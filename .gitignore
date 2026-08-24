@@ -1,0 +1,22 @@
+# 데이터 — 용량이 크고 원본은 각 출처에서 받으면 된다
+#   data/apriltag/tagslam    : github.com/berndpfrommer/tagslam  (example/)
+#   data/apriltag/team293    : github.com/Team293/AprilTagDetection
+#   data/ashpile_*           : IEEE DataPort  PathFinder (10.21227/vz7z-jc84)
+data/
+
+# 참고자료 — 남의 저장소/블로그 사본이라 굳이 올리지 않는다
+ref/
+
+# 파이썬
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ipynb_checkpoints/
+
+# WSL 부산물
+*:Zone.Identifier
+
+# 환경
+.venv/
+.env
