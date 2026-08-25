@@ -18,12 +18,14 @@
 import apriltag
 
 
-# 검출 전에 살짝 흐리면 오히려 검출률이 크게 오른다.
-# 실촬영(tagslam) 실측: quad_blur 0 -> 56개, 2.0 -> 84개, 4.0 -> 112개.
-# 대신 자세 정확도가 아주 조금 나빠진다(같은 평판 태그들의 일치 편차 0.70도 -> 0.84도).
-# 검출이 50% 늘고 정확도는 0.14도 손해라 기본으로 켜둔다.
-# 노이즈가 심한 실촬영이면 3.0~4.0 까지 올려볼 만하고, 깨끗한 합성영상에서는 효과가 없다.
-DEFAULT_QUAD_BLUR = 2.0
+# quad_blur — 검출 전 가우시안 블러. 영상 종류에 따라 효과가 정반대다.
+#
+#   노이즈 있는 실촬영(tagslam) : 0 -> 56개,  2.0 -> 84개,  4.0 -> 112개   크게 좋아짐
+#   깨끗한 합성영상             : 0 -> 17개,  2.0 -> 14개                  오히려 나빠짐
+#
+# 자세 정확도는 살짝 손해다(같은 평판 태그들의 일치 편차 0.70도 -> 0.84도).
+# 영상마다 반대로 작용하므로 기본은 끄고, 실촬영에서 검출이 모자라면 켜는 쪽으로 둔다.
+DEFAULT_QUAD_BLUR = 0.0
 
 
 def make_detector(families="tag36h11", quad_blur=DEFAULT_QUAD_BLUR, **options):
@@ -69,3 +71,26 @@ def summarize(results):
         lines.append(f"id={r.tag_id:<4} 중심=({cx:7.1f},{cy:7.1f}) "
                      f"margin={r.decision_margin:6.1f} hamming={r.hamming}")
     return "\n".join(lines) if lines else "(검출 없음)"
+
+
+def center_offset(detection, width, height, corner_mean=True, y_up=True):
+    """태그 중심을 화면중앙 기준 오프셋[px]으로.
+
+    Testing_apriltag.mp4 좌측 상단에 찍힌 HUD("Center X/Y coord")와 같은 규약이라
+    영상의 정답값과 바로 비교할 수 있다.
+
+    Args:
+        corner_mean: True 면 네 모서리의 평균, False 면 검출기가 준 center.
+            기울어진 태그에서 둘이 갈라진다. 정면일 땐 같지만 roll/pitch 가 크면
+            원근 때문에 무게중심과 중심점이 어긋난다.
+            HUD 는 **모서리 평균** 쪽이었다(frame11 기준 1.8px vs 9.7px).
+        y_up: True 면 위쪽이 +. 영상 좌표는 아래가 + 라서 뒤집어 맞춘다.
+
+    Returns:
+        (dx, dy) [px]
+    """
+    import numpy as _np
+    c = detection.corners.mean(axis=0) if corner_mean else _np.asarray(detection.center)
+    dx = c[0] - width / 2
+    dy = c[1] - height / 2
+    return float(dx), float(-dy if y_up else dy)

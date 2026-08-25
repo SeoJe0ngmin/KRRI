@@ -19,24 +19,76 @@ import numpy as np
 from utils.util import r2rpy, invert_T, t2pr
 
 
-def estimate_pose(detector, detection, intrinsics, tag_size):
+# 태그 네 모서리의 3D 좌표. detection.corners 와 같은 순서다.
+# 실측 확인: 정면 태그에서 corners[0] 이 화면 오른쪽아래에 오고 (-s,-s) 에 대응한다.
+def _object_points(tag_size):
+    s = tag_size / 2.0
+    return np.array([[-s, -s, 0.], [s, -s, 0.], [s, s, 0.], [-s, s, 0.]], dtype=np.float64)
+
+
+def pose_by_pnp(detection, intrinsics, tag_size):
+    """OpenCV solvePnP 로 자세를 구한다. detection_pose 의 대안.
+
+    라이브러리의 detection_pose() 는 호모그래피를 분해하는 방식이라,
+    태그가 **정확히 정면(기울기 0.00도)이고 화면축과 나란할 때** 계산이 퇴화해
+    NaN 을 낸다(라이브러리 내부 homography_to_pose 의 "had ta normalize!" 경고).
+    도킹은 정렬각 0 이 목표 상태라 바로 그 지점에서 값이 필요하므로 이 경로를 둔다.
+
+    실측: 기울기 0도에서 오차 0.00도, 다른 각도에서는 detection_pose 와 소수점까지 일치.
+
+    Returns:
+        (T_camera_tag 4x4, 재투영오차[px])
+    """
+    obj = _object_points(tag_size)
+    img = np.asarray(detection.corners, dtype=np.float64).reshape(-1, 1, 2)
+    dist = np.array(intrinsics.distortion, dtype=np.float64) if intrinsics.distortion else np.zeros(5)
+
+    ok, rvec, tvec = cv2.solvePnP(obj, img, intrinsics.K, dist,
+                                  flags=cv2.SOLVEPNP_ITERATIVE)
+    if not ok:
+        return np.full((4, 4), np.nan), float("inf")
+
+    R, _ = cv2.Rodrigues(rvec)
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = tvec.ravel()
+
+    proj, _ = cv2.projectPoints(obj, rvec, tvec, intrinsics.K, dist)
+    err = float(np.sqrt(((proj.reshape(-1, 2) - img.reshape(-1, 2)) ** 2).sum(axis=1)).mean())
+    return T, err
+
+
+def estimate_pose(detector, detection, intrinsics, tag_size, method="auto"):
     """태그 하나의 자세를 구한다.
 
     Args:
         intrinsics: CameraIntrinsics
         tag_size: 태그 실제 한 변 길이 [m]. 검은 테두리까지 포함한 값이다.
                   이 값이 틀리면 거리가 그 비율만큼 통째로 틀어진다.
+        method:
+            "auto"  detection_pose 를 쓰되 NaN 이 나오면 solvePnP 로 넘어간다 (기본)
+            "tag"   detection_pose 만 쓴다 (블로그 원본 그대로)
+            "pnp"   solvePnP 만 쓴다
 
     Returns:
         (T_camera_tag 4x4, init_error, final_error)
         두 오차는 다듬기 전/후 재투영 오차다. 둘이 비슷하게 크면 자세를 믿기 어렵다.
     """
+    if method == "pnp":
+        T, err = pose_by_pnp(detection, intrinsics, tag_size)
+        return T, err, err
+
     T, e0, e1 = detector.detection_pose(
         detection=detection,
         camera_params=intrinsics.params,
         tag_size=tag_size,
     )
-    return np.asarray(T), e0, e1
+    T = np.asarray(T)
+
+    if method == "auto" and not np.isfinite(T).all():
+        T, err = pose_by_pnp(detection, intrinsics, tag_size)
+        return T, err, err
+    return T, e0, e1
 
 
 def pose_to_xyzrpy(T, unit='deg'):
@@ -137,3 +189,71 @@ def draw_corners(overlay, detection, color=(0, 0, 255), thickness=2):
     cv2.putText(overlay, f"id:{detection.tag_id}", (cx - 20, cy - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2, 16)
     return overlay
+
+
+def docking_state(T_camera_tag):
+    """도킹 제어가 바로 쓸 수 있는 형태로 바꾼다.
+
+    detection_pose() 는 "카메라 기준 태그"를 준다. 도킹에서 알고 싶은 건 반대,
+    **태그(탑재부) 기준으로 지게차가 어디에 어떻게 서 있나**다.
+
+    그런데 이게 하나로 안 된다. 두 가지가 서로 다른 것을 말한다.
+
+        approach_deg : 태그 정면축 기준으로 내가 **어느 방향에** 있나  (위치)
+        heading_deg  : 내가 태그 축과 **나란히 서 있나**              (자세)
+
+    둘은 독립이다. 정면축 위에 있어도(approach=0) 고개를 돌리고 있으면 heading≠0 이고,
+    반대로 옆에 비켜서 태그를 똑바로 바라보면 heading=0 이지만 approach≠0 이다.
+    **진입하려면 둘 다 0 이어야 한다.**
+
+            태그면
+        ════════════
+             │ ← 정면축
+             │
+        🚜   │      approach≠0 (옆으로 벗어남), heading=0 (태그를 봄)
+          ╲  │
+           ╲ │
+             🚜     approach=0 (축 위), heading≠0 (비스듬히 봄)
+
+    Returns:
+        dict
+          lateral    [m]  정면축에서 좌우 벗어남. +가 오른쪽
+          vertical   [m]  위아래 벗어남
+          forward    [m]  태그면까지 수직 거리
+          distance   [m]  직선 거리
+          approach_deg [도] 정면축에서 벗어난 방향각. tag tilt 와 같은 값
+          heading_deg  [도] 진입 방향이 축과 이루는 각
+          reliable_angle [bool] approach_deg 를 믿어도 되는지
+              태그가 정면에 가까우면(약 10도 미만) 각도를 못 재므로 False.
+              그때는 lateral 로 판단해야 한다.
+    """
+    T_tag_cam = invert_T(np.asarray(T_camera_tag))
+    p = T_tag_cam[:3, 3]                       # 태그 기준 카메라 위치
+    R = T_tag_cam[:3, :3]
+
+    lateral, vertical, forward = float(p[0]), float(p[1]), float(p[2])
+    distance = float(np.linalg.norm(p))
+
+    # 내가 태그 정면축에서 몇 도 벗어난 위치에 있나
+    approach = float(np.degrees(np.arctan2(abs(lateral), abs(forward))))
+
+    # 카메라 광축(+z)이 태그 기준으로 어디를 향하나.
+    # 태그를 정면으로 마주보면 태그의 -z 방향을 향한다.
+    fwd = R @ np.array([0.0, 0.0, 1.0])
+    heading = float(np.degrees(np.arctan2(fwd[0], -fwd[2])))
+
+    return {"lateral": lateral, "vertical": vertical, "forward": forward,
+            "distance": distance,
+            "approach_deg": approach, "heading_deg": heading,
+            "reliable_angle": approach >= 10.0}
+
+
+def tag_tilt_deg(T_camera_tag):
+    """태그면이 카메라를 정면으로 마주보는 정도 [도].
+
+    0 이면 태그가 화면과 완전히 나란하다(정면). 이 값이 약 10도 미만이면
+    원근 왜곡이 픽셀 이하라 **각도 추정을 믿을 수 없다.**
+    좌표계 규약과 무관해서 roll/pitch/yaw 보다 판정 기준으로 쓰기 좋다.
+    """
+    n = np.asarray(T_camera_tag)[:3, :3] @ np.array([0.0, 0.0, 1.0])
+    return float(np.degrees(np.arccos(min(1.0, abs(n[2])))))
