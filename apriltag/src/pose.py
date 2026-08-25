@@ -206,41 +206,38 @@ def docking_state(T_camera_tag):
     반대로 옆에 비켜서 태그를 똑바로 바라보면 heading=0 이지만 approach≠0 이다.
     **진입하려면 둘 다 0 이어야 한다.**
 
-            태그면
-        ════════════
-             │ ← 정면축
-             │
-        🚜   │      approach≠0 (옆으로 벗어남), heading=0 (태그를 봄)
-          ╲  │
-           ╲ │
-             🚜     approach=0 (축 위), heading≠0 (비스듬히 봄)
+    부호 규약 주의: AprilTag 의 태그 좌표계는 **+z 가 태그 뒤쪽**을 향한다.
+    그대로 쓰면 카메라가 항상 z 음수에 놓여 "앞으로 몇 m" 가 음수로 나온다.
+    여기서는 사람이 읽기 편하게 뒤집어서, forward 가 **양수면 태그 앞쪽**이 되게 한다.
 
     Returns:
         dict
-          lateral    [m]  정면축에서 좌우 벗어남. +가 오른쪽
+          lateral    [m]  정면축에서 좌우 벗어남
           vertical   [m]  위아래 벗어남
-          forward    [m]  태그면까지 수직 거리
+          forward    [m]  태그면까지 수직 거리 (양수 = 태그 앞쪽)
           distance   [m]  직선 거리
-          approach_deg [도] 정면축에서 벗어난 방향각. tag tilt 와 같은 값
-          heading_deg  [도] 진입 방향이 축과 이루는 각
-          reliable_angle [bool] approach_deg 를 믿어도 되는지
-              태그가 정면에 가까우면(약 10도 미만) 각도를 못 재므로 False.
-              그때는 lateral 로 판단해야 한다.
+          approach_deg [도] 정면축에서 벗어난 방향각
+          heading_deg  [도] 진입 방향이 축과 이루는 각 (0 이면 축과 나란함)
+          reliable_angle [bool] approach_deg 를 믿어도 되는지.
+              태그가 정면에 가까우면(약 10도 미만) 원근 왜곡이 픽셀 이하라
+              각도를 못 잰다. 그때는 lateral 로 판단해야 한다.
     """
     T_tag_cam = invert_T(np.asarray(T_camera_tag))
-    p = T_tag_cam[:3, 3]                       # 태그 기준 카메라 위치
+    p = T_tag_cam[:3, 3]
     R = T_tag_cam[:3, :3]
 
-    lateral, vertical, forward = float(p[0]), float(p[1]), float(p[2])
+    lateral = float(p[0])
+    vertical = float(p[1])
+    forward = float(-p[2])                      # 태그 앞쪽이 양수가 되게 뒤집는다
     distance = float(np.linalg.norm(p))
 
     # 내가 태그 정면축에서 몇 도 벗어난 위치에 있나
     approach = float(np.degrees(np.arctan2(abs(lateral), abs(forward))))
 
-    # 카메라 광축(+z)이 태그 기준으로 어디를 향하나.
-    # 태그를 정면으로 마주보면 태그의 -z 방향을 향한다.
+    # 카메라 광축(+z)이 태그 좌표계에서 어디를 향하나.
+    # 태그를 정면으로 마주보고 축과 나란하면 태그의 +z 방향(뒤쪽)을 향한다.
     fwd = R @ np.array([0.0, 0.0, 1.0])
-    heading = float(np.degrees(np.arctan2(fwd[0], -fwd[2])))
+    heading = float(np.degrees(np.arctan2(fwd[0], fwd[2])))
 
     return {"lateral": lateral, "vertical": vertical, "forward": forward,
             "distance": distance,
