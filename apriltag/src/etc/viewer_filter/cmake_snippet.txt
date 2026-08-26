@@ -1,0 +1,30 @@
+166-# AprilTag docking-pose detection -- always built; the system libapriltag is required
+167-find_package(PkgConfig REQUIRED)
+168:pkg_check_modules(APRILTAG apriltag)
+169-
+170:if(NOT APRILTAG_FOUND)
+171-    message(FATAL_ERROR
+172-        "realsense-viewer needs the AprilTag library (pkg-config module 'apriltag') for the "
+173-        "'AprilTag : Docking Pose' post-processing filter, and pkg-config could not find it.\n"
+174-        "On Debian/Ubuntu:  sudo apt install libapriltag-dev\n"
+175-        "Otherwise point PKG_CONFIG_PATH at the directory holding apriltag.pc.")
+176-endif()
+177-
+178:message(STATUS "Enabling AprilTag docking-pose detection for realsense-viewer (apriltag ${APRILTAG_VERSION}) ...")
+179-
+180-get_property(deps VARIABLE PROPERTY DEPENDENCIES)
+181:set(DEPENDENCIES ${deps} ${APRILTAG_LIBRARIES})
+182-
+183:include_directories( ${APRILTAG_INCLUDE_DIRS} )
+184:link_directories( ${APRILTAG_LIBRARY_DIRS} )
+185-
+186-set(RS_VIEWER_CPP
+187-    ${RS_VIEWER_CPP}
+188-    apriltag-detection.cpp
+189-    )
+190-
+191-# config-ui
+192-target_sources( ${PROJECT_NAME} PRIVATE ${RS_VIEWER_CPP} viewer-main.cpp )
+193-if(WIN32)
+194-    target_sources( ${PROJECT_NAME} PRIVATE ../../common/windows-app-bootstrap.cpp )
+195-

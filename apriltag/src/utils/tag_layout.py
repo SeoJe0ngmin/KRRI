@@ -18,11 +18,11 @@ Team293 코드의 WORLD_TAG_LOCATIONS 와 같은 역할이다.
 태그는 들어오는 지게차를 마주보므로 태그면 법선이 -x 를 향한다.
 `facing_approach()` 가 그 자세를 만들어 준다.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-from utils.util import invert_T, pr2t, r2rpy, rpy2r
+from .util import invert_T, pr2t, r2rpy, rpy2r
 
 
 def facing_approach(roll_deg=0.0):
@@ -140,9 +140,11 @@ class TagLayout:
 #                         │      [2] 내부
 #                         └─ 원점(목표 지점)
 DOCK_LAYOUT = TagLayout([
+    # size 는 인쇄한 태그를 자로 잰 값(검은 테두리 바깥까지)으로 반드시 고칠 것.
+    # 이 값이 틀리면 거리가 그 비율만큼 통째로 틀어진다. position 도 실측 전에는 가정값이다.
     TagPlacement(tag_id=1, name="상단(외부)",
                  position=np.array([-0.20, 0.0, 1.60]),
-                 R=facing_approach(), size=0.60),
+                 R=facing_approach(), size=0.20),
     TagPlacement(tag_id=2, name="내부(안쪽)",
                  position=np.array([1.20, 0.0, 0.80]),
                  R=facing_approach(), size=0.20),

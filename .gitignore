@@ -4,7 +4,7 @@
 #   data/ashpile_*           : IEEE DataPort  PathFinder (10.21227/vz7z-jc84)
 data/
 work_dirs/
-ref/
+librealsense/
 
 # 파이썬
 __pycache__/
