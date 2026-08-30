@@ -12,6 +12,8 @@
 set -u
 PS=/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe
 USBIPD="/mnt/c/Program Files/usbipd-win/usbipd.exe"
+# bare `python` 은 PATH 상 다른 conda 환경(vlm)으로 잡힌다. krri 바이너리를 직접 쓴다.
+PY="${KRRI_PY:-/home/jeongmin/anaconda3/envs/krri/bin/python}"
 VID_PID="8086:0b3a"          # D435i. 다른 모델이면 usbipd list 로 확인해서 바꾼다
 
 echo "[1/3] usbipd attach"
@@ -35,13 +37,15 @@ echo "[3/3] 권한 설정"
 $PS -NoProfile -Command "wsl -u root -e bash -c 'chgrp plugdev /dev/video* 2>/dev/null; chmod g+rw /dev/video* 2>/dev/null; find /dev/bus/usb -type c -exec chgrp plugdev {} + -exec chmod g+rw {} +'" 2>&1 | tr -d '\r' | sed 's/^/      /'
 
 echo
-python -c "
+"$PY" -c "
 import pyrealsense2 as rs
 d = rs.context().query_devices()
 if len(d)==0:
-    print('  실패 - 장치가 안 보인다. src/etc/realsense_check.py 로 진단할 것.'); raise SystemExit(1)
+    print('  실패 - 장치가 안 보인다. src/utils/realsense_check.py 로 진단할 것.'); raise SystemExit(1)
 for x in d:
     print(f'  준비 완료 - {x.get_info(rs.camera_info.name)}  '
           f'serial {x.get_info(rs.camera_info.serial_number)}  '
           f'USB {x.get_info(rs.camera_info.usb_type_descriptor)}')
 "
+
+#/home/jeongmin/work/projects/krri/apriltag/tools/wsl_attach_camera.sh

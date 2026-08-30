@@ -1,30 +1,20 @@
-"""인쇄용 AprilTag PDF 생성.
-
-프린터가 제멋대로 축소하는 것("페이지에 맞춤")이 거리 오차의 최대 원인이다.
-여기서는 **실물 치수를 고정한 벡터 PDF**를 만들고, 인쇄물을 자로 검증할 수 있게
-눈금자까지 같이 찍는다.
-
-    python src/etc/make_tag_pdf.py --id 1 --size 200 --paper A4
-
-tag_size 규약: **검은 테두리 바깥까지**. tag36h11 은 6x6 데이터 + 검은테두리 1칸 = 8칸이고,
-OpenCV 가 만드는 이미지의 바깥 경계가 정확히 그 지점이다. 우리 src/models/tag_pose.py 가 쓰는 기준과 같다.
-
-인쇄할 때 반드시:
-    - 배율 100% / 실제 크기 (Actual size). "페이지에 맞춤" 절대 금지
-    - 무광 용지 (광택지는 조명 반사로 검출이 깨진다)
-    - 인쇄 후 눈금자를 자로 재서 맞는지 확인하고, 실측값을 --tag-size 로 넘길 것
-"""
+"""인쇄용 AprilTag PDF 생성."""
 import argparse
+import os
+import sys
+
+# 스크립트로 직접 돌리므로 상대 임포트가 안 된다. 저장소 루트를 경로에 넣는다.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import cv2
 import numpy as np
+
+from src.config import MM_PER_INCH, TAG_CELLS as CELLS
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-MM_PER_INCH = 25.4
-CELLS = 8                      # tag36h11: 6x6 데이터 + 검은 테두리 1칸
 PAPERS = {                     # (가로, 세로) mm
     "A4": (210, 297), "A4L": (297, 210),
     "A3": (297, 420), "A3L": (420, 297),
@@ -32,11 +22,7 @@ PAPERS = {                     # (가로, 세로) mm
 
 
 def tag_cells(tag_id):
-    """tag36h11 을 8x8 불리언 격자로. True = 검은 칸.
-
-    래스터 이미지를 배치하면 PDF 변환행렬에서 100µm 수준 반올림이 생긴다.
-    칸마다 벡터 사각형을 그리면 치수가 정확하고 인쇄도 선명하다.
-    """
+    """tag36h11 을 8x8 불리언 격자로. True = 검은 칸."""
     dic = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     img = cv2.aruco.generateImageMarker(dic, tag_id, CELLS * 10)
     return np.array([[img[r * 10 + 5, c * 10 + 5] < 128
@@ -110,8 +96,6 @@ def main():
     a = ap.parse_args()
 
     # 기본 출력은 저장소 루트 기준으로 고정한다. 예전엔 cwd 상대라서, 어디서
-    # 돌리느냐에 따라 PDF 가 엉뚱한 데 생기고 work_dirs/tags 가 여기저기 만들어졌다.
-    # (이 파일은 <repo>/src/etc/ 에 있으므로 루트는 parents[2].)
     import os
     ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = a.out or os.path.join(

@@ -1,3 +1,4 @@
+# 출처 https://joonhyung-lee.github.io/repositories/
 import math,time,os
 import numpy as np
 from matplotlib import animation
@@ -8,18 +9,14 @@ from IPython.display import HTML
 from scipy.spatial.distance import cdist
 
 def rot_mtx(deg):
-    """
-        2 x 2 rotation matrix
-    """
+    """2 x 2 rotation matrix"""
     theta = np.radians(deg)
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c, -s), (s, c)))
     return R
 
 def pr2t(p,R):
-    """ 
-        Convert pose to transformation matrix 
-    """
+    """Convert pose to transformation matrix"""
     p0 = p.ravel() # flatten
     T = np.block([
         [R, p0[:, np.newaxis]],
@@ -28,31 +25,23 @@ def pr2t(p,R):
     return T
 
 def t2pr(T):
-    """
-        T to p and R
-    """   
+    """T to p and R"""
     p = T[:3,3]
     R = T[:3,:3]
     return p,R
 
 def t2p(T):
-    """
-        T to p 
-    """   
+    """T to p"""
     p = T[:3,3]
     return p
 
 def t2r(T):
-    """
-        T to R
-    """   
+    """T to R"""
     R = T[:3,:3]
     return R    
 
 def rpy2r(rpy_rad):
-    """
-        roll,pitch,yaw in radian to R
-    """
+    """roll,pitch,yaw in radian to R"""
     roll  = rpy_rad[0]
     pitch = rpy_rad[1]
     yaw   = rpy_rad[2]
@@ -71,9 +60,7 @@ def rpy2r(rpy_rad):
     return R
 
 def r2rpy(R,unit='rad'):
-    """
-        Rotation matrix to roll,pitch,yaw in radian
-    """
+    """Rotation matrix to roll,pitch,yaw in radian"""
     roll  = math.atan2(R[2, 1], R[2, 2])
     pitch = math.atan2(-R[2, 0], (math.sqrt(R[2, 1] ** 2 + R[2, 2] ** 2)))
     yaw   = math.atan2(R[1, 0], R[0, 0])
@@ -87,9 +74,7 @@ def r2rpy(R,unit='rad'):
     return out    
 
 def r2w(R):
-    r"""
-        R to \omega
-    """
+    """R to \omega"""
     el = np.array([
             [R[2,1] - R[1,2]],
             [R[0,2] - R[2,0]], 
@@ -105,10 +90,7 @@ def r2w(R):
     return w.flatten()
 
 def r2quat(R):
-    """ 
-        Convert Rotation Matrix to Quaternion.  See rotation.py for notes 
-        (https://gist.github.com/machinaut/dab261b78ac19641e91c6490fb9faa96)
-    """
+    """Convert Rotation Matrix to Quaternion.  See rotation.py for notes"""
     R = np.asarray(R, dtype=np.float64)
     Qxx, Qyx, Qzx = R[..., 0, 0], R[..., 0, 1], R[..., 0, 2]
     Qxy, Qyy, Qzy = R[..., 1, 0], R[..., 1, 1], R[..., 1, 2]
@@ -135,23 +117,18 @@ def r2quat(R):
         # Select largest eigenvector, reorder to w,x,y,z quaternion
         q[it.multi_index] = vecs[[3, 0, 1, 2], np.argmax(vals)]
         # Prefer quaternion with positive w
-        # (q * -1 corresponds to same rotation as q)
         if q[it.multi_index][0] < 0:
             q[it.multi_index] *= -1
         it.iternext()
     return q
 
 def skew(x):
-    """ 
-        Get a skew-symmetric matrix
-    """
+    """Get a skew-symmetric matrix"""
     x_hat = np.array([[0,-x[2],x[1]],[x[2],0,-x[0]],[-x[1],x[0],0]])
     return x_hat
 
 def rodrigues(a=np.array([1,0,0]),q_rad=0.0):
-    """
-        Compute the rotation matrix from an angular velocity vector
-    """
+    """Compute the rotation matrix from an angular velocity vector"""
     a_norm = np.linalg.norm(a)
     if abs(a_norm-1) > 1e-6:
         print ("[rodrigues] norm of a should be 1.0 not [%.2e]."%(a_norm))
@@ -165,9 +142,7 @@ def rodrigues(a=np.array([1,0,0]),q_rad=0.0):
     return R
     
 def np_uv(vec):
-    """
-        Get unit vector
-    """
+    """Get unit vector"""
     x = np.array(vec)
     return x/np.linalg.norm(x)
 
@@ -186,9 +161,7 @@ def get_rotation_matrix_from_two_points(p_fr,p_to):
     
 
 def trim_scale(x,th):
-    """
-        Trim scale
-    """
+    """Trim scale"""
     x         = np.copy(x)
     x_abs_max = np.abs(x).max()
     if x_abs_max > th:
@@ -196,9 +169,7 @@ def trim_scale(x,th):
     return x
 
 def soft_squash(x,x_min=-1,x_max=+1,margin=0.1):
-    """
-        Soft squashing numpy array
-    """
+    """Soft squashing numpy array"""
     def th(z,m=0.0):
         # thresholding function 
         return (m)*(np.exp(2/m*z)-1)/(np.exp(2/m*z)+1)
@@ -214,9 +185,7 @@ def soft_squash_multidim(
     x_min  = -np.ones(5),
     x_max  = np.ones(5),
     margin = 0.1):
-    """
-        Multi-dim version of 'soft_squash' function
-    """
+    """Multi-dim version of 'soft_squash' function"""
     x_squash = np.copy(x)
     dim      = x.shape[1]
     for d_idx in range(dim):
@@ -225,24 +194,18 @@ def soft_squash_multidim(
     return x_squash 
 
 def kernel_se(X1,X2,hyp={'g':1,'l':1}):
-    """
-        Squared exponential (SE) kernel function
-    """
+    """Squared exponential (SE) kernel function"""
     K = hyp['g']*np.exp(-cdist(X1,X2,'sqeuclidean')/(2*hyp['l']*hyp['l']))
     return K
 
 def kernel_levse(X1,X2,L1,L2,hyp={'g':1,'l':1}):
-    """
-        Leveraged SE kernel function
-    """
+    """Leveraged SE kernel function"""
     K = hyp['g']*np.exp(-cdist(X1,X2,'sqeuclidean')/(2*hyp['l']*hyp['l']))
     L = np.cos(np.pi/2.0*cdist(L1,L2,'cityblock'))
     return np.multiply(K,L)
 
 def is_point_in_polygon(point,polygon):
-    """
-        Is the point inside the polygon
-    """
+    """Is the point inside the polygon"""
     if isinstance(point,np.ndarray):
         point_check = Point(point)
     else:
@@ -250,9 +213,7 @@ def is_point_in_polygon(point,polygon):
     return sp.contains(polygon,point_check)
 
 def is_point_feasible(point,obs_list):
-    """
-        Is the point feasible w.r.t. obstacle list
-    """
+    """Is the point feasible w.r.t. obstacle list"""
     result = is_point_in_polygon(point,obs_list) # is the point inside each obstacle?
     if sum(result) == 0:
         return True
@@ -260,9 +221,7 @@ def is_point_feasible(point,obs_list):
         return False
 
 def is_point_to_point_connectable(point1,point2,obs_list):
-    """
-        Is the line connecting two points connectable
-    """
+    """Is the line connecting two points connectable"""
     result = sp.intersects(LineString([point1,point2]),obs_list)
     if sum(result) == 0:
         return True
@@ -270,28 +229,20 @@ def is_point_to_point_connectable(point1,point2,obs_list):
         return False
     
 class TicTocClass(object):
-    """
-        Tic toc
-    """
+    """Tic toc"""
     def __init__(self,name='tictoc',print_every=1):
-        """
-            Initialize
-        """
+        """Initialize"""
         self.name        = name
         self.time_start  = time.time()
         self.time_end    = time.time()
         self.print_every = print_every
 
     def tic(self):
-        """
-            Tic
-        """
+        """Tic"""
         self.time_start = time.time()
 
     def toc(self,str=None,cnt=0,VERBOSE=True):
-        """
-            Toc
-        """
+        """Toc"""
         self.time_end = time.time()
         self.time_elapsed = self.time_end - self.time_start
         if VERBOSE:
@@ -313,9 +264,7 @@ class TicTocClass(object):
                         (str,time_show,time_unit))
 
 def get_interp_const_vel_traj(traj_anchor,vel=1.0,HZ=100,ord=np.inf):
-    """
-        Get linearly interpolated constant velocity trajectory
-    """
+    """Get linearly interpolated constant velocity trajectory"""
     L = traj_anchor.shape[0]
     D = traj_anchor.shape[1]
     dists = np.zeros(L)
@@ -332,9 +281,7 @@ def get_interp_const_vel_traj(traj_anchor,vel=1.0,HZ=100,ord=np.inf):
     return times_interp,traj_interp
 
 def meters2xyz(depth_img,cam_matrix):
-    """
-        Scaled depth image to pointcloud
-    """
+    """Scaled depth image to pointcloud"""
     fx = cam_matrix[0][0]
     cx = cam_matrix[0][2]
     fy = cam_matrix[1][1]
@@ -353,16 +300,7 @@ def meters2xyz(depth_img,cam_matrix):
     return xyz_img # [H x W x 3]
 
 def compute_view_params(camera_pos,target_pos,up_vector=np.array([0,0,1])):
-    """Compute azimuth, distance, elevation, and lookat for a viewer given camera pose in 3D space.
-
-    Args:
-        camera_pos (np.ndarray): 3D array of camera position.
-        target_pos (np.ndarray): 3D array of target position.
-        up_vector (np.ndarray): 3D array of up vector.
-
-    Returns:
-        tuple: Tuple containing azimuth, distance, elevation, and lookat values.
-    """
+    """Compute azimuth, distance, elevation, and lookat for a viewer given camera pose in 3D space."""
     # Compute camera-to-target vector and distance
     cam_to_target = target_pos - camera_pos
     distance = np.linalg.norm(cam_to_target)
@@ -386,9 +324,7 @@ def compute_view_params(camera_pos,target_pos,up_vector=np.array([0,0,1])):
     return azimuth, distance, elevation, lookat
 
 def sample_xyzs(n_sample,x_range=[0,1],y_range=[0,1],z_range=[0,1],min_dist=0.1,xy_margin=0.0):
-    """
-        Sample a point in three dimensional space with the minimum distance between points
-    """
+    """Sample a point in three dimensional space with the minimum distance between points"""
     xyzs = np.zeros((n_sample,3))
     for p_idx in range(n_sample):
         while True:
@@ -403,9 +339,7 @@ def sample_xyzs(n_sample,x_range=[0,1],y_range=[0,1],z_range=[0,1],min_dist=0.1,
     return xyzs
 
 def create_folder_if_not_exists(file_path):
-    """ 
-        Create folder if not exist
-    """
+    """Create folder if not exist"""
     folder_path = os.path.dirname(file_path)
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -429,29 +363,16 @@ def render_video(frames):
     
 
 # ──────────────────────────────────────────────────────────────────────────
-# 아래 4개는 원본 repo 에 없는 함수다. AprilTag 도킹 작업에 필요해서 추가했다.
-# 전부 표준 함수로 대체 가능하니, 걷어내고 싶으면 오른쪽 주석대로 바꾸면 된다.
-# ──────────────────────────────────────────────────────────────────────────
 
 def r2t(R):
-    """R -> T (위치는 원점).
-
-    대체: T = np.eye(4); T[:3,:3] = R
-    참고: 블로그가 `from utils.util import r2t` 로 불러오지만 원본에는 없다.
-          블로그 본문에서 실제로 쓰이는 곳도 없다.
-    """
+    """R -> T (위치는 원점)."""
     T = np.eye(4)
     T[:3, :3] = np.asarray(R)
     return T
 
 
 def quat2r(q):
-    """쿼터니언 (w,x,y,z) -> R. 위 r2quat 의 역방향.
-
-    대체: scipy.spatial.transform.Rotation.from_quat(q).as_matrix()
-          단 scipy 는 (x,y,z,w) 순서라 자리를 바꿔 넣어야 한다.
-    쓰임: ROS 는 자세를 쿼터니언으로 주고받으므로 받을 때 필요하다.
-    """
+    """쿼터니언 (w,x,y,z) -> R. 위 r2quat 의 역방향."""
     w, x, y, z = np.asarray(q, dtype=np.float64) / np.linalg.norm(q)
     return np.array([
         [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
@@ -461,13 +382,7 @@ def quat2r(q):
 
 
 def invert_T(T):
-    """4x4 역변환. 기준을 뒤집는다 (T_A_B -> T_B_A).
-
-    대체: np.linalg.inv(T)
-          여기서는 회전행렬의 역이 전치라는 성질을 써서 더 빠르고 안정적으로 구한다.
-    쓰임: detection_pose() 는 "카메라 기준 태그" 를 준다. 도킹에서는
-          "태그(탑재부) 기준 카메라" 가 필요하므로 이걸로 뒤집는다.
-    """
+    """4x4 역변환. 기준을 뒤집는다 (T_A_B -> T_B_A)."""
     R = T[:3, :3]
     p = T[:3, 3]
     Ti = np.eye(4)
@@ -477,10 +392,7 @@ def invert_T(T):
 
 
 def compose(*Ts):
-    """변환을 차례로 곱한다. compose(T_A_B, T_B_C) -> T_A_C.
-
-    대체: T_A_B @ T_B_C
-    """
+    """변환을 차례로 곱한다. compose(T_A_B, T_B_C) -> T_A_C."""
     out = np.eye(4)
     for T in Ts:
         out = out @ T

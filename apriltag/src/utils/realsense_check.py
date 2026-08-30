@@ -1,23 +1,4 @@
-"""RealSense 진단 - **librealsense SDK CLI 가 못 하는 것만** 남긴 최소 도구.
-
-장치 목록/프로파일 표/내부파라미터/실측 fps 는 전부 걷어냈다. SDK 실행파일이 더
-정확하게 하기 때문이다(특히 fps 는 rs-data-collect 쪽이 우리 측정보다 정직하다).
-    장치정보/펌웨어/USB속도/프로파일 표 -> rs-enumerate-devices  (내부파라미터는 -c)
-    실측 fps -> rs-data-collect -c cfg.csv -f out.csv -m 90 후 Host Timestamp 차분
-    라이브 뷰/펌웨어 -> realsense-viewer,   생존 확인 -> rs-hello-realsense
-
-남긴 건 SDK 가 **구조적으로 못 하는** 세 가지뿐이다.
-  1) pyrealsense2 임포트 - rs-* 는 C++ 바이너리라 파이썬 바인딩엔 아무 말도 못 한다.
-     rs-enumerate-devices 가 잘 도는 env 에서도 import 가 실패하는 경우가 실제로 있다.
-  2) cv2.imshow 창 - viewer/rs-capture 는 GLFW/OpenGL 로 그린다. 그게 뜬다고
-     OpenCV highgui 가 된다는 보장이 없고(headless 휠 함정), src/models/ 는 cv2 를 쓴다.
-  3) 장치가 안 보일 때의 WSL2 usbipd 절차 - SDK 는 "No device detected" 가 끝이다.
-
-설계 원칙은 그대로: **절대 예외로 죽지 않는다.** 카메라가 없어도 정상 종료한다.
-
-사용법
-    python src/etc/realsense_check.py [--no-gui]     # --no-gui 는 헤드리스(SSH)용
-"""
+"""RealSense 진단 - **librealsense SDK CLI 가 못 하는 것만** 남긴 최소 도구."""
 import argparse
 import os
 import platform
@@ -83,10 +64,7 @@ def step_import():
 
 
 def count_devices(rs):
-    """장치 '유무'만 센다. 상세는 rs-enumerate-devices 담당이라 여기선 안 찍는다.
-
-    이걸 남기는 이유는 아래 4번(WSL 안내)을 띄울지 말지 판단해야 하기 때문이다.
-    """
+    """장치 '유무'만 센다. 상세는 rs-enumerate-devices 담당이라 여기선 안 찍는다."""
     section(2, "장치 유무")
     try:
         n = len(list(rs.context().query_devices()))
@@ -138,22 +116,7 @@ def step_gui(enabled=True):
 
 # --- 4) 프레임 메타데이터 : 이건 SDK CLI 로 못 본다. 커널 패치 유무가 여기서 갈린다 ---
 def step_frame_metadata(rs):
-    """프레임별 노출/게인/센서시각이 **실제로** 오는지 확인한다.
-
-    왜 중요한가:
-        검출이 실패한 프레임에 그때의 노출값을 같이 찍어둘 수 있으면
-        "왜 못 찾았나"가 사후에 규명된다(노출이 튀어 흐렸는지, 게인이 올라
-        노이즈가 낀 건지). 그런데 이 값들은 UVC 벤더 메타데이터에서 오고,
-        **리눅스에서는 librealsense 커널 패치가 깔려 있어야** v4l2 가
-        V4L2_META_FMT_D4XX 노드를 열어준다(src/linux/backend-v4l2.cpp:2875).
-        WSL2 의 기본 uvcvideo 에는 없다.
-
-        메타데이터가 없으면 SDK 는 **조용히** 시스템 시각으로 폴백하고
-        (src/ds/ds-timestamp.cpp:60-74) 타임스탬프 도메인이 system_time 이 된다.
-        그 상태에서는 global_time_enabled 를 켜도 아무 일도 안 일어난다 —
-        global_timestamp_reader 가 hardware_clock 일 때만 보정하기 때문이다.
-        조용히 폴백하므로 **직접 읽어보는 수밖에 없다.** 그게 이 단계다.
-    """
+    """프레임별 노출/게인/센서시각이 **실제로** 오는지 확인한다."""
     section(4, "프레임 메타데이터 / 타임스탬프")
     try:
         pipe = rs.pipeline()
@@ -213,10 +176,6 @@ def step_frame_metadata(rs):
             mark("WARN", "컬러 자동노출 ROI", "지원 안 함 (FW 5.10.9 미만이거나 D405)")
 
         # --- 노출 눈금 대조 : 컬러는 100us, 뎁스는 us 라 100배가 다르다 ---
-        # 메타데이터 actual_exposure 와 옵션 EXPOSURE 는 **같은 UVC 원값**이라
-        # (ds-color-common.cpp:85/117) 자동노출이 안정된 상태면 숫자가 일치해야 한다.
-        # 일치하면 src.rs_tuning.COLOR_EXPOSURE_UNIT_US=100 이 맞다는 실증이 된다.
-        # 이건 소스만 읽어서는 확정 못 하는 항목이라 여기서 실물로 확인한다.
         try:
             csen = None
             for sen in prof.get_device().query_sensors():
@@ -234,17 +193,14 @@ def step_frame_metadata(rs):
                 else:
                     mark("WARN", "노출 눈금 대조",
                          "metadata=%d vs option=%.0f 불일치 - 단위 가정을 다시 봐라" % (md, opt))
-                    info("→ src/utils/rs_tuning.py COLOR_EXPOSURE_UNIT_US 와 Frame.exposure_us 가 틀어진다.")
+                    info("→ src/utils/camera.py COLOR_EXPOSURE_UNIT_US 와 Frame.exposure_us 가 틀어진다.")
         except Exception:
             pass
 
         # --- 프레임 드롭 : SDK 는 이걸 알려주지 않는다 ---
-        # pipeline 출력 큐는 용량 1 이고 넘치면 오래된 것을 조용히 버린다
-        # (aggregator.cpp:16). 그래서 "fps 가 낮다"가 카메라 탓인지 우리 탓인지
-        # frame_number 의 구멍을 세기 전에는 알 수 없다.
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-            from src.utils.rs_tuning import FrameStats
+            from src.utils.camera import FrameStats
             st = FrameStats()
             t0 = None
             for _ in range(60):

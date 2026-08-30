@@ -1,48 +1,4 @@
-"""도킹용 AprilTag 자세를 실시간 화면으로 본다.
-
-**지금 카메라가 무엇을 보고 있는지** 한 화면에서 본다.
-왼쪽은 검출/자세를 그린 영상, 오른쪽은 숫자 패널이다.
-
-RealSense 가 아직 WSL2 로 넘어오지 않았으므로 카메라 없이도 돌아가야 한다.
-그래서 입력을 네 갈래로 열어둔다.
-
-    --source realsense          RealSense 컬러 (기본)
-    --source ir                 RealSense 적외선. 글로벌 셔터, 이미터 자동 off
-    --source bag --path X.bag   녹화한 .bag 재생 — 매번 완전히 같은 입력
-    --source video --path X     영상 파일 — 오늘 검증은 이걸로 한다
-
-(예전에 있던 `--source cam`(일반 웹캠)은 뺐다. 내부 파라미터가 없는 입력이라
-숫자가 전부 ASSUMED 로 나오는데, 그 경로는 --source video 로 이미 덮인다.
-
-이 도구는 **보여주기만 한다.** 숫자를 만드는 것은 src/models/tag_pose.py 의
-TagPipeline 이고, 여기서는 프레임을 넣고 나온 Result 를 그리거나 찍을 뿐이다.
-정확도를 재려면 이 도구가 아니라 tools/verify.py 다 — 눈으로 보는 것과
-숫자가 맞는지 재는 것은 다른 일이라 도구를 갈랐다.
-
-패널 글자는 전부 영어다. cv2 의 Hershey 폰트에 한글 글리프가 없어서
-한글을 쓰면 네모로 깨진다. 주석/독스트링만 한글로 둔다.
-
-믿으면 안 되는 값은 눈에 띄게 표시한다.
-    - 내부 파라미터를 화각 가정으로 만들었을 때        -> ASSUMED 경고 + 거리값에 '?'
-    - 태그 크기가 사용자 입력이 아니라 기본값일 때     -> ASSUMED 경고 + 거리값에 '?'
-    - docking_state()['reliable_angle'] 이 False 일 때 -> 각도값에 '?' + 색 변경
-거리는 fx 와 태그 크기에 그대로 비례하므로, 둘 중 하나가 가정이면 거리도 가정이다.
-
-키
-    q / ESC   종료        a  좌표축<->큐브
-    s         현재 화면 저장 (work_dirs/run/)
-    r         fps 카운터 초기화
-    SPACE     일시정지 / 재개
-
-사용법
-    python tools/live_pose.py                                   # RealSense 컬러
-    python tools/live_pose.py --source ir
-    python tools/live_pose.py --source video --path a.mp4 --tag-size 0.20
-    python tools/live_pose.py --source video --path a.mp4 --headless 5   # 창 없이 검증
-
-합성 테스트 영상(Testing_apriltag*.mp4)은 디버그 그래픽이 태그를 덮고 있어서
-실촬영에는 쓰지 마라.
-"""
+"""도킹용 AprilTag 자세를 실시간 화면으로 본다."""
 import argparse
 import sys
 import time
@@ -55,15 +11,17 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.models.tag_pose import (CameraIntrinsics, TagPipeline,      # noqa: E402
+from src.config import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
+from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  pose_to_xyzrpy, tag_pixel_size,
                                  ASSUMED_HFOV_DEG, DEFAULT_QUAD_BLUR,
                                  MAX_REPROJ_RMS_PX)
 from src.utils.drawing import draw_cube, draw_axes, draw_corners     # noqa: E402
-from src.utils.rs_tuning import diagnose_frame                       # noqa: E402
+from src.utils.camera import diagnose_frame                       # noqa: E402
 
-DEFAULT_TAG_SIZE = 0.20      # m. 태그1 기준(20x20cm). 인쇄 후 자로 재서 --tag-size 로 덮어쓸 것
-OUTDIR = ROOT / "work_dirs" / "run"
+OUTDIR = ROOT / "work_dirs" / "live_pose"       # 스크린샷(s 키)
+LOGDIR = ROOT / "work_dirs" / "live_pose" / "log"   # --log
+BAGDIR = ROOT / "work_dirs" / "live_pose" / "bag"   # --record
 
 PANEL_BG = (30, 30, 32)
 FONT = cv2.FONT_HERSHEY_PLAIN      # Hershey 중에서 제일 고정폭에 가깝다
@@ -82,13 +40,18 @@ KEYMAP_PANEL = ["keys: q quit | a cube/axes/both | s save",
 
 
 # ----------------------------------------------------------------- 입력 소스
-def open_pipeline(args, tag_size):
-    """--source 에 맞는 TagPipeline 을 연다. 실패는 여기서 즉시 터뜨린다.
+def _resolve(val, outdir, ext):
+    """이름만 주면 outdir 아래로, 경로가 들어오면 그대로. 안 주면 시각으로 짓는다."""
+    if not val:
+        return outdir / ("%s%s" % (datetime.now().strftime("%Y%m%d_%H%M%S"), ext))
+    p = Path(val)
+    if not (p.is_absolute() or "/" in val):
+        p = outdir / val
+    return p if p.suffix == ext else p.with_suffix(ext)
 
-    예전에는 이 도구가 Source 클래스를 따로 들고 (프레임, 내부파라미터, origin,
-    ASSUMED 여부) 를 손으로 엮었는데, 그 조립이 TagPipeline 으로 통째로
-    들어갔다. 여기 남은 것은 **CLI 인자를 소스별 인자로 옮겨 적는 일**뿐이다.
-    """
+
+def open_pipeline(args, tag_size):
+    """--source 에 맞는 TagPipeline 을 연다. 실패는 여기서 즉시 터뜨린다."""
     common = dict(families=args.family, quad_blur=args.quad_blur,
                   method=args.method, min_margin=args.min_margin,
                   max_hamming=args.max_hamming,
@@ -97,7 +60,6 @@ def open_pipeline(args, tag_size):
     if args.source in ("realsense", "ir"):
         stream = "color" if args.source == "realsense" else "infrared"
         # emitter=None 이 자동이다 — IR 이면 끄고 컬러면 켠다.
-        # 점 패턴이 태그 위에 찍히면 검출이 죽으므로 IR 에서는 반드시 꺼야 한다.
         label = "realsense/%s" % stream
         if args.exposure_ms is not None:
             label += " (exp %.1fms 고정)" % args.exposure_ms
@@ -109,7 +71,9 @@ def open_pipeline(args, tag_size):
             tag_size, stream=stream, width=args.width, height=args.height,
             fps=args.fps, ir_index=args.ir_index, ae_roi=args.ae_roi,
             exposure_us=(None if args.exposure_ms is None else args.exposure_ms * 1000.0),
-            ae_priority=args.ae_priority, label=label, **common)
+            ae_priority=args.ae_priority, label=label,
+            record=(None if args.record is None
+                    else str(_resolve(args.record, BAGDIR, ".db3"))), **common)
 
     if args.source == "bag":
         if not args.path:
@@ -117,7 +81,6 @@ def open_pipeline(args, tag_size):
         if not Path(args.path).exists():
             raise SystemExit("bag 이 없다: %s" % args.path)
         # realtime=False 가 기본이다 — 한 프레임도 안 버리고 우리 속도에 맞춰 준다.
-        # 임계값을 만질 때는 이쪽이어야 같은 입력으로 숫자를 비교할 수 있다.
         return TagPipeline.from_bag(args.path, tag_size, loop=args.loop, **common)
 
     if args.source == "video":
@@ -163,13 +126,7 @@ DRAW_MODES = ("cube", "axes", "both")   # a 키가 이 순서로 돈다
 
 
 def draw_overlay(res, tag_size, mode="cube"):
-    """Result 위에 검출/자세를 그려 화면용 BGR 한 장을 만든다.
-
-    원본에 그리면 검출 좌표와 픽셀이 어긋나 상자가 태그에서 떠 보인다.
-
-    그리기 실패로 뷰어가 죽지는 않게 전부 삼킨다. 여기서 나는 예외는 화면
-    문제일 뿐이고, 숫자는 이미 res 안에 다 들어 있다.
-    """
+    """Result 위에 검출/자세를 그려 화면용 BGR 한 장을 만든다."""
     img = np.asarray(res.image)
     vis = img.copy() if img.ndim == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     for d in res.detections:
@@ -178,7 +135,6 @@ def draw_overlay(res, tag_size, mode="cube"):
             T = res.poses.get(int(d.tag_id))
             if T is not None:
                 # both 는 선이 15개라 태그가 작을 때(5m 에서 54px) 지저분하다.
-                # 그래서 기본은 큐브 하나고, 필요할 때만 겹쳐 본다.
                 if mode in ("cube", "both"):
                     draw_cube(vis, res.intrinsics.params, tag_size, T)
                 if mode in ("axes", "both"):
@@ -189,17 +145,7 @@ def draw_overlay(res, tag_size, mode="cube"):
 
 
 def pick_primary(res, want_id=None):
-    """패널에 띄울 주 태그의 detection. --tag-id 가 있으면 그것, 없으면 제일 큰 태그.
-
-    Result.primary() 와 두 가지가 다르다.
-      - 자세 계산에 **실패한 태그도 고른다.** 패널이 "POSE FAILED" 를 띄우려면
-        그 태그를 잡고 있어야 한다. 실패를 조용히 건너뛰면 화면에는 태그가
-        보이는데 패널만 "no detection" 이 되어 사람을 헷갈리게 한다.
-      - 그래서 반환이 dict 가 아니라 detection 하나다.
-    고르는 기준은 Result.primary() 와 같은 tag_pixel_size(네 변 길이 평균)다 —
-    면적(contourArea)으로 재면 태그가 기울 때 원근으로 납작해져서
-    "멀어졌다"와 "돌아갔다"를 구분하지 못한다.
-    """
+    """패널에 띄울 주 태그의 detection. --tag-id 가 있으면 그것, 없으면 제일 큰 태그."""
     if not res.detections:
         return None
     if want_id is not None:
@@ -226,8 +172,6 @@ def build_lines(ctx):
     add("resolution : %dx%d   frame %d%s" % (ctx["w"], ctx["h"], ctx["frame"],
                                              "  [PAUSED]" if ctx["paused"] else ""))
     add("fps        : %5.1f  (measured)" % ctx["fps"])
-    if ctx["strip"]:
-        add("preproc    : color overlay stripped (%s)" % ctx["strip"], "warn")
     add("intrinsics : fx=%.1f fy=%.1f" % (intr.fx, intr.fy))
     add("             cx=%.1f cy=%.1f" % (intr.cx, intr.cy))
     add("  origin   : %s" % ctx["intr_origin"], "warn" if ctx["intr_assumed"] else "ok")
@@ -282,8 +226,6 @@ def build_lines(ctx):
                 % (qa.get("tilt_deg", float("nan")), "yes" if ok_ang else "NO"),
                 "ok" if ok_ang else "warn")
             # 재투영은 반드시 rms_px 로 찍는다. estimate_pose 가 주는 e1 은
-            # detection_pose 경로에서 **px^2** 이라 px 인 척 찍으면 한 자릿수가
-            # 통째로 틀린다(pose_quality docstring 의 단위 함정).
             rms = qa.get("reproj_rms_px", float("nan"))
             add("  reproj rms %5.2f px" % rms,
                 "ok" if rms <= MAX_REPROJ_RMS_PX else "warn")
@@ -320,12 +262,7 @@ def render_panel(lines, width, height, scale=1.15, step=21, margin=12):
 
 
 def compose_canvas(vis, lines, args):
-    """왼쪽 영상 + 오른쪽 패널을 한 캔버스로 붙인다.
-
-    이름이 compose_canvas 인 이유: src/utils/util.py 에 동차변환을 곱하는
-    compose(*Ts) 가 이미 있다. 같은 이름을 쓰면 둘 중 하나가 조용히 가려지고,
-    터지는 자리는 여기가 아니라 저 아래 좌표 계산 한복판이 된다.
-    """
+    """왼쪽 영상 + 오른쪽 패널을 한 캔버스로 붙인다."""
     h, w = vis.shape[:2]
     if h > args.view_height:
         s = args.view_height / float(h)
@@ -349,9 +286,7 @@ def main():
     ap.add_argument("--height", type=int, default=None, help="RealSense 세로")
     ap.add_argument("--fps", type=int, default=30, help="RealSense fps")
     ap.add_argument("--ir-index", type=int, default=1, help="적외선 1=왼쪽 2=오른쪽")
-    ap.add_argument("--intrinsics", default=None, help="cameras.yaml 로 내부 파라미터 덮어쓰기")
-    ap.add_argument("--yaml-cam", default="cam0", help="yaml 안의 카메라 이름")
-    ap.add_argument("--hfov", type=float, default=ASSUMED_HFOV_DEG,
+    ap.add_argument("--hfov", type=float, default=None,
                     help="보정값이 없을 때 가정할 수평화각 [deg]")
     ap.add_argument("--tag-size", type=float, default=None,
                     help="태그 한 변 [m], 검은 테두리 포함. 안 주면 %.2f 로 가정한다"
@@ -363,7 +298,7 @@ def main():
     ap.add_argument("--min-margin", type=float, default=0.0)
     ap.add_argument("--max-hamming", type=int, default=0)
     ap.add_argument("--method", default="auto", choices=["auto", "tag", "pnp"])
-    # RealSense 전용 — 근거는 src/utils/rs_tuning.py 와 open_realsense docstring 에 있다
+    # RealSense 전용 — 근거는 src/utils/camera.py 와 open_realsense docstring 에 있다
     ap.add_argument("--ae-roi", action="store_true",
                     help="자동노출을 태그에만 건다. 역광 도크에서 검출률을 가른다")
     ap.add_argument("--exposure-ms", type=float, default=None, metavar="MS",
@@ -381,6 +316,14 @@ def main():
                     help="시작 표시. a 키로 cube -> axes -> both 순환")
     ap.add_argument("--view-height", type=int, default=720, help="화면에 띄울 영상 높이")
     ap.add_argument("--panel-width", type=int, default=500)
+    ap.add_argument("--record", nargs="?", const="", default=None, metavar="PATH",
+                    help="RealSense 스트림을 .db3 로 녹화한다(영상+depth+내부파라미터). "
+                         "나중에 --source bag 으로 똑같이 재생된다. "
+                         "이름만 주면 work_dirs/live_pose/bag/ 아래. "
+                         "무압축이라 1080p 는 11GB/분이다 — 길게 찍으려면 해상도를 낮춰라")
+    ap.add_argument("--log", nargs="?", const="", default=None, metavar="PATH",
+                    help="프레임별 도킹값을 JSON 으로 저장한다. 값이 얼마나 흔들리는지 보려고. "
+                         "이름만 주면 work_dirs/live_pose/log/ 아래, 안 주면 시각으로 짓는다")
     ap.add_argument("--headless", type=int, default=0, metavar="N",
                     help="창 없이 N 프레임만 처리하고 패널을 stdout 으로 찍는다")
     args = ap.parse_args()
@@ -395,10 +338,6 @@ def main():
     except Exception as exc:
         raise SystemExit("소스를 열지 못했다 (%s): %s: %s"
                          % (args.source, type(exc).__name__, exc))
-    if args.intrinsics:
-        pipe.intr = CameraIntrinsics.from_yaml(args.intrinsics, args.yaml_cam)
-        pipe.intrinsics_assumed = False
-        pipe.origin = "yaml (%s:%s)" % (Path(args.intrinsics).name, args.yaml_cam)
 
     fps = FpsMeter()
 
@@ -406,6 +345,11 @@ def main():
     print("tag size   : %.3f m%s" % (tag_size, "  (ASSUMED default)" if size_assumed else ""))
     print("intrinsics : %s" % (pipe.origin or "pending (first frame)"))
     print("keys       : %s" % KEYMAP)
+    if args.record is not None:
+        _bag = _resolve(args.record, BAGDIR, ".db3")
+        print("record     : %s  (무압축 %s)"
+              % (_bag, "약 11GB/분 @1080p" if (args.height or 1080) >= 1080
+                 else "약 5GB/분 @720p"))
     if args.headless:
         print("headless   : %d frames, no window\n" % args.headless)
     else:
@@ -420,12 +364,10 @@ def main():
     lines = []
     n_seen = n_hit = 0
     dists = []
+    log_rows = []                  # --log 용. 프레임마다 한 줄
     last_z = None                  # 직전에 성공한 거리. 실패 프레임 블러 환산에 쓴다
     try:
         # pipe 를 그냥 `for res in pipe:` 로 돌지 않는 이유가 두 개 있다.
-        #   - 빈 프레임을 세기 전에 걸러야 검출률(n_seen)이 오염되지 않는다.
-        #   - 자동노출 ROI 와 --diagnose 가 **원본 프레임**을 봐야 한다
-        #     (res.image 는 오버레이를 지운 쪽이라 depth/luma 가 떨어져 나간다).
         for i, ts, frame in pipe.frames:
             if frame is None or frame.size == 0:
                 continue
@@ -443,7 +385,6 @@ def main():
                 dists.append(last_z)
 
             # 자동노출을 태그로 끌고 간다. 놓친 프레임에는 직전 ROI 를 유지한다
-            # (매번 전체화면으로 되돌리면 노출이 펄떡거려 재검출을 방해한다).
             roi = pipe.ae_roi
             if roi is not None and res.detections:
                 roi.follow(res.detections, frame.shape)
@@ -453,6 +394,20 @@ def main():
                 print("frame %d 검출실패: %s" % (
                     i, diagnose_frame(frame, fx=intr.fx, z_m=last_z,
                                       speed_mps=args.speed)))
+
+            if args.log and det is not None:
+                tid = int(det.tag_id)
+                d = res.docking.get(tid)
+                q = res.quality.get(tid, {})
+                if d is not None:
+                    log_rows.append({"frame": int(i), "t": float(ts), "tag_id": tid,
+                                     **{k: float(v) if isinstance(v, (int, float)) else v
+                                        for k, v in d.items()},
+                                     "z_optical": float(T[2, 3]),
+                                     "ok": bool(q.get("ok", False)),
+                                     "tag_px": float(q.get("tag_px", 0.0)),
+                                     "reproj_rms_px": float(q.get("reproj_rms_px", 0.0)),
+                                     "decision_margin": float(q.get("decision_margin", 0.0))})
 
             ctx = {"source": pipe.label, "w": frame.shape[1], "h": frame.shape[0],
                    "frame": i, "fps": fps.fps, "intr": intr,
@@ -507,11 +462,34 @@ def main():
     hit = 100.0 * n_hit / max(1, n_seen)
     print("frames %d, detected %d (%.0f%%)" % (n_seen, n_hit, hit))
     # 프레임 드롭 회계. RealSense/bag 소스일 때만 있다.
-    # 이걸 봐야 fps 가 30 을 밑돈 게 "카메라가 못 냈다"인지
-    # "우리가 늦어 버려졌다"인지 갈린다 — 대책이 정반대다.
     st = pipe.stats
     if st is not None and st.received:
         print("frames(SDK): %s" % st.summary())
+    if args.record is not None:
+        _b = _resolve(args.record, BAGDIR, ".db3")
+        if _b.exists():
+            print("record: %s (%.0f MB)" % (_b, _b.stat().st_size / 1e6))
+
+    if args.log is not None:
+        import json, statistics as st_
+        # 이름만 주면 LOGDIR 아래로. 절대경로나 / 가 든 경로는 그대로 쓴다.
+        out = _resolve(args.log, LOGDIR, ".json")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"source": pipe.label, "tag_size": tag_size,
+                                   "intrinsics_assumed": bool(pipe.intrinsics_assumed),
+                                   "n": len(log_rows), "rows": log_rows},
+                                  ensure_ascii=False, indent=1))
+        print("log: %s (%d rows)" % (out, len(log_rows)))
+        keys = ("lateral", "forward", "heading_deg", "tilt_deg", "z_optical")
+        if len(log_rows) >= 2:
+            print("  %-14s%10s%10s%10s" % ("", "평균", "표준편차", "최대-최소"))
+            for k in keys:
+                v = [r[k] for r in log_rows]
+                u, f = ("mm", 1000.0) if k in ("lateral", "forward", "z_optical") else ("도", 1.0)
+                v = [x * f for x in v]
+                print("  %-14s%9.2f%s%9.2f%10.2f"
+                      % (k, st_.mean(v), u, st_.pstdev(v), max(v) - min(v)))
+
     if dists:
         print("distance: min %.3f  max %.3f  mean %.3f m%s"
               % (min(dists), max(dists), sum(dists) / len(dists),

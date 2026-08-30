@@ -1,49 +1,4 @@
-"""자세 숫자가 **맞는지** 잰다. 보이는지가 아니라.
-
-tools/live_pose.py 는 "지금 무엇이 보이나"를 띄운다. 이 도구는 다른 질문에 답한다 —
-**나온 숫자를 믿어도 되나.** 그래서 창을 안 띄운다(측정 도구다).
-
-왜 한 프레임으로는 안 되나
-    한 프레임의 distance 1.246 m 는 아무것도 증명하지 않는다. 그 값이
-    ±1mm 로 붙어 있는지 ±80mm 로 떨고 있는지 모르고, 정답에서 얼마나
-    치우쳤는지도 모른다. 정확도는 **분포**다. 그래서 N 프레임을 모아
-    평균과 표준편차를 같이 낸다.
-
-        sd 가 크다   -> 흔들린다. 노출/블러/태그픽셀 크기를 의심한다.
-        sd 는 작은데 정답과 어긋난다 -> 치우쳤다(bias). 거의 항상
-                        tag_size 나 fx 가 틀린 것이다. 둘 다 거리에 정비례한다.
-    둘은 원인이 다르므로 한 숫자로 뭉쳐 보면 안 된다.
-
-정답(truth)은 어디서 오나 — 두 갈래다
-    --source synth   우리가 정한 자세로 태그를 합성해 넣는다. **정답을 안다.**
-                     카메라도 영상도 없이 돌아가는 유일한 정확도 검사다.
-                     대신 렌즈 왜곡·센서 노이즈·모션블러·조명이 하나도 없으므로
-                     여기 숫자는 **상한선**이다. 실물은 반드시 이보다 나쁘다.
-    --source realsense|bag|video + --truth-*
-                     실측 정답은 사람이 줄자로 재서 넣는 수밖에 없다.
-                     안 주면 정답 칸 없이 분포만 나온다(그것도 쓸모가 있다 —
-                     같은 자세에서 sd 가 얼마인지는 정답 없이도 재진다).
-
---truth-z 는 **광축 방향 Z**다(pose_to_xyzrpy 의 z). 태그면에 수직인 거리를
-줄자로 쟀다면 그건 forward 쪽이다. 태그를 정면으로 마주보면 둘이 같아지고,
-비스듬히 서면 갈린다. 헷갈리면 표에 z 와 forward 가 둘 다 찍히니 비교해 볼 것.
-
-각도는 아무 때나 못 잰다
-    docking_state()['reliable_angle'] 이 False 인 프레임(태그가 정면에 가까울 때)
-    에서는 heading/approach 가 원근 왜곡 픽셀 이하라 의미가 없다. 그런 프레임을
-    섞어서 낸 heading 평균은 **숫자처럼 생긴 잡음**이다. 그래서 이 도구는
-    reliable 비율을 반드시 같이 찍고, 100% 가 아니면 reliable 프레임만 골라
-    다시 낸 값을 따로 보여준다.
-
-사용법
-    python tools/verify.py --source synth --frames 30
-    python tools/verify.py --source synth --synth-tilt 20 --synth-distance 1.5 --max-err-mm 5
-    python tools/verify.py --source bag --path dock.bag --frames 60 --truth-z 1.500
-    python tools/verify.py --source realsense --frames 100 --truth-z 1.5 --log work_dirs/verify.csv
-
---log 는 한 번 돌 때마다 CSV 한 줄을 덧붙인다. 거리를 바꿔 가며 여러 번 돌리면
-거리-오차 곡선이 그대로 쌓인다. --note 로 그 줄에 이름을 달아 둘 수 있다.
-"""
+"""자세 숫자가 **맞는지** 잰다. 보이는지가 아니라."""
 import argparse
 import csv
 import sys
@@ -57,22 +12,16 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.models.tag_pose import (CameraIntrinsics, TagPipeline,      # noqa: E402
+from src.config import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
+from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  intrinsics_from_hfov, pose_to_xyzrpy,
                                  tag_tilt_deg, docking_state,
                                  ASSUMED_HFOV_DEG, DEFAULT_QUAD_BLUR,
                                  RELIABLE_TILT_DEG)
 
-DEFAULT_TAG_SIZE = 0.20      # m. live_pose.py 와 같은 가정. 인쇄 후 자로 재서 덮어쓸 것
 
 
 # ===========================================================================
-# 표에 올릴 값들
-# ===========================================================================
-#
-# (키, 표시이름, 단위, 오차단위, 오차환산계수)
-# 오차를 m 로 찍으면 "0.0044" 처럼 0 이 줄줄이라 눈으로 크기를 못 잰다.
-# 길이는 mm, 각도는 도로 바꿔서 찍는다 — 현장에서 줄자로 재는 단위와 같다.
 ROWS = [
     ("z",        "z",        "m",   "mm",  1000.0),
     ("distance", "distance", "m",   "mm",  1000.0),
@@ -106,8 +55,8 @@ def sample_of(det, T, qual):
             "tag_px": qual.get("tag_px", float("nan")),
             "reproj": qual.get("reproj_rms_px", float("nan")),
             "margin": float(getattr(det, "decision_margin", float("nan"))),
-            # 표에는 안 나가지만 신뢰도 회계에 쓴다. 이름이 같고 뜻이 다른
-            # 두 reliable_angle 을 **둘 다** 들고 간다 — 실제로 갈린다.
+            # 표에는 안 나가지만 신뢰도 회계에 쓴다. docking_state 와 pose_quality
+            # 가 각자 판정한 값이다. 둘 다 tilt >= RELIABLE_TILT_DEG 라 보통 같다.
             "_rel_approach": bool(st["reliable_angle"]),
             "_rel_tilt": bool(qual.get("reliable_angle",
                                        tag_tilt_deg(T) >= RELIABLE_TILT_DEG)),
@@ -116,11 +65,7 @@ def sample_of(det, T, qual):
 
 
 def stats(vals):
-    """n/mean/sd/min/max. sd 는 표본표준편차(ddof=1)다.
-
-    ddof=0 을 쓰면 프레임 수가 적을 때 흔들림을 실제보다 작게 본다 —
-    우리는 N=28 같은 작은 표본을 자주 쓰므로 여기서 낙관하면 안 된다.
-    """
+    """n/mean/sd/min/max. sd 는 표본표준편차(ddof=1)다."""
     a = np.asarray([v for v in vals if v is not None and np.isfinite(v)], dtype=float)
     if a.size == 0:
         return None
@@ -130,36 +75,11 @@ def stats(vals):
 
 
 # ===========================================================================
-# 합성 소스 — 정답을 아는 유일한 입력
-# ===========================================================================
 
 def synth_source(intr, tag_size, tilt_deg=15.0, distance=2.0, lateral=0.0,
                  vertical=0.0, roll_deg=0.0, noise=2.0, n=30, seed=0,
                  tag_id=0, px=600, pad=150):
-    """정해진 자세로 태그를 합성해 (frames, T_truth) 를 돌려준다.
-
-    ── 태그 좌표계를 맞추는 데가 함정이다 ────────────────────────────
-    cv2.aruco 가 그려 주는 36h11 비트배치의 원점 모서리와 AT2 검출기가 쓰는
-    태그 좌표계는 **면내로 180도 돌아가 있다.** 그래서 object point 를
-    (-s,-s),(s,-s),(s,s),(-s,s) 순서(이미지 TL,TR,BR,BL 에 대응)로 두면
-    정답과 추정이 lateral/vertical/heading 에서 **부호가 통째로 뒤집힌다.**
-    실측으로 확인했다: tilt=+15, d=2m 에서 정답 lateral +0.5176 / heading -15.00,
-    추정 lateral -0.5127 / heading +14.88 — forward 와 tilt 만 같았다.
-    (부호만 맞추려고 정답에 -1 을 곱하면 안 된다. 그건 진짜 부호 버그가
-    나도 안 보이게 만든다.) 그래서 object point 자체를 AT2 좌표계로 적는다:
-    (s,s),(-s,s),(-s,-s),(s,-s). 이러면 T_truth = [R|t] 가 그대로 정답이다.
-
-    좌우 미러는 절대 안 된다 — 미러된 태그는 검출기가 아예 못 읽는다(실측 0/4).
-
-    Args:
-        noise: 가우시안 잡음 표준편차 [그레이레벨]. 0 이면 N 장이 전부
-            똑같아서 sd 가 0 으로 나온다 — 그건 "정확하다"가 아니라
-            "같은 그림을 N 번 넣었다"는 뜻일 뿐이다. 기본 2.0 은 노출이
-            제대로 잡힌 D435i 컬러의 대략적인 수준이다.
-
-    Returns:
-        (generator of (i, ts, gray), T_truth 4x4)
-    """
+    """정해진 자세로 태그를 합성해 (frames, T_truth) 를 돌려준다."""
     dic = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     core = cv2.aruco.generateImageMarker(dic, int(tag_id), px)
     # 흰 여백이 없으면 검출기가 태그 경계를 못 잡는다(quad 를 못 닫는다).
@@ -201,14 +121,9 @@ def synth_source(intr, tag_size, tilt_deg=15.0, distance=2.0, lateral=0.0,
 
 
 # ===========================================================================
-# 소스 열기
-# ===========================================================================
 
 def open_pipeline(args, tag_size):
-    """--source 에 맞는 (TagPipeline, truth dict) 를 연다.
-
-    합성이 아니면 truth 는 --truth-* 로 받은 것뿐이다(안 준 칸은 아예 없다).
-    """
+    """--source 에 맞는 (TagPipeline, truth dict) 를 연다."""
     common = dict(families=args.family, quad_blur=args.quad_blur,
                   method=args.method, min_margin=args.min_margin,
                   max_hamming=args.max_hamming,
@@ -217,23 +132,20 @@ def open_pipeline(args, tag_size):
              if getattr(args, f) is not None}
 
     if args.source == "synth":
-        intr = (CameraIntrinsics.from_yaml(args.intrinsics, args.yaml_cam)
-                if args.intrinsics
-                else intrinsics_from_hfov((args.height, args.width), args.hfov))
+        intr = intrinsics_from_hfov((args.height, args.width), args.hfov)
         frames, T_truth = synth_source(
             intr, tag_size, tilt_deg=args.synth_tilt, distance=args.synth_distance,
             lateral=args.synth_lateral, vertical=args.synth_vertical,
             roll_deg=args.synth_roll, noise=args.synth_noise, n=args.frames,
             seed=args.seed, tag_id=(args.tag_id or 0))
         # 합성은 **모든 칸의 정답을 안다.** 추정과 똑같은 함수를 통과시켜
-        # 뽑는다 — 정답만 다른 식으로 계산하면 그 식이 틀렸을 때 못 잡는다.
         t_all = sample_of(_NoDet(), T_truth, {})
         truth = {k: t_all[k] for k, *_ in ROWS if k in t_all and not k.startswith("_")}
         truth.pop("tag_px", None)          # 픽셀 크기는 "정답"이랄 게 없다
         truth.pop("reproj", None)
         truth.pop("margin", None)
-        origin = ("yaml (%s)" % Path(args.intrinsics).name if args.intrinsics
-                  else "SYNTHETIC (hfov=%.0fdeg, 정답과 같은 값)" % args.hfov)
+        origin = ("SYNTHETIC (%s, 정답과 같은 값)"
+                  % ("hfov=%.0fdeg" % args.hfov if args.hfov else "D435i ref"))
         pipe = TagPipeline(frames, intrinsics=intr, tag_size=tag_size,
                            label="synth (tilt=%.1fdeg d=%.2fm noise=%.1f)"
                                  % (args.synth_tilt, args.synth_distance, args.synth_noise),
@@ -266,16 +178,10 @@ def open_pipeline(args, tag_size):
 
 
 class _NoDet:
-    """합성 정답을 sample_of() 에 태우기 위한 빈 검출 자리표.
-
-    정답에는 검출이 없다(우리가 자세를 정했을 뿐이다). decision_margin 은
-    NaN 이 되고, 표에서 truth 칸이 비어 그대로 '-' 로 찍힌다.
-    """
+    """합성 정답을 sample_of() 에 태우기 위한 빈 검출 자리표."""
     decision_margin = float("nan")
 
 
-# ===========================================================================
-# 출력
 # ===========================================================================
 
 def print_table(rows_stat, truth):
@@ -325,13 +231,12 @@ def print_reliability(samples, n_seen, n_det, angle_stats):
         print("      reasons: %s"
               % ", ".join("%s x%d" % (k, v) for k, v in sorted(why.items(),
                                                                key=lambda kv: -kv[1])))
-    print("  reliable_angle (docking: approach>=10deg): %d/%d (%.0f%%)"
-          % (ra, n, pc(ra, n)))
-    print("  reliable_angle (quality: tilt>=10deg)    : %d/%d (%.0f%%)"
-          % (rt, n, pc(rt, n)))
+    print("  reliable_angle (docking_state, tilt>=%.0fdeg) : %d/%d (%.0f%%)"
+          % (RELIABLE_TILT_DEG, ra, n, pc(ra, n)))
+    print("  reliable_angle (pose_quality, tilt>=%.0fdeg)  : %d/%d (%.0f%%)"
+          % (RELIABLE_TILT_DEG, rt, n, pc(rt, n)))
 
     # 여기가 이 도구의 존재 이유 절반이다. reliable 이 아닌 프레임을 섞어
-    # 낸 heading 평균은 숫자처럼 생긴 잡음이다. 섞였으면 반드시 말한다.
     if ra == n:
         return
     if ra == 0:
@@ -340,7 +245,7 @@ def print_reliability(samples, n_seen, n_det, angle_stats):
         print("    위 표의 heading/approach 평균은 **쓰지 마라** — lateral 로 조종할 것.")
         return
     print("  ! 위 표의 heading/approach 는 unreliable 프레임까지 섞은 값이다.")
-    print("    reliable(approach>=10deg) 프레임만 골라 다시 재면:")
+    print("    reliable(tilt>=%.0fdeg) 프레임만 골라 다시 재면:" % RELIABLE_TILT_DEG)
     for key in ANGLE_ROWS:
         st = angle_stats.get(key)
         if st is None:
@@ -351,11 +256,7 @@ def print_reliability(samples, n_seen, n_det, angle_stats):
 
 
 def append_log(path, args, meta, rows_stat, truth, rel):
-    """--log CSV 에 한 줄 덧붙인다. 파일이 없으면 헤더부터 쓴다.
-
-    거리를 바꿔 가며 돌린 결과가 그대로 쌓이라고 만든 것이다. 헤더를 매번
-    같은 순서로 쓰므로 pandas 로 바로 읽힌다.
-    """
+    """--log CSV 에 한 줄 덧붙인다. 파일이 없으면 헤더부터 쓴다."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     row = {"time": datetime.now().isoformat(timespec="seconds"),
@@ -391,8 +292,6 @@ def append_log(path, args, meta, rows_stat, truth, rel):
     print("\nlog: %s 에 1줄 덧붙임%s" % (p, " (헤더 새로 씀)" if new else ""))
 
 
-# ===========================================================================
-# main
 # ===========================================================================
 
 def main():
@@ -432,9 +331,7 @@ def main():
     ap.add_argument("--tag-size", type=float, default=None,
                     help="태그 한 변 [m]. 안 주면 %.2f 로 가정한다 — 거리가 여기 정비례한다"
                          % DEFAULT_TAG_SIZE)
-    ap.add_argument("--intrinsics", default=None, help="cameras.yaml")
-    ap.add_argument("--yaml-cam", default="cam0")
-    ap.add_argument("--hfov", type=float, default=ASSUMED_HFOV_DEG)
+    ap.add_argument("--hfov", type=float, default=None)
     ap.add_argument("--width", type=int, default=1280, help="합성 가로 / RealSense 가로")
     ap.add_argument("--height", type=int, default=960, help="합성 세로 / RealSense 세로")
     ap.add_argument("--fps", type=int, default=30)
@@ -525,7 +422,6 @@ def main():
                    rows_stat, truth, rel)
 
     # ----------------------------------------------------------------- 게이트
-    # 임계값을 준 경우에만 판정한다. 안 주면 이 도구는 재기만 하고 판단은 사람 몫이다.
     bad = []
     for key, label, unit, eunit, escale in ROWS:
         st, tv = rows_stat.get(key), truth.get(key)

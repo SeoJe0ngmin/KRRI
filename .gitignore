@@ -6,6 +6,9 @@ data/
 work_dirs/
 librealsense/
 
+# 안 쓰는 옛 코드 — 참고용으로 로컬에만 둔다
+apriltag/legacy/
+
 # 파이썬
 __pycache__/
 *.pyc
