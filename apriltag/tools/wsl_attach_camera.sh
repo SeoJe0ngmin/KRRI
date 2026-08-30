@@ -10,10 +10,12 @@
 # 3번이 필요한 이유: WSL2 에는 udev 데몬이 없어서 /etc/udev/rules.d 규칙이 자동 적용되지 않는다.
 # 그래서 /dev/video* 와 /dev/bus/usb/* 가 root 전용(600) 으로 남는다. 수동으로 열어준다.
 set -u
-PS=/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe
-USBIPD="/mnt/c/Program Files/usbipd-win/usbipd.exe"
-# bare `python` 은 PATH 상 다른 conda 환경(vlm)으로 잡힌다. krri 바이너리를 직접 쓴다.
-PY="${KRRI_PY:-/home/jeongmin/anaconda3/envs/krri/bin/python}"
+PS=$(command -v powershell.exe || echo /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe)
+USBIPD=$(command -v usbipd.exe || echo "/mnt/c/Program Files/usbipd-win/usbipd.exe")
+[ -x "$USBIPD" ] || { echo "usbipd 를 못 찾음. 윈도우에서 'winget install --exact dorssel.usbipd-win' 먼저."; exit 1; }
+
+PY="${KRRI_PY:-${CONDA_PREFIX:+$CONDA_PREFIX/bin/python}}"
+PY="${PY:-$(command -v python3 || command -v python)}"
 VID_PID="8086:0b3a"          # D435i. 다른 모델이면 usbipd list 로 확인해서 바꾼다
 
 echo "[1/3] usbipd attach"
@@ -38,7 +40,11 @@ $PS -NoProfile -Command "wsl -u root -e bash -c 'chgrp plugdev /dev/video* 2>/de
 
 echo
 "$PY" -c "
-import pyrealsense2 as rs
+try:
+    import pyrealsense2 as rs
+except ImportError:
+    raise SystemExit('  pyrealsense2 가 없는 python 이다: $PY\n'
+                     '  conda activate krri 후 다시 실행하거나 KRRI_PY 로 지정할 것.')
 d = rs.context().query_devices()
 if len(d)==0:
     print('  실패 - 장치가 안 보인다. src/utils/realsense_check.py 로 진단할 것.'); raise SystemExit(1)
@@ -48,4 +54,3 @@ for x in d:
           f'USB {x.get_info(rs.camera_info.usb_type_descriptor)}')
 "
 
-#/home/jeongmin/work/projects/krri/apriltag/tools/wsl_attach_camera.sh

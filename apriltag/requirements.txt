@@ -1,5 +1,5 @@
 # python 3.11 (conda env: krri)
-#   /home/jeongmin/anaconda3/envs/krri/bin/python -m pip install -r requirements.txt
+#   pip install -r requirements.txt
 
 pupil-apriltags==1.0.4.post11  
 opencv-python==5.0.0.93        

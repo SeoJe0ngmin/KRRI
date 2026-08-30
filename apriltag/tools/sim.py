@@ -229,8 +229,13 @@ def _use_korean_font():
     """한글이 네모로 나오지 않게. DejaVu 에는 한글 글자가 없음."""
     import matplotlib
     from matplotlib import font_manager
-    for path in ("/home/jeongmin/.local/share/fonts/malgun.ttf",
-                 "/mnt/c/Windows/Fonts/malgun.ttf"):
+    import glob
+    home = os.path.expanduser("~")
+    cands = (glob.glob(home + "/.local/share/fonts/*.ttf")
+             + glob.glob("/usr/share/fonts/**/*Nanum*.ttf", recursive=True)
+             + ["/mnt/c/Windows/Fonts/malgun.ttf",          # WSL 에서 윈도우 폰트
+                "C:/Windows/Fonts/malgun.ttf"])             # 윈도우 네이티브
+    for path in cands:
         try:
             font_manager.fontManager.addfont(path)
             name = font_manager.FontProperties(fname=path).get_name()
