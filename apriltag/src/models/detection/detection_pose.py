@@ -1,6 +1,6 @@
 """3. 자세 구하기 — 검출된 태그에서 도킹 값까지.
 
-lateral / forward / heading 이 제어에 쓰는 값이다.
+lateral / forward / heading 이 제어에 쓰는 값.
 """
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,14 +19,14 @@ from .detection_tag import (DEFAULT_QUAD_BLUR, STABLE_TAG_PX, detect, make_detec
                      tag_pixel_size)
 
 
-# 태그 네 모서리의 3D 좌표. detection.corners 와 같은 순서다.
+# 태그 네 모서리의 3D 좌표. detection.corners 와 같은 순서.
 def _object_points(tag_size):
     s = tag_size / 2.0
     return np.array([[-s, -s, 0.], [s, -s, 0.], [s, s, 0.], [-s, s, 0.]], dtype=np.float64)
 
 
 def pose_by_pnp(detection, intrinsics, tag_size):
-    """OpenCV solvePnP 로 자세를 구한다. detection_pose 의 대안."""
+    """OpenCV solvePnP 로 자세를 구함. detection_pose 의 대안."""
     obj = _object_points(tag_size)
     img = np.asarray(detection.corners, dtype=np.float64).reshape(-1, 1, 2)
     dist = np.array(intrinsics.distortion, dtype=np.float64) if intrinsics.distortion else np.zeros(5)
@@ -47,9 +47,9 @@ def pose_by_pnp(detection, intrinsics, tag_size):
 
 
 def estimate_pose(detector, detection, intrinsics, tag_size, method="auto"):
-    """태그 하나의 자세를 구한다. (T, e0, e1) 3-튜플.
+    """태그 하나의 자세를 구함. (T, e0, e1) 3-튜플.
 
-    detector.detection_pose() 와 같은 반환 형식이다. 실측 예:
+    detector.detection_pose() 와 같은 반환 형식. 실측 예:
 
         T  = [[-0.999  0.009  0.032  0.151]   좌상 3x3 = 회전, 우측 3x1 = 위치 [m]
               [ 0.005 -0.920  0.391  0.322]   카메라 기준 태그
@@ -57,7 +57,7 @@ def estimate_pose(detector, detection, intrinsics, tag_size, method="auto"):
               [ 0.     0.     0.     1.   ]]
         e0 = e1 = 1.38e-06                    재투영 잔차
 
-    AT2 는 다듬기 전/후 오차 둘을 줬지만 AT3 는 하나뿐이라 같은 값을 두 번 넣는다.
+    AT2 는 다듬기 전/후 오차 둘을 줬지만 AT3 는 하나뿐이라 같은 값을 두 번 넣음.
     """
     if method == "pnp":
         T, err = pose_by_pnp(detection, intrinsics, tag_size)
@@ -74,7 +74,7 @@ def estimate_pose(detector, detection, intrinsics, tag_size, method="auto"):
     T = np.eye(4)
     T[:3, :3] = np.asarray(R, dtype=float)
     T[:3, 3] = np.asarray(tvec, dtype=float).ravel()
-    # AT3 의 pose_err 는 재투영 잔차다. AT2 의 e0/e1(다듬기 전/후)과 달리 하나뿐이라
+    # AT3 의 pose_err 는 재투영 잔차. AT2 의 e0/e1(다듬기 전/후)과 달리 하나뿐이라
     err = float(getattr(detection, "pose_err", 0.0) or 0.0)
 
     if method == "auto" and not np.isfinite(T).all():
@@ -84,15 +84,15 @@ def estimate_pose(detector, detection, intrinsics, tag_size, method="auto"):
 
 
 def pose_to_xyzrpy(T, unit='deg'):
-    """4x4 -> 읽을 수 있는 형태. 사람이 보기 위한 것이지 제어용이 아니다.
+    """4x4 -> 읽을 수 있는 형태. 사람이 보기 위한 것이지 제어용이 아님.
 
         {'x': 0.151, 'y': 0.322, 'z': 1.387,        카메라 기준 태그 위치 [m]
          'roll': 23.02, 'pitch': -1.87, 'yaw': 179.73,   [도]
          'distance': 1.432}                          원점 거리 [m]
 
-    roll/pitch/yaw 는 분해 순서에 따라 값이 달라지고 짐벌락에서 튄다.
+    roll/pitch/yaw 는 분해 순서에 따라 값이 달라지고 짐벌락에서 튐.
     제어에는 docking_state() 를 쓸 것. yaw 는 지게차 방향이 아니라
-    카메라 장착 기울기를 잰다(카메라 좌표계는 y 가 아래라 축 이름이 다르다).
+    카메라 장착 기울기를 잼(카메라 좌표계는 y 가 아래라 축 이름이 다름).
     """
     p, R = t2pr(T)
     rpy = r2rpy(R, unit=unit)
@@ -102,7 +102,7 @@ def pose_to_xyzrpy(T, unit='deg'):
 
 
 def docking_state(T_camera_tag):
-    """카메라 기준 태그 자세를 **도킹 제어가 쓸 형태**로 바꾼다. 실측 예:
+    """카메라 기준 태그 자세를 **도킹 제어가 쓸 형태**로 바꿈. 실측 예:
 
         {'lateral':  0.104,      태그 축에서 좌우로 얼마나 벗어났나 [m]
          'vertical': -0.248,     카메라높이 - 태그높이 [m]
@@ -111,12 +111,12 @@ def docking_state(T_camera_tag):
          'approach_deg':  4.22,  태그에서 봤을 때 축에서 몇 도 비켜 있나 (위치)
          'heading_deg':   2.04,  지게차가 태그 축과 몇 도 틀어져 있나 (자세)
          'tilt_deg':     23.10,  태그가 화면에서 찌그러진 정도
-         'reliable_angle': True} tilt >= 10도 라 각도를 믿어도 된다
+         'reliable_angle': True} tilt >= 10도 라 각도를 믿어도 됨
 
-    제어에 쓰는 것은 lateral / forward / heading_deg 셋이다.
-    x,y,z 는 지게차가 고개만 돌려도 부호까지 바뀌지만 이 셋은 안 변한다.
-    approach 와 heading 은 독립이다 — 축 위에 서서 고개를 돌리면
-    approach=0 인데 heading!=0 이다. 진입하려면 둘 다 0 이어야 한다.
+    제어에 쓰는 것은 lateral / forward / heading_deg 셋.
+    x,y,z 는 지게차가 고개만 돌려도 부호까지 바뀌지만 이 셋은 안 변함.
+    approach 와 heading 은 독립임 — 축 위에 서서 고개를 돌리면
+    approach=0 인데 heading!=0 임. 진입하려면 둘 다 0 이어야 함.
     """
     T_tag_cam = invert_T(np.asarray(T_camera_tag))
     p = T_tag_cam[:3, 3]
@@ -124,7 +124,7 @@ def docking_state(T_camera_tag):
 
     lateral = float(p[0])
     vertical = float(p[1])
-    forward = float(-p[2])                      # 태그 앞쪽이 양수가 되게 뒤집는다
+    forward = float(-p[2])                      # 태그 앞쪽이 양수가 되게 뒤집음
     distance = float(np.linalg.norm(p))
 
     # 내가 태그 정면축에서 몇 도 벗어난 위치에 있나
@@ -134,7 +134,7 @@ def docking_state(T_camera_tag):
     fwd = R @ np.array([0.0, 0.0, 1.0])
     heading = float(np.degrees(np.arctan2(fwd[0], fwd[2])))
 
-    # 각도를 믿어도 되는지는 **태그가 화면에서 얼마나 찌그러져 보이나(tilt)** 로 정한다.
+    # 각도를 믿어도 되는지는 **태그가 화면에서 얼마나 찌그러져 보이나(tilt)** 로 정함.
     tilt = tag_tilt_deg(T_camera_tag)
     return {"lateral": lateral, "vertical": vertical, "forward": forward,
             "distance": distance,
@@ -147,7 +147,7 @@ def tag_tilt_deg(T_camera_tag):
     """태그면이 카메라를 정면으로 마주보는 정도 [도]. float 하나.
 
     0 이면 정면(각도를 못 믿음), 클수록 비스듬(각도가 정확). 실측 예 23.10.
-    3m/25cm 태그에서 tilt 2도면 좌우 변 길이차가 0.3px 라 노이즈에 묻힌다.
+    3m/25cm 태그에서 tilt 2도면 좌우 변 길이차가 0.3px 라 노이즈에 묻힘.
     그래서 RELIABLE_TILT_DEG = 10.
     """
     n = np.asarray(T_camera_tag)[:3, :3] @ np.array([0.0, 0.0, 1.0])
@@ -177,18 +177,18 @@ def _sample_depth_m(detection, depth, patch, depth_scale):
 
 
 def depth_cross_check(detection, depth, T_camera_tag, patch=5, depth_scale=None):
-    """태그 자세의 z 와 depth 센서의 z 를 대조한다. 원리가 다른 두 측정이라
-    어긋나면 tag_size 나 내부파라미터가 틀렸다는 신호다.
+    """태그 자세의 z 와 depth 센서의 z 를 대조함. 원리가 다른 두 측정이라
+    어긋나면 tag_size 나 내부파라미터가 틀렸다는 신호.
 
         {'z_pose':   1.388,   자세로 잰 거리 [m]
          'z_depth':  1.332,   depth 센서로 잰 거리 [m]
          'diff_m':  -0.056,   차이 [m]
          'diff_pct': -4.06,   차이 [%]
-         'tol_m':    0.096,   허용치. max(0.02, 0.05*z^2) 로 거리에 따라 커진다
+         'tol_m':    0.096,   허용치. max(0.02, 0.05*z^2) 로 거리에 따라 커짐
          'in_range': True,    z 가 판정 가능 거리(1.5m) 안인가
          'agree':    True}    |diff_m| <= tol_m
 
-    z 가 DEPTH_CHECK_MAX_Z(1.5m) 를 넘으면 허용치가 너무 헐거워져 판정을 건너뛴다.
+    z 가 DEPTH_CHECK_MAX_Z(1.5m) 를 넘으면 허용치가 너무 헐거워져 판정을 건너뜀.
     """
     z_pose = float(np.asarray(T_camera_tag)[2, 3])
     tol = max(DEPTH_TOL_FLOOR_M, DEPTH_TOL_COEF * z_pose * z_pose)
@@ -209,7 +209,7 @@ def depth_cross_check(detection, depth, T_camera_tag, patch=5, depth_scale=None)
 
 
 def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method="auto"):
-    """이 프레임의 자세를 믿어도 되는지 한 번에 판정한다. 실측 예:
+    """이 프레임의 자세를 믿어도 되는지 한 번에 판정함. 실측 예:
 
         {'reproj_rms_px': 1.4e-06,   구한 자세로 모서리를 되찍어 본 오차 [px]
          'reproj_err':    1.4e-06,   같은 값 (단위는 reproj_units)
@@ -220,9 +220,9 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
          'decision_margin': 43.44,   검출기 판정 여유
          'hamming': 0,               고쳐낸 비트 수
          'ok': True,                 아래 reasons 가 비었나
-         'reasons': []}              걸린 항목들. ok=False 면 여기에 이유가 온다
+         'reasons': []}              걸린 항목들. ok=False 면 여기에 이유가 옴
 
-    depth 를 넘기면 'depth' 키가 더 붙는다(depth_cross_check 결과).
+    depth 를 넘기면 'depth' 키가 더 붙음(depth_cross_check 결과).
     거르는 기준: tag_px >= 20, reproj <= 2.0px, margin >= 20, hamming == 0.
     """
     T = np.asarray(T_camera_tag, dtype=np.float64)
@@ -271,7 +271,7 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
 
 @dataclass
 class Result:
-    """한 프레임에서 나온 것 전부. TagPipeline 이 프레임마다 하나씩 만든다."""
+    """한 프레임에서 나온 것 전부. TagPipeline 이 프레임마다 하나씩 만듦."""
     index: int
     timestamp: float
     image: object
@@ -290,7 +290,7 @@ class Result:
         return len(self.detections)
 
     def primary(self, tag_id=None):
-        """이 프레임에서 **믿고 쓸 태그 하나**를 골라 한 묶음으로 돌려준다."""
+        """이 프레임에서 **믿고 쓸 태그 하나**를 골라 한 묶음으로 돌려줌."""
         usable = [d for d in self.detections if int(d.tag_id) in self.poses]
         if not usable:
             return None
@@ -310,7 +310,7 @@ _PIPE_KEYS = ("detector", "families", "quad_blur", "method", "min_margin",
               "hfov", "quality", "depth_check", "label", "origin")
 
 class TagPipeline:
-    """소스 한 개 + 검출기 한 개를 들고, 프레임마다 Result 를 뱉는다."""
+    """소스 한 개 + 검출기 한 개를 들고, 프레임마다 Result 를 뱉음."""
 
     def __init__(self, frames=None, intrinsics=None, tag_size=None, detector=None,
                  families="tag36h11", quad_blur=DEFAULT_QUAD_BLUR, method="auto",
@@ -318,8 +318,8 @@ class TagPipeline:
                  hfov=None, quality=True, depth_check=True,
                  label="", origin="", close=None):
         """Args:
-        tag_size: **필수다. 기본값을 두지 않았다.**
-            이 값이 틀리면 거리 전체가 그 비율만큼 조용히 틀어진다(화면은
+        tag_size: **필수. 기본값을 두지 않았음.**
+            이 값이 틀리면 거리 전체가 그 비율만큼 조용히 틀어짐(화면은
         """
         if tag_size is None:
             raise ValueError(
@@ -345,13 +345,13 @@ class TagPipeline:
 
     @staticmethod
     def _split_kw(kw):
-        """kw 를 (파이프라인용, 소스용) 으로 가른다. 이름이 겹치는 인자는 없다."""
+        """kw 를 (파이프라인용, 소스용) 으로 가름. 이름이 겹치는 인자는 없음."""
         pipe = {k: kw.pop(k) for k in list(kw) if k in _PIPE_KEYS}
         return pipe, kw
 
     @classmethod
     def from_realsense(cls, tag_size, stream="color", **kw):
-        """실물 D435i 를 열어 파이프라인을 만든다. 남는 인자는 open_realsense 로 간다."""
+        """실물 D435i 를 열어 파이프라인을 만듦. 남는 인자는 open_realsense 로 감."""
         pipe_kw, open_kw = cls._split_kw(kw)
         frames, intr = open_realsense(stream=stream, **open_kw)
         pipe_kw.setdefault("label", "realsense/%s" % stream)
@@ -361,7 +361,7 @@ class TagPipeline:
 
     @classmethod
     def from_bag(cls, path, tag_size, **kw):
-        """녹화한 .bag 을 재생한다. 남는 인자는 open_bag 으로 간다."""
+        """녹화한 .bag 을 재생함. 남는 인자는 open_bag 으로 감."""
         pipe_kw, open_kw = cls._split_kw(kw)
         frames, intr = open_bag(str(path), **open_kw)
         pipe_kw.setdefault("label", "bag (%s)" % Path(path).name)
@@ -372,7 +372,7 @@ class TagPipeline:
     @classmethod
     def from_video(cls, path, tag_size, intrinsics=None, hfov=None,
                    loop=False, **kw):
-        """영상 파일. 카메라 값이 없으므로 intrinsics 를 주거나 화각을 가정한다."""
+        """영상 파일. 카메라 값이 없으므로 intrinsics 를 주거나 화각을 가정함."""
         pipe_kw, _rest = cls._split_kw(kw)
         if _rest:
             raise TypeError("모르는 인자: %s" % ", ".join(sorted(_rest)))
@@ -383,7 +383,7 @@ class TagPipeline:
                    close=frames.close, **pipe_kw)
 
     def intrinsics_for(self, shape):
-        """카메라 값을 확정한다. 없으면 화면 크기 + 화각 가정으로 지어낸다."""
+        """카메라 값을 확정함. 없으면 화면 크기 + 화각 가정으로 지어냄."""
         if self.intr is None:
             self.intr = intrinsics_from_hfov(shape, self.hfov)
             self.intrinsics_assumed = True
@@ -392,7 +392,7 @@ class TagPipeline:
         return self.intr
 
     def process(self, img, index=None, timestamp=None):
-        """이미지 한 장 -> Result. 어떤 실패도 밖으로 새지 않는다."""
+        """이미지 한 장 -> Result. 어떤 실패도 밖으로 새지 않음."""
         src = img                 
         gray = to_gray(img, channel=self.gray_channel)
         intr = self.intrinsics_for(np.asarray(img).shape)
@@ -442,7 +442,7 @@ class TagPipeline:
         return res
 
     def __iter__(self):
-        """소스를 끝까지 돌며 Result 를 뱉는다. 3-튜플 계약을 그대로 소비한다."""
+        """소스를 끝까지 돌며 Result 를 뱉음. 3-튜플 계약을 그대로 소비함."""
         if self.frames is None:
             raise RuntimeError("소스 없이 만든 파이프라인이다 — process(img) 로 한 장씩 넣어라.")
         for i, ts, img in self.frames:
@@ -459,10 +459,10 @@ class TagPipeline:
         return getattr(self.frames, "ae_roi", None)
 
     def close(self):
-        """소스를 닫고 검출기를 푼다. 몇 번 불러도 안전하다.
+        """소스를 닫고 검출기를 풂. 몇 번 불러도 안전함.
 
-        검출기 참조만 놓는다. 실제 해제는 make_detector 가 막아 둔다 —
-        pupil_apriltags 의 apriltag_detector_destroy 가 세그폴트를 낸다.
+        검출기 참조만 놓음. 실제 해제는 make_detector 가 막아 둠 —
+        pupil_apriltags 의 apriltag_detector_destroy 가 세그폴트를 냄.
         """
         c, self._close = self._close, None
         if c is not None:
@@ -484,16 +484,16 @@ class TagPipeline:
 
 
 def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
-    """정지 상태에서 여러 프레임을 모아 **대표값 하나**를 낸다.
+    """정지 상태에서 여러 프레임을 모아 **대표값 하나**를 냄.
 
-    한 프레임 값은 못 쓴다 — 태그·카메라를 고정해 둬도 실측으로 이만큼 흔들린다:
+    한 프레임 값은 못 씀 — 태그·카메라를 고정해 둬도 실측으로 이만큼 흔들림:
         lateral +-9.0mm / heading +-0.45도 (1.4m, 1920x1080)
     코너 검출이 0.35px 떨리고, 그게 heading 을 흔들고, 다시 거리에 곱해져
-    lateral 을 흔든다. n 프레임을 모으면 sqrt(n) 로 준다(30이면 1/5.5).
+    lateral 을 흔듦. n 프레임을 모으면 sqrt(n) 로 줌(30이면 1/5.5).
 
-    중앙값을 쓴다. 평균과 달리 가끔 튀는 프레임에 안 끌려간다.
+    중앙값을 씀. 평균과 달리 가끔 튀는 프레임에 안 끌려감.
     spread 는 **대표값의 표준오차**(표준편차/sqrt(n))다 — "이 값을 얼마나
-    믿을 수 있나"이지 장면이 얼마나 흔들리나가 아니다.
+    믿을 수 있나"이지 장면이 얼마나 흔들리나가 아님.
 
     반환:
         {'lateral': 0.104, 'forward': 1.407, 'heading_deg': 2.04,   대표값
@@ -506,7 +506,7 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
         태그를 못 봤으면 None.
 
     stable 이 False 면 **명령을 내지 말고 다시 재라.** 누가 지나갔거나
-    조명이 깜빡였거나 아직 안 멈춘 것이다.
+    조명이 깜빡였거나 아직 안 멈춘 것.
     """
     from ...config import (MEASURE_FRAMES, MEASURE_MAX_FRAMES,
                            STABLE_HEADING_DEG, STABLE_LATERAL_M)

@@ -1,4 +1,4 @@
-"""RealSense 카메라를 **읽고 쓰는** 것 전부. 태그 검출과 무관한 카메라 쪽 일은 여기 모은다."""
+"""RealSense 카메라를 **읽고 쓰는** 것 전부. 태그 검출과 무관한 카메라 쪽 일은 여기 모음."""
 from dataclasses import dataclass, asdict, replace, fields
 import numpy as np
 
@@ -6,33 +6,30 @@ from ..config import (BLUR_CLEAN_PX, BLUR_DEAD_PX, COLOR_EXPOSURE_UNIT_US,
                       LUMA_CLIPPED_LEVELS)
 
 
-# ── 1. YUYV 원본 휘도 ────────────────────────────────────────────────────────
-
-
-
+# 1. YUYV 원본 휘도
 def yuyv_to_luma(buf):
-    """pyrealsense2 가 준 YUYV 버퍼에서 **센서 원본 휘도**를 뽑는다."""
+    """pyrealsense2 가 준 YUYV 버퍼에서 **센서 원본 휘도**를 뽑음."""
     a = np.asanyarray(buf)
     if a.ndim != 2:
         raise ValueError("YUYV 버퍼는 2-D 여야 한다: %r" % (a.shape,))
     if a.dtype != np.uint8:
         a = a.view(np.uint8)                 # (H, W) uint16 -> (H, 2W) uint8
-    # 짝수 바이트가 Y, 홀수 바이트가 U/V 가 번갈아 든다. Y 만 걷어낸다.
+    # 짝수 바이트가 Y, 홀수 바이트가 U/V 가 번갈아 듦. Y 만 걷어냄.
     return np.ascontiguousarray(a[:, 0::2])
 
 
-# ── 2. 컬러 자동노출 ROI ─────────────────────────────────────────────────────
+# 2. 컬러 자동노출 ROI
 
 class ExposureROI:
-    """컬러 센서의 자동노출을 태그 사각형에만 건다."""
+    """컬러 센서의 자동노출을 태그 사각형에만 걺."""
 
-    #: ROI 한 변의 최소 픽셀. 이보다 작으면 펌웨어가 받지 않는 경우가 있어 넓혀 준다.
+    #: ROI 한 변의 최소 픽셀. 이보다 작으면 펌웨어가 받지 않는 경우가 있어 넓혀 줌.
     MIN_SIDE_PX = 32
 
     def __init__(self, profile, pad=0.35, stream="color"):
         """Args:
         profile: pipeline.start(config) 가 준 객체
-        pad: 태그 바운딩박스를 이 비율만큼 사방으로 넓혀 잡는다.
+        pad: 태그 바운딩박스를 이 비율만큼 사방으로 넓혀 잡음.
         """
         self.pad = float(pad)
         self.sensor = None
@@ -51,10 +48,10 @@ class ExposureROI:
                     self.supported = True
                 break
         except Exception:
-            pass                              # 지원 안 하는 장치/펌웨어면 조용히 비활성
+            pass                            
 
     def follow(self, detections, shape):
-        """검출된 태그들을 덮는 사각형으로 AE ROI 를 옮긴다."""
+        """검출된 태그들을 덮는 사각형으로 AE ROI 를 옮김."""
         if not self.supported or not detections:
             return False
         h, w = shape[0], shape[1]
@@ -66,11 +63,11 @@ class ExposureROI:
         return self.set_box(x0 - px, y0 - py, x1 + px, y1 + py, w, h)
 
     def set_box(self, x0, y0, x1, y1, w, h):
-        """픽셀 사각형으로 직접 건다. 화면 밖은 잘라내고 최소 크기를 보장한다."""
+        """픽셀 사각형으로 직접 걺. 화면 밖은 잘라내고 최소 크기를 보장함."""
         if not self.supported:
             return False
         import pyrealsense2 as rs
-        # 최소 크기 확보 — 중심을 유지한 채 벌린다
+        # 최소 크기 확보 — 중심을 유지한 채 벌림
         cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
         half = max(self.MIN_SIDE_PX / 2.0, (x1 - x0) / 2.0)
         x0, x1 = cx - half, cx + half
@@ -82,37 +79,36 @@ class ExposureROI:
         if box[2] - box[0] < 4 or box[3] - box[1] < 4:
             return False
         if box == self.last:
-            return False                      # 같은 값을 다시 쓰면 펌웨어 왕복만 낭비
+            return False                   
         roi = rs.region_of_interest()
         roi.min_x, roi.min_y, roi.max_x, roi.max_y = box
         try:
             self.sensor.set_region_of_interest(roi)
         except Exception:
-            return False                      # 펌웨어가 거부. 다음 프레임에 다시 시도
+            return False                    
         self.last = box
         return True
 
     def reset(self, w, h):
-        """ROI 를 화면 전체로 되돌린다. 태그를 오래 놓쳤을 때 탐색용으로 쓴다."""
         return self.set_box(0, 0, w - 1, h - 1, w, h)
 
 
-# ── 3. 프레임 드롭 회계 ──────────────────────────────────────────────────────
+# 3. 프레임 드롭 회계
 
 class FrameStats:
-    """프레임을 몇 장 흘렸는지 센다."""
+    """프레임을 몇 장 흘렸는지 셈."""
 
     def __init__(self):
         self.received = 0
         self.dropped = 0
-        self.gaps = 0            # 구멍이 난 횟수 (연속 드롭 1회 = 1)
+        self.gaps = 0          
         self.first_number = None
         self.last_number = None
         self._t_first = None
         self._t_last = None
 
     def update(self, frame_or_number, t=None):
-        """프레임 하나를 반영한다."""
+        """프레임 하나를 반영함."""
         n = getattr(frame_or_number, "frame_number", None)
         if n is None and isinstance(frame_or_number, (int, np.integer)):
             n = int(frame_or_number)
@@ -131,7 +127,7 @@ class FrameStats:
                 self.dropped += miss
                 self.gaps += 1
             else:
-                miss = 0                 # 번호가 되감기면(bag loop) 음수가 나온다. 무시.
+                miss = 0                 
         if self.first_number is None:
             self.first_number = n
         self.last_number = n
@@ -152,7 +148,7 @@ class FrameStats:
 
     @property
     def drop_rate(self):
-        """버려진 비율 0.0~1.0. 카메라가 보낸 것 대비다."""
+        """버려진 비율 0.0~1.0. 카메라가 보낸 것 대비."""
         return (self.dropped / self.sent) if self.sent else 0.0
 
     def summary(self):
@@ -166,16 +162,16 @@ class FrameStats:
         return s
 
 
-# ── 4. 프레임 메타데이터 / 타임스탬프 ─────────────────────────────────────────
+# 4. 프레임 메타데이터 / 타임스탬프
 
-# 값이 있을 때 자세 실패 원인 규명에 실제로 쓰이는 것들만 추렸다.
+# 값이 있을 때 자세 실패 원인 규명에 실제로 쓰이는 것들만 추렸음.
 _META_KEYS = ("actual_exposure", "gain_level", "frame_counter", "sensor_timestamp",
               "time_of_arrival", "backend_timestamp", "actual_fps",
               "auto_exposure", "white_balance", "frame_laser_power_mode")
 
 
 def frame_meta(f, keys=_META_KEYS):
-    """프레임 하나의 메타데이터를 dict 로. 없는 항목은 아예 넣지 않는다."""
+    """프레임 하나의 메타데이터를 dict 로. 없는 항목은 아예 넣지 않음."""
     try:
         import pyrealsense2 as rs
     except Exception:
@@ -222,7 +218,7 @@ def timestamp_domain(f):
 
 
 def set_global_time(profile, enabled=True):
-    """모든 센서의 global_time_enabled 를 켜고/끈다."""
+    """모든 센서의 global_time_enabled 를 켜고/끔."""
     out = {}
     try:
         import pyrealsense2 as rs
@@ -241,18 +237,18 @@ def set_global_time(profile, enabled=True):
     return out
 
 
-# ── 5. 프레임별 메타데이터 수집기 ────────────────────────────────────────────
+# 5. 프레임별 메타데이터 수집기
 
 class MetaReader:
     """프레임마다 노출/게인/센서시각을 뽑아 Frame 에 실어 보내기 위한 수집기."""
 
     def __init__(self, keys=_META_KEYS):
         self._keys = tuple(keys)
-        self._probed = None          # [(이름, rs.frame_metadata_value)] — 첫 프레임에 정해진다
-        self.supported = ()          # 실제로 살아 있는 키 이름들
+        self._probed = None        
+        self.supported = ()       
 
     def probe(self, f):
-        """첫 프레임에서 살아 있는 키를 한 번만 조사한다."""
+        """첫 프레임에서 살아 있는 키를 한 번만 조사함."""
         try:
             import pyrealsense2 as rs
         except Exception:
@@ -283,21 +279,17 @@ class MetaReader:
             try:
                 out[k] = int(f.get_frame_metadata(mv))
             except Exception:
-                pass                 # 중간에 빠지는 항목이 있어도 나머지는 살린다
+                pass             
         return out
 
 
-# ── 6. 검출 실패 원인 규명 ───────────────────────────────────────────────────
+# 6. 검출 실패 원인 규명
 
-# 모션블러 절벽. 1920x1080, 태그 238px(=tag36h11 한 칸 23.8px)에서 실측한 값이다.
+# 모션블러 절벽. 1920x1080, 태그 238px(=tag36h11 한 칸 23.8px)에서 실측한 값.
 
-# 아래 두 이름은 병합 전 camera_control.py 가 rs_tuning 에서 별칭으로 끌어 쓰던 것이다.
+# 아래 두 이름은 병합 전 camera_control.py 가 rs_tuning 에서 별칭으로 끌어 쓰던 것.
 BLUR_PX_100PCT = BLUR_CLEAN_PX     # 검출 100% 를 지키는 블러 상한 [px]
 BLUR_PX_ZERO = BLUR_DEAD_PX        # 검출이 0% 로 무너지는 블러 [px]
-
-
-#: 컬러 센서의 rs.option.exposure 한 눈금이 몇 마이크로초인가. set_color_exposure 참고.
-
 
 def motion_blur_px(exposure_us, speed_mps, fx, z_m):
     """노출시간 동안 태그가 화면에서 몇 픽셀 밀리는가."""
@@ -324,7 +316,6 @@ def diagnose_frame(img, fx=None, z_m=None, speed_mps=None):
     exp = getattr(img, "exposure_us", None)
     gain = getattr(img, "gain", None)
     if exp is None and gain is None:
-        # "메타데이터가 비었다"와 "애초에 RealSense 프레임이 아니다"는 다른 얘기다.
         if getattr(img, "meta", None) is None:
             why = "RealSense 프레임이 아니다(영상파일/웹캠) — 노출 정보가 원래 없다"
         else:
@@ -352,10 +343,10 @@ def diagnose_frame(img, fx=None, z_m=None, speed_mps=None):
     return ", ".join(parts)
 
 
-# ── 7. 컬러 센서 노출 제어 ───────────────────────────────────────────────────
+# 7. 컬러 센서 노출 제어
 
 def set_color_exposure(profile, exposure_us=None, ae_priority=None, gain=None):
-    """컬러 센서의 노출을 직접 잡는다. 모션블러를 끊는 **유일한** 방법이다."""
+    """컬러 센서의 노출을 직접 잡음. 모션블러를 끊는 **유일한** 방법."""
     out = {"exposure_us": None, "ae_priority": None, "gain": None,
            "auto_exposure": None, "errors": []}
     try:
@@ -382,9 +373,9 @@ def set_color_exposure(profile, exposure_us=None, ae_priority=None, gain=None):
                 out["errors"].append(name + "(미지원)")
                 return None
             rng = sensor.get_option_range(opt)
-            v = min(max(float(value), rng.min), rng.max)   # 범위를 넘기면 예외가 난다
+            v = min(max(float(value), rng.min), rng.max)  
             sensor.set_option(opt, v)
-            return sensor.get_option(opt)                  # 되읽기 — 짐작 금지
+            return sensor.get_option(opt)          
         except Exception as exc:
             out["errors"].append("%s(%s)" % (name, exc.__class__.__name__))
             return None
@@ -393,7 +384,6 @@ def set_color_exposure(profile, exposure_us=None, ae_priority=None, gain=None):
         v = _set(rs.option.auto_exposure_priority, float(ae_priority), "ae_priority")
         out["ae_priority"] = None if v is None else int(v)
     if exposure_us is not None:
-        # us -> 100us 눈금. 함정 1 참고.
         v = _set(rs.option.exposure, float(exposure_us) / COLOR_EXPOSURE_UNIT_US, "exposure")
         out["exposure_us"] = None if v is None else float(v) * COLOR_EXPOSURE_UNIT_US
     if gain is not None:
@@ -407,10 +397,10 @@ def set_color_exposure(profile, exposure_us=None, ae_priority=None, gain=None):
     return out
 
 
-#: 한국 상용전원 60 Hz. 형광등/저가 LED 는 그 **두 배**인 120 Hz 로 깜빡인다.
+#: 한국 상용전원 60 Hz. 형광등/저가 LED 는 그 **두 배**인 120 Hz 로 깜빡임.
 MAINS_HALF_CYCLE_MS = 1000.0 / 120.0
 
-# BLUR_PX_100PCT(10) / BLUR_PX_ZERO(32) 는 위에서 위쪽 읽기 절에서 정의한 값을 그대로 쓴다.
+# BLUR_PX_100PCT(10) / BLUR_PX_ZERO(32) 는 위에서 위쪽 읽기 절에서 정의한 값을 그대로 씀.
 
 #: realsense-viewer 의 AE ROI "reset" 이 쓰는 상자 = 화면 가운데 3/4
 AE_ROI_MARGIN_FRACTION = 1.0 / 8.0
@@ -422,12 +412,12 @@ def exposure_ms_for_motion(speed_mps, range_m, fx, blur_px=BLUR_PX_100PCT):
     """이 속도/거리에서 블러를 blur_px 안에 묶는 노출시간 [ms]."""
     speed_mps = abs(float(speed_mps))
     if speed_mps <= 0.0:
-        return float("inf")                  # 정지 상태면 블러 상한이 없다
+        return float("inf")                  # 정지 상태면 블러 상한이 없음
     return 1000.0 * float(blur_px) * float(range_m) / (float(fx) * speed_mps)
 
 
 def exposure_units(ms, unit_us=COLOR_EXPOSURE_UNIT_US):
-    """밀리초 -> 컬러 exposure 옵션 값. 최소 1 칸은 보장한다."""
+    """밀리초 -> 컬러 exposure 옵션 값. 최소 1 칸은 보장함."""
     return max(1, int(round(float(ms) * 1000.0 / float(unit_us))))
 
 
@@ -436,7 +426,7 @@ def exposure_ms(units, unit_us=COLOR_EXPOSURE_UNIT_US):
     return float(units) * float(unit_us) / 1000.0
 
 
-#: 도킹 기본 노출값. 왜 하필 83 인가 — 두 가지 제약이 같은 곳에서 만난다.
+#: 도킹 기본 노출값. 왜 하필 83 인가 — 두 가지 제약이 같은 곳에서 만남.
 DOCKING_EXPOSURE_UNITS = exposure_units(MAINS_HALF_CYCLE_MS)   # = 83
 
 
@@ -446,7 +436,7 @@ DOCKING_EXPOSURE_UNITS = exposure_units(MAINS_HALF_CYCLE_MS)   # = 83
 class CameraSettings:
     """컬러 센서에서 **태그 검출에 실제로 영향이 있는** 옵션만 담은 묶음."""
 
-    #: 자동노출. False 면 노출이 프레임 사이에 안 움직인다.
+    #: 자동노출. False 면 노출이 프레임 사이에 안 움직임.
     enable_auto_exposure: bool = None
 
     #: 노출값. **단위는 100us** (COLOR_EXPOSURE_UNIT_US). 83 = 8.3 ms.
@@ -458,16 +448,16 @@ class CameraSettings:
     #: 0=끔 1=50Hz 2=60Hz 3=자동 (d400-color.cpp:205-212 의 값 매핑 그대로).
     power_line_frequency: int = None
 
-    #: 1 이면 어두울 때 AE 가 **프레임률을 떨어뜨려서** 노출을 더 벌 수 있다. 기본값이 1.
+    #: 1 이면 어두울 때 AE 가 **프레임률을 떨어뜨려서** 노출을 더 벌 수 있음. 기본값이 1.
     auto_exposure_priority: int = None
 
-    #: 자동 화이트밸런스. 잠근다.
+    #: 자동 화이트밸런스. 잠금.
     enable_auto_white_balance: bool = None
 
     #: SDK 쪽 프레임 큐 깊이(펌웨어 아님). 녹화된 기본값 16.
     frames_queue_size: int = None
 
-    #: 프레임 타임스탬프를 호스트 시계에 맞춘다. 검출 품질과는 무관하다.
+    #: 프레임 타임스탬프를 호스트 시계에 맞춤. 검출 품질과는 무관함.
     global_time_enabled: bool = None
 
     # ── 만들기 ──────────────────────────────────────────────────────────────
@@ -478,11 +468,11 @@ class CameraSettings:
         units = DOCKING_EXPOSURE_UNITS
         if speed_mps:
             if not fx:
-                # 기본값을 두면 해상도가 달라도 조용히 1080p 로 계산해 버린다.
-                # 부르는 쪽은 CameraIntrinsics.fx 를 이미 갖고 있다.
+                # 기본값을 두면 해상도가 달라도 조용히 1080p 로 계산해 버림.
+                # 부르는 쪽은 CameraIntrinsics.fx 를 이미 갖고 있음.
                 raise ValueError("speed_mps 를 주면 fx 도 줘야 한다 (intr.fx)")
             ms = exposure_ms_for_motion(speed_mps, range_m, fx)
-            # 깜빡임 때문에 반주기(8.333ms)의 정수배로 내린다. 한 주기 밑으로는 못 간다 —
+            # 깜빡임 때문에 반주기(8.333ms)의 정수배로 내림. 한 주기 밑으로는 못 감 —
             n = int(ms / MAINS_HALF_CYCLE_MS)
             units = exposure_units(n * MAINS_HALF_CYCLE_MS) if n >= 1 else exposure_units(ms)
         return cls(
@@ -498,7 +488,7 @@ class CameraSettings:
 
     @classmethod
     def from_sensor(cls, sensor):
-        """지금 센서 상태를 그대로 뜬다. 지원 안 하는 옵션은 None 으로 남는다."""
+        """지금 센서 상태를 그대로 뜸. 지원 안 하는 옵션은 None 으로 남음."""
         import pyrealsense2 as rs
         s = color_sensor(sensor)
         out = {}
@@ -523,9 +513,9 @@ class CameraSettings:
     # ── 쓰기 ────────────────────────────────────────────────────────────────
 
     def apply(self, sensor, strict=False):
-        """센서에 쓴다. **순서가 전부다.**"""
+        """센서에 씀. **순서가 전부.**"""
         import pyrealsense2 as rs
-        # **아무것도 쓰기 전에** 모순부터 본다. 순서가 중요한 만큼 중간에 터지면
+        # **아무것도 쓰기 전에** 모순부터 봄. 순서가 중요한 만큼 중간에 터지면
         if self.enable_auto_exposure is True and strict:
             self.validate()
         s = color_sensor(sensor)
@@ -544,7 +534,7 @@ class CameraSettings:
         for name in order:
             want = getattr(self, name)
             if want is None:
-                continue                      # None = 건드리지 않는다
+                continue                      # None = 건드리지 않음
             opt = getattr(rs.option, name, None)
             if opt is None:
                 if strict:
@@ -562,14 +552,14 @@ class CameraSettings:
                 continue
 
             val = float(want)
-            try:                              # 장치가 아는 범위로 자른다
+            try:                              # 장치가 아는 범위로 자름
                 r = s.get_option_range(opt)
                 val = min(max(val, r.min), r.max)
             except Exception:
                 pass
             try:
                 s.set_option(opt, val)
-                after = s.get_option(opt)     # 쓴 값이 아니라 읽은 값을 보고한다
+                after = s.get_option(opt)     # 쓴 값이 아니라 읽은 값을 보고함
             except Exception:
                 if strict:
                     raise
@@ -578,7 +568,7 @@ class CameraSettings:
         return report
 
     def validate(self):
-        """모순된 조합을 걸러낸다. apply(strict=True) 가 **쓰기 전에** 부른다."""
+        """모순된 조합을 걸러냄. apply(strict=True) 가 **쓰기 전에** 부름."""
         if self.enable_auto_exposure is True:
             bad = [n for n in ("exposure", "gain") if getattr(self, n) is not None]
             if bad:
@@ -598,16 +588,8 @@ class CameraSettings:
         """노출을 밀리초로. None 이면 None."""
         return None if self.exposure is None else exposure_ms(self.exposure)
 
-    def merged(self, **kw):
-        """일부만 바꾼 새 묶음. 원본은 안 건드린다."""
-        return replace(self, **kw)
-
-    def to_dict(self):
-        """JSON 으로 떨궈 두고 나중에 CameraSettings(**d) 로 되살릴 수 있다."""
-        return asdict(self)
-
     def describe(self):
-        """사람이 읽을 여러 줄 문자열. 로그에 한 번 찍어 두면 나중에 살아난다."""
+        """사람이 읽을 여러 줄 문자열. 로그에 한 번 찍어 두면 나중에 살아남."""
         lines = []
         for f in fields(self):
             v = getattr(self, f.name)
@@ -620,14 +602,14 @@ class CameraSettings:
         return "\n".join(lines)
 
 
-#: 도킹 기본값. 모듈 상수로도 하나 놔둔다 — open_realsense(tune=True) 가 이걸 쓴다.
+#: 도킹 기본값. 모듈 상수로도 하나 놔둠 — open_realsense(tune=True) 가 이걸 씀.
 DOCKING_SETTINGS = CameraSettings.docking()
 
 
 # ── 센서 찾기 ────────────────────────────────────────────────────────────────
 
 def color_sensor(obj):
-    """무엇을 주든 컬러 센서를 찾아 준다."""
+    """무엇을 주든 컬러 센서를 찾아 줌."""
     import pyrealsense2 as rs
     if isinstance(obj, rs.sensor) or hasattr(obj, "get_option_range"):
         return obj
@@ -645,7 +627,7 @@ def color_sensor(obj):
 
 def tune_for_tags(target, settings=None, speed_mps=None, range_m=1.0, fx=None,
                   verbose=False):
-    """카메라를 태그 검출하기 좋은 상태로 만든다. 한 번만 부르면 된다."""
+    """카메라를 태그 검출하기 좋은 상태로 만듦. 한 번만 부르면 됨."""
     s = color_sensor(target)
     want = settings or CameraSettings.docking(speed_mps=speed_mps, range_m=range_m, fx=fx)
     before = CameraSettings.from_sensor(s)
@@ -663,7 +645,7 @@ def tune_for_tags(target, settings=None, speed_mps=None, range_m=1.0, fx=None,
 
 
 def ae_limit_supported(target):
-    """"자동노출 상한" 이 이 센서에 정말 있는지 카메라에 직접 물어본다."""
+    """"자동노출 상한" 이 이 센서에 정말 있는지 카메라에 직접 물어봄."""
     import pyrealsense2 as rs
     dev = target.get_device() if hasattr(target, "get_device") else target
     out = {}
@@ -711,7 +693,7 @@ def ae_roi_supported(target):
 
 
 def aim_ae_at_bbox(target, bbox, shape, pad=0.35):
-    """자동노출 계측창을 태그 자리에 건다."""
+    """자동노출 계측창을 태그 자리에 걺."""
     import pyrealsense2 as rs
     try:
         s = color_sensor(target)
@@ -729,18 +711,18 @@ def aim_ae_at_bbox(target, bbox, shape, pad=0.35):
     box = (max(0, int(x0)), max(0, int(y0)),
            min(w - 1, int(round(x1))), min(h - 1, int(round(y1))))
     if box[2] - box[0] < 8 or box[3] - box[1] < 8:
-        return False                          # 너무 작으면 펌웨어가 거부한다
+        return False                          # 너무 작으면 펌웨어가 거부함
     roi = rs.region_of_interest()
     roi.min_x, roi.min_y, roi.max_x, roi.max_y = box
     try:
         r.set_region_of_interest(roi)
     except Exception:
         return False                          # rs.cpp:1793 은 min<=max 만 보고
-    return True                               # 실제 거부는 펌웨어가 한다
+    return True                               # 실제 거부는 펌웨어가 함
 
 
 def center_ae_roi(target, width, height):
-    """AE ROI 를 기본 상자(가운데 3/4)로 되돌린다."""
+    """AE ROI 를 기본 상자(가운데 3/4)로 되돌림."""
     mx = int(width * AE_ROI_MARGIN_FRACTION)
     my = int(height * AE_ROI_MARGIN_FRACTION)
     return aim_ae_at_bbox(target, (mx, my, width - 1 - mx, height - 1 - my),
@@ -758,7 +740,7 @@ def ae_roi_of(target):
 
 # ── 일부러 뺀 것들 ───────────────────────────────────────────────────────────
 
-#: 나중에 "이것도 넣으면 낫지 않나" 하고 돌아오는 것을 막으려고 남긴다.
+#: 나중에 "이것도 넣으면 낫지 않나" 하고 돌아오는 것을 막으려고 남김.
 _WHY_NOT = {
     "sharpness":
         "위험해서 뺐다. 언샤프 마스크는 흑백 경계에 오버슈트 링잉을 얹는데, "

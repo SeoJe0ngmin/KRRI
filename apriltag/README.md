@@ -81,7 +81,6 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `utils/drawing.py` | 화면에 큐브·축 그리기. 표시 전용 |
 | `utils/util.py` | 블로그 원본. 5개만 씀 |
 | `utils/realsense_check.py` | 환경 진단 — 어느 층에서 깨졌나 |
-| `utils/camera_tune_check.py` | 카메라 설정을 쓰고 되읽어 확인 |
 | `utils/make_tag_pdf.py` | 인쇄용 태그 PDF (눈금자 포함) |
 
 ### `tools/`
@@ -91,8 +90,9 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `run.py` | **도킹 자동 실행.** 시작만 키보드, 그 뒤는 카메라가 정한다 |
 | `live_pose.py` | 실시간 화면 + 숫자. `--log` JSON, `--record` .db3 |
 | `verify.py` | 줄자로 잰 값과 대조 |
-| `simulate.py` | 정답을 지어내서 오차 측정 (카메라 없이) |
-| `simulate_view.py` | 위를 그림으로 |
+| `sim.py` | 정답을 지어내서 오차 측정 (카메라 없이). `--live` 로 3D + 슬라이더 |
+| `sim_measure.py` | 배치 → 렌더 → 검출 → 오차 |
+| `sim_engine.py` | 그림과 정답을 만드는 엔진 |
 | `wsl_attach_camera.sh` | WSL2 에 카메라 붙이기 |
 
 ---

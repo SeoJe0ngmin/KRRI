@@ -22,11 +22,11 @@ src/utils/     camera.py      카메라 읽기·쓰기
                tag_layout.py  태그 여러 개를 한 좌표계로
                drawing.py     화면에 그리기 (표시 전용)
                util.py        블로그 원본 그대로 둔다. 5개만 씀
-               realsense_check.py / camera_tune_check.py / make_tag_pdf.py   실행 스크립트
+               realsense_check.py / make_tag_pdf.py   실행 스크립트
 tools/         live_pose.py   실시간 화면          <- 실사용
                verify.py      실측 검증 (줄자)
-               simulate.py    가상 검증 (숫자)
-               simulate_view.py  가상 검증 (그림)
+               sim.py         가상 검증 — SCENARIO 하나로 굴린다 (--live 로 3D)
+               sim_measure.py / sim_engine.py   그 엔진
                run.py         (빈 파일) 통합 실행
                viewer.sh      realsense-viewer 실행기 (rsview 로 링크됨)
                wsl_attach_camera.sh
@@ -51,8 +51,8 @@ image.py  ->  detection_tag.py  ->  detection_pose.py
 rsview                                                # realsense-viewer (카메라 자동 연결)
 python tools/live_pose.py --source realsense          # 실시간 화면
 python tools/verify.py --frames 200 --truth-z 2.00    # 줄자 대조
-python tools/simulate.py --distance 3 --heading 20    # 가상 검증
-python tools/simulate_view.py --view layout3d -i      # 3D 배치 (마우스 회전)
+python tools/sim.py --live                            # 3D + 슬라이더로 실시간
+python tools/sim.py distance 1 2 3 5 --plot           # 한 값만 바꿔가며
 python src/utils/make_tag_pdf.py --id 1 --size 200 --paper A3
 ```
 
@@ -625,7 +625,7 @@ STOP_M    태그1 을 놓기 전 멈출 거리. 지금 높이차(0.4m)면 1.31m 
 set_option(EXPOSURE, ...)   →  SDK 가 ENABLE_AUTO_EXPOSURE 를 0 으로 내린다
 ```
 
-의도된 동작이지만 **아무 경고가 없다.** 그래서 `camera_tune_check.py` 로 되읽어 확인한다.
+의도된 동작이지만 **아무 경고가 없다.** 쓴 뒤에는 반드시 되읽어 확인할 것.
 AE ROI 가 실패하는 것도 같은 이유다 (ROI 는 AE 가 켜져 있어야 걸린다).
 
 

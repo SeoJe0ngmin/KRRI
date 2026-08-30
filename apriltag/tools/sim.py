@@ -1,11 +1,13 @@
-"""시뮬레이터를 한 곳에서 굴린다 — ablation 용.
+#태그 사이즈 태그 위치(높이)에 따라 화각 가능 범위가 달라지고, 또 그거에 따라서 실험할 수 있는 거리랑 각도가 달라져서 미리 시뮬로 측정
+"""시뮬레이터를 한 곳에서 굴림 — ablation 용.
 
-손댈 값이 simulate.py 에 CLI 23개로 흩어져 있다. 여기 SCENARIO 하나만
-고치면 되고, 한 값씩 바꿔가며 오차를 보는 것도 한 줄이면 된다.
+손댈 값을 SCENARIO 하나로 모았음. 여기만
+고치면 되고, 한 값씩 바꿔가며 오차를 보는 것도 한 줄이면 됨.
 
-    python tools/sim.py --live                   슬라이더로 실시간 (제일 편하다)
+    python tools/sim.py --live                   슬라이더로 실시간 (제일 편함)
     python tools/sim.py                          SCENARIO 그대로 한 번
     python tools/sim.py distance 1 2 3 5         거리만 바꿔가며
+    python tools/sim.py distance 1 2 3 5 --plot  그래프까지
     python tools/sim.py noise 0 2 5 10           센서 노이즈만
     python tools/sim.py heading -30 -15 0 15 30
 
@@ -14,21 +16,23 @@
     run(distance=5.0, noise=3.0)                 한 번 재기
     ablate("blur_px", [0, 5, 10, 20, 32])        표로
 
-정답은 우리가 만든 것이라 소수점 열두 자리까지 정확하다. 카메라도 줄자도
-필요 없다. 실카메라 검증은 tools/verify.py 가 한다(정답이 줄자라 ±5mm).
+정답은 우리가 만든 것이라 소수점 열두 자리까지 정확함. 카메라도 줄자도
+필요 없음. 실카메라 검증은 tools/verify.py 가 함(정답이 줄자라 ±5mm).
 """
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.simulate_view import (RESOLUTIONS, as_place, intrinsics_for,  # noqa: E402
-                                 measure)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from sim_measure import (RESOLUTIONS, as_place, intrinsics_for,      # noqa: E402
+                         measure)
 
 
 # ── 손댈 값 전부. 여기만 고치면 된다 ────────────────────────────────────────
 SCENARIO = dict(
-    # 배치 — 전부 바닥 기준으로 잰다 (실제 방을 재는 방식 그대로)
+    # 배치 — 전부 바닥 기준으로 잼 (실제 방을 재는 방식 그대로)
     tag_height = 1.60,      # m   태그 중심 높이
     cam_height = 1.20,      # m   카메라 장착 높이. 태그와 다르면 가까이서 화면 이탈
     distance   = 3.00,      # m   태그면까지 (forward)
@@ -48,7 +52,7 @@ SCENARIO = dict(
 
     # 화질 열화 — 실제로 겪는 것들
     blur_px    = 0.0,       # px  모션블러. 실측 10px 까지 100%, 32px 에서 0%
-    noise      = 0.0,       # 그레이 단계. 어두운 곳일수록 크다
+    noise      = 0.0,       # 그레이 단계. 어두운 곳일수록 큼
     seed       = 0,
 )
 
@@ -56,9 +60,9 @@ _PLACE_KEYS = ("tag_height", "cam_height", "distance", "lateral", "heading")
 
 
 def run(**over):
-    """SCENARIO 에서 몇 개만 바꿔 한 번 재고 결과를 돌려준다.
+    """SCENARIO 에서 몇 개만 바꿔 한 번 재고 결과를 돌려줌.
 
-    반환은 simulate_view.measure() 의 것이다. 자주 쓰는 것:
+    반환은 sim_measure.measure() 의 것. 자주 쓰는 것:
         r["err"]["lateral"]   정답 대비 오차 [m]
         r["est"]["tag_px"]    화면상 태그 크기 [px]
         r["ok"], r["reason"]  못 쟀으면 왜인지
@@ -84,8 +88,11 @@ ROWS = (("lateral", "mm", 1000.0), ("forward", "mm", 1000.0),
         ("z_optical", "mm", 1000.0), ("heading", "deg", 1.0), ("tilt", "deg", 1.0))
 
 
-def ablate(knob, values, log=print, **over):
-    """한 값만 바꿔가며 오차를 표로. 나머지는 SCENARIO 그대로."""
+def ablate(knob, values, log=print, plot=False, **over):
+    """한 값만 바꿔가며 오차를 표로. 나머지는 SCENARIO 그대로.
+
+    plot=True 면 그래프도 띄움 — 어디서 무너지는지는 표보다 그림이 빠름.
+    """
     if knob not in SCENARIO:
         raise SystemExit("모르는 값: %s (가능: %s)" % (knob, ", ".join(sorted(SCENARIO))))
     head = "%-12s" % knob + "".join("%12s" % ("%s[%s]" % (k, u)) for k, u, _ in ROWS)
@@ -102,7 +109,37 @@ def ablate(knob, values, log=print, **over):
         for k, _u, f in ROWS:
             line += "%12.2f" % (r["err"][k] * f)
         log(line + "%9.1f" % r["est"]["tag_px"])
+    if plot:
+        _plot_ablation(knob, out)
     return out
+
+
+def _plot_ablation(knob, out):
+    """ablate 결과를 그림으로. 위=길이오차, 아래=각도오차, 점선=화면상 태그크기."""
+    import matplotlib.pyplot as plt
+    _use_korean_font()
+    ok = [(v, r) for v, r in out if r["ok"]]
+    bad = [v for v, r in out if not r["ok"]]
+    if not ok:
+        raise SystemExit("전부 검출 실패했다")
+    xs = [v for v, _ in ok]
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(9, 6.5), sharex=True)
+    for k, u, f in ROWS:
+        ax = a1 if u == "mm" else a2
+        ax.plot(xs, [r["err"][k] * f for _, r in ok], "o-", ms=3.5, label=k)
+    a1.set_ylabel("길이 오차 [mm]"); a2.set_ylabel("각도 오차 [deg]")
+    a2.set_xlabel(knob)
+    for ax in (a1, a2):
+        ax.axhline(0, color="#9ca3af", lw=0.8)
+        ax.grid(alpha=0.25); ax.legend(fontsize=8, ncol=3)
+        for v in bad:
+            ax.axvline(v, color="#ef4444", ls=":", lw=1)
+    ax2 = a1.twinx()
+    ax2.plot(xs, [r["est"]["tag_px"] for _, r in ok], "--", color="#6b7280", lw=1)
+    ax2.set_ylabel("화면상 태그 [px] (점선)", color="#6b7280", fontsize=9)
+    a1.set_title("%s 에 따른 오차   (붉은 세로선 = 검출 실패)" % knob)
+    fig.tight_layout()
+    plt.show()
 
 
 # ── 슬라이더로 실시간 ───────────────────────────────────────────────────────
@@ -119,7 +156,7 @@ _SLIDERS = (("distance",   0.3,  8.0, "m"),
 
 
 def _draw3d(ax, cfg, ok):
-    """배치를 3D 로 그린다. 좌표는 **태그 기준**이다.
+    """배치를 3D 로 그림. 좌표는 **태그 기준**임.
 
         x = 태그면에서 앞으로 (forward)
         y = 좌우 (lateral, +가 오른쪽)
@@ -132,7 +169,7 @@ def _draw3d(ax, cfg, ok):
     ts = cfg["tag_size"]
 
     ax.clear()
-    # 축 범위는 실제로 쓰는 만큼만 — 넓게 잡으면 그림이 납작해진다
+    # 축 범위는 실제로 쓰는 만큼만 — 넓게 잡으면 그림이 납작해짐
     x0, x1 = -0.3, d * 1.15 + 0.3
     y0, y1 = min(lat, 0.0) - 0.6, max(lat, 0.0) + 0.6
     z1 = max(th, ch) + 0.5
@@ -182,14 +219,14 @@ def _draw3d(ax, cfg, ok):
         a.set_major_locator(plt.MaxNLocator(4))
     ax.view_init(elev=20, azim=-62)
     try:
-        # 세로를 실제 비율보다 키운다 — 안 그러면 납작해서 안 보인다
+        # 세로를 실제 비율보다 키움 — 안 그러면 납작해서 안 보임
         ax.set_box_aspect((x1 - x0, y1 - y0, z1 * 1.8))
     except Exception:
         pass
 
 
 def _use_korean_font():
-    """한글이 네모로 나오지 않게. DejaVu 에는 한글 글자가 없다."""
+    """한글이 네모로 나오지 않게. DejaVu 에는 한글 글자가 없음."""
     import matplotlib
     from matplotlib import font_manager
     for path in ("/home/jeongmin/.local/share/fonts/malgun.ttf",
@@ -206,10 +243,10 @@ def _use_korean_font():
 
 
 def live():
-    """슬라이더를 움직이며 검출되는지 / 얼마나 틀리는지를 실시간으로 본다.
+    """슬라이더를 움직이며 검출되는지 / 얼마나 틀리는지를 실시간으로 봄.
 
-    한 번 재는 데 약 30ms 라 슬라이더를 끌면 바로 따라온다.
-    검출이 안 되면 이유를 화면에 크게 띄운다(시야 밖 / 너무 작음 / 블러 등).
+    한 번 재는 데 약 30ms 라 슬라이더를 끌면 바로 따라옴.
+    검출이 안 되면 이유를 화면에 크게 띄움(시야 밖 / 너무 작음 / 블러 등).
     """
     import matplotlib
     matplotlib.use("TkAgg")
@@ -305,7 +342,7 @@ def main():
             raise SystemExit("못 쟀다: %s" % r["reason"])
         print("%-12s%12s%12s%12s" % ("", "정답", "추정", "오차"))
         for k, u, f in ROWS:
-            d = r["truth"]["docking"]      # 키 이름이 조금 다르다
+            d = r["truth"]["docking"]      # 키 이름이 조금 다름
             t = d.get(k, d.get(k + "_deg", r["truth"].get(k)))
             print("%-12s%12.3f%12.3f%12.2f%s"
                   % (k, t * f, r["est"][k] * f, r["err"][k] * f, u))
@@ -313,6 +350,8 @@ def main():
               % (r["est"]["tag_px"], r["quality"].get("reproj_rms_px", float("nan")),
                  r["est"]["rel_tilt"]))
         return
+    plot = "--plot" in args
+    args = [a for a in args if a != "--plot"]
     knob, values = args[0], args[1:]
     cast = type(SCENARIO[knob]) if SCENARIO.get(knob) is not None else float
     if cast is str:
@@ -321,7 +360,7 @@ def main():
         vals = [int(v) for v in values]
     else:
         vals = [float(v) for v in values]
-    ablate(knob, vals)
+    ablate(knob, vals, plot=plot)
 
 
 if __name__ == "__main__":

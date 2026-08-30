@@ -1,4 +1,4 @@
-"""도킹용 AprilTag 자세를 실시간 화면으로 본다."""
+"""도킹용 AprilTag 자세를 실시간 화면으로 봄."""
 import argparse
 import sys
 import time
@@ -24,7 +24,7 @@ LOGDIR = ROOT / "work_dirs" / "live_pose" / "log"   # --log
 BAGDIR = ROOT / "work_dirs" / "live_pose" / "bag"   # --record
 
 PANEL_BG = (30, 30, 32)
-FONT = cv2.FONT_HERSHEY_PLAIN      # Hershey 중에서 제일 고정폭에 가깝다
+FONT = cv2.FONT_HERSHEY_PLAIN      # Hershey 중에서 제일 고정폭에 가까움
 COLORS = {
     "head": (150, 220, 255),
     "lab": (200, 200, 200),
@@ -41,7 +41,7 @@ KEYMAP_PANEL = ["keys: q quit | a cube/axes/both | s save",
 
 # ----------------------------------------------------------------- 입력 소스
 def _resolve(val, outdir, ext):
-    """이름만 주면 outdir 아래로, 경로가 들어오면 그대로. 안 주면 시각으로 짓는다."""
+    """이름만 주면 outdir 아래로, 경로가 들어오면 그대로. 안 주면 시각으로 지음."""
     if not val:
         return outdir / ("%s%s" % (datetime.now().strftime("%Y%m%d_%H%M%S"), ext))
     p = Path(val)
@@ -51,7 +51,7 @@ def _resolve(val, outdir, ext):
 
 
 def open_pipeline(args, tag_size):
-    """--source 에 맞는 TagPipeline 을 연다. 실패는 여기서 즉시 터뜨린다."""
+    """--source 에 맞는 TagPipeline 을 엶. 실패는 여기서 즉시 터뜨림."""
     common = dict(families=args.family, quad_blur=args.quad_blur,
                   method=args.method, min_margin=args.min_margin,
                   max_hamming=args.max_hamming,
@@ -59,7 +59,7 @@ def open_pipeline(args, tag_size):
 
     if args.source in ("realsense", "ir"):
         stream = "color" if args.source == "realsense" else "infrared"
-        # emitter=None 이 자동이다 — IR 이면 끄고 컬러면 켠다.
+        # emitter=None 이 자동임 — IR 이면 끄고 컬러면 켬.
         label = "realsense/%s" % stream
         if args.exposure_ms is not None:
             label += " (exp %.1fms 고정)" % args.exposure_ms
@@ -80,7 +80,7 @@ def open_pipeline(args, tag_size):
             raise SystemExit("--source bag 은 --path 가 필요하다")
         if not Path(args.path).exists():
             raise SystemExit("bag 이 없다: %s" % args.path)
-        # realtime=False 가 기본이다 — 한 프레임도 안 버리고 우리 속도에 맞춰 준다.
+        # realtime=False 가 기본임 — 한 프레임도 안 버리고 우리 속도에 맞춰 줌.
         return TagPipeline.from_bag(args.path, tag_size, loop=args.loop, **common)
 
     if args.source == "video":
@@ -96,7 +96,7 @@ def open_pipeline(args, tag_size):
 
 # ----------------------------------------------------------------- fps
 class FpsMeter:
-    """측정 fps. 프레임 간격을 지수이동평균으로 눌러 숫자가 튀지 않게 한다."""
+    """측정 fps. 프레임 간격을 지수이동평균으로 눌러 숫자가 튀지 않게 함."""
 
     def __init__(self, alpha=0.15):
         self.alpha = alpha
@@ -122,19 +122,19 @@ class FpsMeter:
 
 
 # ----------------------------------------------------------------- 그리기
-DRAW_MODES = ("cube", "axes", "both")   # a 키가 이 순서로 돈다
+DRAW_MODES = ("cube", "axes", "both")   # a 키가 이 순서로 돎
 
 
 def draw_overlay(res, tag_size, mode="cube"):
-    """Result 위에 검출/자세를 그려 화면용 BGR 한 장을 만든다."""
+    """Result 위에 검출/자세를 그려 화면용 BGR 한 장을 만듦."""
     img = np.asarray(res.image)
     vis = img.copy() if img.ndim == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     for d in res.detections:
         try:
-            draw_corners(vis, d)               # 세 draw_* 는 전부 vis 를 제자리에서 고친다
+            draw_corners(vis, d)               # 세 draw_* 는 전부 vis 를 제자리에서 고침
             T = res.poses.get(int(d.tag_id))
             if T is not None:
-                # both 는 선이 15개라 태그가 작을 때(5m 에서 54px) 지저분하다.
+                # both 는 선이 15개라 태그가 작을 때(5m 에서 54px) 지저분함.
                 if mode in ("cube", "both"):
                     draw_cube(vis, res.intrinsics.params, tag_size, T)
                 if mode in ("axes", "both"):
@@ -157,7 +157,7 @@ def pick_primary(res, want_id=None):
 
 # ----------------------------------------------------------------- 패널
 def build_lines(ctx):
-    """패널 한 장을 (문자열, 색키) 목록으로 만든다. 영어만 쓴다."""
+    """패널 한 장을 (문자열, 색키) 목록으로 만듦. 영어만 씀."""
     L = []
     add = lambda t, c="lab": L.append((t, c))
     rule = lambda: L.append(("-" * 44, "rule"))
@@ -225,7 +225,7 @@ def build_lines(ctx):
             add("  tag tilt %8.1f deg   reliable: %s"
                 % (qa.get("tilt_deg", float("nan")), "yes" if ok_ang else "NO"),
                 "ok" if ok_ang else "warn")
-            # 재투영은 반드시 rms_px 로 찍는다. estimate_pose 가 주는 e1 은
+            # 재투영은 반드시 rms_px 로 찍음. estimate_pose 가 주는 e1 은
             rms = qa.get("reproj_rms_px", float("nan"))
             add("  reproj rms %5.2f px" % rms,
                 "ok" if rms <= MAX_REPROJ_RMS_PX else "warn")
@@ -246,7 +246,7 @@ def build_lines(ctx):
 
 
 def render_panel(lines, width, height, scale=1.15, step=21, margin=12):
-    """패널 줄을 이미지로 그린다. 제일 긴 줄이 폭을 넘으면 글자를 줄여서 맞춘다."""
+    """패널 줄을 이미지로 그림. 제일 긴 줄이 폭을 넘으면 글자를 줄여서 맞춤."""
     inner = width - 2 * margin
     widest = max([cv2.getTextSize(t, FONT, scale, 1)[0][0] for t, _ in lines] or [1])
     if widest > inner:
@@ -262,7 +262,7 @@ def render_panel(lines, width, height, scale=1.15, step=21, margin=12):
 
 
 def compose_canvas(vis, lines, args):
-    """왼쪽 영상 + 오른쪽 패널을 한 캔버스로 붙인다."""
+    """왼쪽 영상 + 오른쪽 패널을 한 캔버스로 붙임."""
     h, w = vis.shape[:2]
     if h > args.view_height:
         s = args.view_height / float(h)
@@ -298,7 +298,7 @@ def main():
     ap.add_argument("--min-margin", type=float, default=0.0)
     ap.add_argument("--max-hamming", type=int, default=0)
     ap.add_argument("--method", default="auto", choices=["auto", "tag", "pnp"])
-    # RealSense 전용 — 근거는 src/utils/camera.py 와 open_realsense docstring 에 있다
+    # RealSense 전용 — 근거는 src/utils/camera.py 와 open_realsense docstring 에 있음
     ap.add_argument("--ae-roi", action="store_true",
                     help="자동노출을 태그에만 건다. 역광 도크에서 검출률을 가른다")
     ap.add_argument("--exposure-ms", type=float, default=None, metavar="MS",
@@ -365,9 +365,9 @@ def main():
     n_seen = n_hit = 0
     dists = []
     log_rows = []                  # --log 용. 프레임마다 한 줄
-    last_z = None                  # 직전에 성공한 거리. 실패 프레임 블러 환산에 쓴다
+    last_z = None                  # 직전에 성공한 거리. 실패 프레임 블러 환산에 씀
     try:
-        # pipe 를 그냥 `for res in pipe:` 로 돌지 않는 이유가 두 개 있다.
+        # pipe 를 그냥 `for res in pipe:` 로 돌지 않는 이유가 두 개 있음.
         for i, ts, frame in pipe.frames:
             if frame is None or frame.size == 0:
                 continue
@@ -384,12 +384,12 @@ def main():
                 last_z = float(pose_to_xyzrpy(T)["distance"])
                 dists.append(last_z)
 
-            # 자동노출을 태그로 끌고 간다. 놓친 프레임에는 직전 ROI 를 유지한다
+            # 자동노출을 태그로 끌고 감. 놓친 프레임에는 직전 ROI 를 유지함
             roi = pipe.ae_roi
             if roi is not None and res.detections:
                 roi.follow(res.detections, frame.shape)
 
-            # 못 찾은 프레임은 왜 못 찾았는지 그 자리에서 남긴다. 지나가면 못 캔다.
+            # 못 찾은 프레임은 왜 못 찾았는지 그 자리에서 남김. 지나가면 못 캠.
             if args.diagnose and not res.detections:
                 print("frame %d 검출실패: %s" % (
                     i, diagnose_frame(frame, fx=intr.fx, z_m=last_z,
@@ -430,7 +430,7 @@ def main():
             canvas = compose_canvas(draw_overlay(res, tag_size, args.draw), lines, args)
             cv2.imshow(win, canvas)
 
-            # 일시정지 중에는 같은 화면을 계속 다시 그리며 키만 받는다
+            # 일시정지 중에는 같은 화면을 계속 다시 그리며 키만 받음
             while True:
                 key = cv2.waitKey(1 if not paused else 30) & 0xFF
                 if key in (ord('q'), 27):
@@ -456,12 +456,12 @@ def main():
     except RuntimeError as exc:               # 소스가 첫 프레임에서야 터지는 경우
         print("capture failed: %s" % exc)
     finally:
-        pipe.close()                   # 제너레이터를 닫아야 파이프라인/캡처가 풀린다
+        pipe.close()                   # 제너레이터를 닫아야 파이프라인/캡처가 풀림
         cv2.destroyAllWindows()
 
     hit = 100.0 * n_hit / max(1, n_seen)
     print("frames %d, detected %d (%.0f%%)" % (n_seen, n_hit, hit))
-    # 프레임 드롭 회계. RealSense/bag 소스일 때만 있다.
+    # 프레임 드롭 회계. RealSense/bag 소스일 때만 있음.
     st = pipe.stats
     if st is not None and st.received:
         print("frames(SDK): %s" % st.summary())
@@ -472,7 +472,7 @@ def main():
 
     if args.log is not None:
         import json, statistics as st_
-        # 이름만 주면 LOGDIR 아래로. 절대경로나 / 가 든 경로는 그대로 쓴다.
+        # 이름만 주면 LOGDIR 아래로. 절대경로나 / 가 든 경로는 그대로 씀.
         out = _resolve(args.log, LOGDIR, ".json")
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps({"source": pipe.label, "tag_size": tag_size,

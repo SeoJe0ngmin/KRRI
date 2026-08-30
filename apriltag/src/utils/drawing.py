@@ -4,7 +4,7 @@ import numpy as np
 
 
 def draw_cube(overlay, camera_params, tag_size, pose, z_sign=1):
-    """태그 위에 정육면체를 그려 자세를 눈으로 확인한다."""
+    """태그 위에 정육면체를 그려 자세를 눈으로 확인함."""
     opoints = np.array([
         -1, -1, 0,
          1, -1, 0,
@@ -39,7 +39,7 @@ def draw_cube(overlay, camera_params, tag_size, pose, z_sign=1):
 
 
 def draw_axes(overlay, camera_params, tag_size, pose, length=None, thickness=3):
-    """태그 원점에 좌표축을 그린다. X=빨강, Y=초록, Z=파랑."""
+    """태그 원점에 좌표축을 그림. X=빨강, Y=초록, Z=파랑."""
     L = length if length is not None else tag_size * 0.5
     opoints = np.float32([[0, 0, 0], [L, 0, 0], [0, L, 0], [0, 0, -L]]).reshape(-1, 3)
 
@@ -58,7 +58,7 @@ def draw_axes(overlay, camera_params, tag_size, pose, length=None, thickness=3):
 
 
 def draw_corners(overlay, detection, color=(0, 0, 255), thickness=2):
-    """검출된 태그의 네 모서리를 잇고 id 를 적는다."""
+    """검출된 태그의 네 모서리를 잇고 id 를 적음."""
     pts = np.round(detection.corners).astype(int)
     cv2.polylines(overlay, [pts.reshape(-1, 1, 2)], True, color, thickness, 16)
     cx, cy = np.round(detection.center).astype(int)

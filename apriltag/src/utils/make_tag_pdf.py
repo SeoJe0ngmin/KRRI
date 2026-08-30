@@ -3,7 +3,7 @@ import argparse
 import os
 import sys
 
-# 스크립트로 직접 돌리므로 상대 임포트가 안 된다. 저장소 루트를 경로에 넣는다.
+# 스크립트로 직접 돌리므로 상대 임포트가 안 됨. 저장소 루트를 경로에 넣음.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import cv2
@@ -51,7 +51,7 @@ def build(tag_id, size_mm, paper, out):
                     (x0 + c * cell, y0 + (CELLS - 1 - r) * cell), cell, cell,
                     fc="black", ec="none", lw=0, zorder=2, snap=False))
 
-    # 모서리 표시 — 자로 잴 때 어디서 어디까지인지 알려준다
+    # 모서리 표시 — 자로 잴 때 어디서 어디까지인지 알려줌
     for dx, dy, ha, va in ((0, 0, "right", "top"), (size_mm, 0, "left", "top")):
         ax.plot([x0 + dx], [y0 + dy], marker="+", ms=9, mew=1.0, color="0.45", zorder=3)
     ax.annotate("", xy=(x0, y0 - 6), xytext=(x0 + size_mm, y0 - 6),
@@ -59,7 +59,7 @@ def build(tag_id, size_mm, paper, out):
     ax.text(pw / 2, y0 - 10, f"{size_mm:.0f} mm  (black border to black border)",
             ha="center", va="top", fontsize=8, color="0.25")
 
-    # 검증용 눈금자 100mm — 인쇄물에서 이게 100mm 면 배율이 정확한 것이다
+    # 검증용 눈금자 100mm — 인쇄물에서 이게 100mm 면 배율이 정확한 것
     ry = 22
     rx = (pw - 100) / 2
     ax.plot([rx, rx + 100], [ry, ry], lw=1.0, color="0.2", zorder=3)
@@ -95,12 +95,12 @@ def main():
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
-    # 기본 출력은 저장소 루트 기준으로 고정한다. 예전엔 cwd 상대라서, 어디서
+    # 기본 출력은 저장소 루트 기준으로 고정함. 예전엔 cwd 상대라서, 어디서
     import os
     ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = a.out or os.path.join(
         ROOT, f"work_dirs/tags/tag36h11_id{a.id}_{a.size:.0f}mm_{a.paper}.pdf")
-    if os.path.dirname(out):        # --out 을 파일명만으로 준 경우 dirname 이 빈 문자열이다
+    if os.path.dirname(out):        # --out 을 파일명만으로 준 경우 dirname 이 빈 문자열
         os.makedirs(os.path.dirname(out), exist_ok=True)
     r = build(a.id, a.size, a.paper, out)
 

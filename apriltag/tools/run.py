@@ -1,15 +1,15 @@
-"""도킹 자동 실행 — 시작만 키보드, 그 뒤는 알아서 간다.
+"""도킹 자동 실행 — 시작만 키보드, 그 뒤는 알아서 감.
 
-    python tools/run.py --dry-run      CAN 없이 순서만 본다 (카메라는 씀)
+    python tools/run.py --dry-run      CAN 없이 순서만 봄 (카메라는 씀)
     python tools/run.py                실제 주행. canlib + keyboard 필요
 
-키보드는 **시작과 비상정지에만** 쓴다. 주행 방향은 카메라가 정한다.
+키보드는 **시작과 비상정지에만** 씀. 주행 방향은 카메라가 정함.
     SPACE  시작
     ESC    비상정지 후 종료
 
-control_forklift_v2.py 는 한 줄도 안 고친다. 그쪽 TX 루프(movement 10ms /
+control_forklift_v2.py 는 한 줄도 안 고침. 그쪽 TX 루프(movement 10ms /
 control 5ms / heartbeat 200ms)를 그대로 띄워 두고, 우리는 current_movement
-변수만 바꾼다 — 키보드 루프가 하던 일과 같다. 대신 key_monitor_loop 은 안 띄운다.
+변수만 바꿈 — 키보드 루프가 하던 일과 같음. 대신 key_monitor_loop 은 안 띄움.
 """
 import argparse
 import asyncio
@@ -25,7 +25,7 @@ from src.models.control.control_from_pose import (CanDriver, DryRunDriver,  # no
 
 
 async def _wait_start():
-    """SPACE 를 기다린다. keyboard 가 없으면 엔터로 대신한다."""
+    """SPACE 를 기다림. keyboard 가 없으면 엔터로 대신함."""
     try:
         import keyboard
     except ImportError:
@@ -70,7 +70,7 @@ async def main_async(args):
         if not ctrl.connect_can():
             raise SystemExit("CAN 연결 실패")
         ctrl.is_running = True
-        # 키보드 루프는 안 띄운다. 나머지 TX 루프만 띄운다.
+        # 키보드 루프는 안 띄움. 나머지 TX 루프만 띄움.
         tasks = [asyncio.create_task(ctrl.control_tx_loop()),
                  asyncio.create_task(ctrl.movement_tx_loop()),
                  asyncio.create_task(ctrl.heartbeat_loop())]

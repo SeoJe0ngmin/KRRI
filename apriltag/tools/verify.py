@@ -1,4 +1,4 @@
-"""자세 숫자가 **맞는지** 잰다. 보이는지가 아니라."""
+"""자세 숫자가 **맞는지** 잼. 보이는지가 아니라."""
 import argparse
 import csv
 import sys
@@ -36,7 +36,7 @@ ROWS = [
     ("margin",   "margin",   "-",   "-",   1.0),
 ]
 
-#: --truth-* 로 받을 수 있는 것. 실측 정답은 사람이 잴 수 있는 것만 받는다.
+#: --truth-* 로 받을 수 있는 것. 실측 정답은 사람이 잴 수 있는 것만 받음.
 TRUTH_FLAGS = {"z": "truth_z", "lateral": "truth_lateral", "heading": "truth_heading"}
 
 #: 각도라서 reliable_angle 이 False 면 의미가 없는 행
@@ -44,7 +44,7 @@ ANGLE_ROWS = ("heading", "approach")
 
 
 def sample_of(det, T, qual):
-    """한 태그의 결과를 표의 행 키에 맞춘 평평한 dict 로 편다."""
+    """한 태그의 결과를 표의 행 키에 맞춘 평평한 dict 로 폄."""
     v = pose_to_xyzrpy(T)
     st = docking_state(T)
     return {"z": v["z"], "distance": v["distance"],
@@ -55,8 +55,8 @@ def sample_of(det, T, qual):
             "tag_px": qual.get("tag_px", float("nan")),
             "reproj": qual.get("reproj_rms_px", float("nan")),
             "margin": float(getattr(det, "decision_margin", float("nan"))),
-            # 표에는 안 나가지만 신뢰도 회계에 쓴다. docking_state 와 pose_quality
-            # 가 각자 판정한 값이다. 둘 다 tilt >= RELIABLE_TILT_DEG 라 보통 같다.
+            # 표에는 안 나가지만 신뢰도 회계에 씀. docking_state 와 pose_quality
+            # 가 각자 판정한 값. 둘 다 tilt >= RELIABLE_TILT_DEG 라 보통 같음.
             "_rel_approach": bool(st["reliable_angle"]),
             "_rel_tilt": bool(qual.get("reliable_angle",
                                        tag_tilt_deg(T) >= RELIABLE_TILT_DEG)),
@@ -79,10 +79,10 @@ def stats(vals):
 def synth_source(intr, tag_size, tilt_deg=15.0, distance=2.0, lateral=0.0,
                  vertical=0.0, roll_deg=0.0, noise=2.0, n=30, seed=0,
                  tag_id=0, px=600, pad=150):
-    """정해진 자세로 태그를 합성해 (frames, T_truth) 를 돌려준다."""
+    """정해진 자세로 태그를 합성해 (frames, T_truth) 를 돌려줌."""
     dic = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     core = cv2.aruco.generateImageMarker(dic, int(tag_id), px)
-    # 흰 여백이 없으면 검출기가 태그 경계를 못 잡는다(quad 를 못 닫는다).
+    # 흰 여백이 없으면 검출기가 태그 경계를 못 잡음(quad 를 못 닫음).
     full = cv2.copyMakeBorder(core, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
     src_quad = np.float32([[pad, pad], [pad + px, pad],
                            [pad + px, pad + px], [pad, pad + px]])
@@ -123,7 +123,7 @@ def synth_source(intr, tag_size, tilt_deg=15.0, distance=2.0, lateral=0.0,
 # ===========================================================================
 
 def open_pipeline(args, tag_size):
-    """--source 에 맞는 (TagPipeline, truth dict) 를 연다."""
+    """--source 에 맞는 (TagPipeline, truth dict) 를 엶."""
     common = dict(families=args.family, quad_blur=args.quad_blur,
                   method=args.method, min_margin=args.min_margin,
                   max_hamming=args.max_hamming,
@@ -138,10 +138,10 @@ def open_pipeline(args, tag_size):
             lateral=args.synth_lateral, vertical=args.synth_vertical,
             roll_deg=args.synth_roll, noise=args.synth_noise, n=args.frames,
             seed=args.seed, tag_id=(args.tag_id or 0))
-        # 합성은 **모든 칸의 정답을 안다.** 추정과 똑같은 함수를 통과시켜
+        # 합성은 **모든 칸의 정답을 앎.** 추정과 똑같은 함수를 통과시켜
         t_all = sample_of(_NoDet(), T_truth, {})
         truth = {k: t_all[k] for k, *_ in ROWS if k in t_all and not k.startswith("_")}
-        truth.pop("tag_px", None)          # 픽셀 크기는 "정답"이랄 게 없다
+        truth.pop("tag_px", None)          # 픽셀 크기는 "정답"이랄 게 없음
         truth.pop("reproj", None)
         truth.pop("margin", None)
         origin = ("SYNTHETIC (%s, 정답과 같은 값)"
@@ -211,7 +211,7 @@ def print_table(rows_stat, truth):
 
 
 def print_reliability(samples, n_seen, n_det, angle_stats):
-    """각도를 믿어도 되는 프레임이 몇 %인지. 이걸 빼면 표가 거짓말을 한다."""
+    """각도를 믿어도 되는 프레임이 몇 %인지. 이걸 빼면 표가 거짓말을 함."""
     n = len(samples)
     ra = sum(1 for s in samples if s["_rel_approach"])
     rt = sum(1 for s in samples if s["_rel_tilt"])
@@ -236,7 +236,7 @@ def print_reliability(samples, n_seen, n_det, angle_stats):
     print("  reliable_angle (pose_quality, tilt>=%.0fdeg)  : %d/%d (%.0f%%)"
           % (RELIABLE_TILT_DEG, rt, n, pc(rt, n)))
 
-    # 여기가 이 도구의 존재 이유 절반이다. reliable 이 아닌 프레임을 섞어
+    # 여기가 이 도구의 존재 이유 절반. reliable 이 아닌 프레임을 섞어
     if ra == n:
         return
     if ra == 0:
@@ -256,7 +256,7 @@ def print_reliability(samples, n_seen, n_det, angle_stats):
 
 
 def append_log(path, args, meta, rows_stat, truth, rel):
-    """--log CSV 에 한 줄 덧붙인다. 파일이 없으면 헤더부터 쓴다."""
+    """--log CSV 에 한 줄 덧붙임. 파일이 없으면 헤더부터 씀."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     row = {"time": datetime.now().isoformat(timespec="seconds"),
@@ -304,7 +304,7 @@ def main():
                     help="모을 프레임 수. 분포를 보려면 최소 20~30 은 있어야 한다")
     ap.add_argument("--tag-id", type=int, default=None,
                     help="이 태그만 잰다. 안 주면 프레임마다 제일 큰 태그")
-    # 정답 (실측). 없으면 분포만 낸다.
+    # 정답 (실측). 없으면 분포만 냄.
     ap.add_argument("--truth-z", type=float, default=None, metavar="M",
                     help="줄자로 잰 광축방향 거리 [m]. 태그면 수직거리라면 forward 와 비교할 것")
     ap.add_argument("--truth-lateral", type=float, default=None, metavar="M",
@@ -332,7 +332,7 @@ def main():
                     help="태그 한 변 [m]. 안 주면 %.2f 로 가정한다 — 거리가 여기 정비례한다"
                          % DEFAULT_TAG_SIZE)
     ap.add_argument("--hfov", type=float, default=None)
-    # 실카메라는 지원 해상도만 받는다(D435i 컬러에 1280x960 은 없다). config 를 따른다.
+    # 실카메라는 지원 해상도만 받음(D435i 컬러에 1280x960 은 없음). config 를 따름.
     ap.add_argument("--width", type=int, default=None, help="가로. 안 주면 config.COLOR_SIZE")
     ap.add_argument("--height", type=int, default=None, help="세로. 안 주면 config.COLOR_SIZE")
     ap.add_argument("--fps", type=int, default=30)

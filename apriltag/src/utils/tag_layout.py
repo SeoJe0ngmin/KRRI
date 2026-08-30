@@ -1,4 +1,4 @@
-"""태그 배치표 — 여러 태그를 하나의 좌표계로 묶는다."""
+"""태그 배치표 — 여러 태그를 하나의 좌표계로 묶음."""
 from dataclasses import dataclass
 
 import numpy as np
@@ -37,7 +37,7 @@ def average_rotations(Rs):
     M = np.mean(np.asarray(Rs, dtype=float), axis=0)
     U, _, Vt = np.linalg.svd(M)
     R = U @ Vt
-    if np.linalg.det(R) < 0:          # 반사(거울상)가 나오면 뒤집는다
+    if np.linalg.det(R) < 0:          # 반사(거울상)가 나오면 뒤집음
         U[:, -1] *= -1
         R = U @ Vt
     return R
@@ -65,7 +65,7 @@ class TagLayout:
         return self.placements[tag_id].T_dock_tag @ invert_T(np.asarray(T_cam_tag))
 
     def fuse(self, observations):
-        """여러 태그에서 나온 결과를 하나로 합친다."""
+        """여러 태그에서 나온 결과를 하나로 합침."""
         Ts = [self.camera_pose_in_dock(tid, T)
               for tid, T in observations if tid in self.placements]
         if not Ts:

@@ -1,6 +1,6 @@
-"""1. 이미지 얻기 — 카메라/bag/영상에서 프레임과 내부파라미터를 낸다.
+"""1. 이미지 얻기 — 카메라/bag/영상에서 프레임과 내부파라미터를 냄.
 
-어느 소스든 `for i, ts, img in frames:` 3-튜플로 통일한다.
+어느 소스든 `for i, ts, img in frames:` 3-튜플로 통일함.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,7 +20,7 @@ class CameraIntrinsics:
     cy: float
     width: int = 0
     height: int = 0
-    distortion: tuple = ()          # radtan (k1,k2,p1,p2,k3). 비어 있으면 왜곡 없음으로 본다
+    distortion: tuple = ()          # radtan (k1,k2,p1,p2,k3). 비어 있으면 왜곡 없음으로 봄
 
     @property
     def params(self):
@@ -36,7 +36,7 @@ class CameraIntrinsics:
 
     @classmethod
     def from_realsense(cls, profile, stream="color", index=1):
-        """RealSense 가 들고 있는 공장 캘리브레이션 값을 그대로 읽는다."""
+        """RealSense 가 들고 있는 공장 캘리브레이션 값을 그대로 읽음."""
         import pyrealsense2 as rs
 
         kinds = {"color": rs.stream.color, "depth": rs.stream.depth,
@@ -48,23 +48,23 @@ class CameraIntrinsics:
         else:
             vsp = profile.get_stream(kinds[stream]).as_video_stream_profile()
         i = vsp.get_intrinsics()
-        # RealSense 는 주점을 ppx, ppy 로 부른다 (= cx, cy)
+        # RealSense 는 주점을 ppx, ppy 로 부름 (= cx, cy)
         return cls(fx=i.fx, fy=i.fy, cx=i.ppx, cy=i.ppy,
                    width=i.width, height=i.height,
                    distortion=tuple(i.coeffs))
 
     def undistort(self, img):
-        """렌즈 왜곡을 편다. 왜곡계수가 없으면 그대로 돌려준다."""
+        """렌즈 왜곡을 폄. 왜곡계수가 없으면 그대로 돌려줌."""
         if not self.distortion:
             return img
         d = np.array(self.distortion, dtype=np.float64)
         return cv2.undistort(img, self.K, d)
 
 def intrinsics_from_ref(shape, ref=D435I_COLOR_REF):
-    """해상도만 알 때 기준 보정값에서 역산한다. 화각 가정보다 정확하다.
+    """해상도만 알 때 기준 보정값에서 역산함. 화각 가정보다 정확함.
 
-    D435i 는 세로 비율로만 스케일된다(4:3 은 가로를 잘라낸다). 실측 대조 결과
-    1280x720 / 640x480 모두 0.03px 안에서 맞았다.
+    D435i 는 세로 비율로만 스케일됨(4:3 은 가로를 잘라냄). 실측 대조 결과
+    1280x720 / 640x480 모두 0.03px 안에서 맞았음.
     """
     h, w = shape[:2]
     W0, H0, fx0, fy0, cx0, cy0 = ref
@@ -74,10 +74,10 @@ def intrinsics_from_ref(shape, ref=D435I_COLOR_REF):
                             h / 2.0 + (cy0 - H0 / 2.0) * s, w, h)
 
 def intrinsics_from_hfov(shape, hfov_deg=None):
-    """화면 크기 + 수평화각으로 CameraIntrinsics 를 지어낸다.
+    """화면 크기 + 수평화각으로 CameraIntrinsics 를 지어냄.
 
-    hfov_deg 를 안 주면 화각을 안 쓰고 intrinsics_from_ref() 로 역산한다.
-    해상도마다 화각이 달라서(16:9 70.5도, 4:3 55.8도) 상수 하나로는 못 맞춘다.
+    hfov_deg 를 안 주면 화각을 안 쓰고 intrinsics_from_ref() 로 역산함.
+    해상도마다 화각이 달라서(16:9 70.5도, 4:3 55.8도) 상수 하나로는 못 맞춤.
     """
     if hfov_deg is None:
         return intrinsics_from_ref(shape)
@@ -99,7 +99,7 @@ class Frame(np.ndarray):
     gain = None
 
     def __array_finalize__(self, obj):
-        # 뷰/슬라이스로 파생될 때도 속성이 따라가게 한다.
+        # 뷰/슬라이스로 파생될 때도 속성이 따라가게 함.
         if obj is None:
             return
         self.depth = getattr(obj, "depth", None)
@@ -118,7 +118,7 @@ _EXPOSURE_UNIT_US = {"color": COLOR_EXPOSURE_UNIT_US, "infrared": 1.0}
 
 def _attach(img, depth=None, depth_scale=0.0, luma=None, frame_number=None,
             meta=None, dropped_before=0, exposure_unit_us=1.0):
-    """이미지에 곁다리 정보를 붙여 Frame 으로 만든다."""
+    """이미지에 곁다리 정보를 붙여 Frame 으로 만듦."""
     f = img.view(Frame)
     f.depth = depth
     f.depth_scale = float(depth_scale)
@@ -140,12 +140,12 @@ class _FrameStream:
                  tuning=None, settings_before=None, cleanup=None):
         self._gen = gen
         self.ae_roi = ae_roi          # camera.ExposureROI 또는 None
-        self.profile = profile        # pipeline.start() 가 준 것. 센서 옵션을 만질 때 쓴다
+        self.profile = profile        # pipeline.start() 가 준 것. 센서 옵션을 만질 때 씀
         self.stats = stats            # camera.FrameStats — **항상 있다**
         self.tuning = tuning          # tune= 을 줬을 때 {옵션: (전, 후)}. 아니면 None
         # 손대기 전 CameraSettings. **되돌리려면 이게 있어야 한다** —
         self.settings_before = settings_before
-        # 파이프라인 정지 + 카메라 상태 복원. **제너레이터가 아니라 여기가 들고 있다.**
+        # 파이프라인 정지 + 카메라 상태 복원. **제너레이터가 아니라 여기가 들고 있음.**
         self._cleanup = cleanup
 
     def __iter__(self):
@@ -155,7 +155,7 @@ class _FrameStream:
         return next(self._gen)
 
     def close(self):
-        """스트림을 닫고 카메라를 원래대로 돌려놓는다. 몇 번 불러도 안전하다."""
+        """스트림을 닫고 카메라를 원래대로 돌려놓음. 몇 번 불러도 안전함."""
         try:
             self._gen.close()
         finally:
@@ -184,10 +184,10 @@ class _FrameStream:
 
 
 def _who_has_camera():
-    """/dev/video* 를 잡고 있는 프로세스를 이름까지 찾아 준다.
+    """/dev/video* 를 잡고 있는 프로세스를 이름까지 찾아 줌.
 
-    EBUSY 는 원인이 둘인데 메시지가 같다 — 우리가 안 닫았거나, 남이 잡고 있거나.
-    누가 잡고 있는지 이름이 나오면 바로 갈린다(realsense-viewer 가 흔하다).
+    EBUSY 는 원인이 둘인데 메시지가 같음 — 우리가 안 닫았거나, 남이 잡고 있거나.
+    누가 잡고 있는지 이름이 나오면 바로 갈림(realsense-viewer 가 흔함).
     """
     import glob
     import subprocess
@@ -216,7 +216,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                    color_format="bgr8", ae_roi=False, stats=None, meta=True,
                    exposure_us=None, ae_priority=None, tune=False, restore=True,
                    record=None):
-    """RealSense 를 열고 (프레임 제너레이터, CameraIntrinsics) 를 돌려준다."""
+    """RealSense 를 열고 (프레임 제너레이터, CameraIntrinsics) 를 돌려줌."""
     import pyrealsense2 as rs
 
     want_depth = bool(depth or with_depth)
@@ -229,7 +229,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
     if stream == "color":
         if color_format not in ("bgr8", "yuyv"):
             raise ValueError("color_format 은 bgr8 또는 yuyv")
-        # D400 컬러 센서가 실제로 내줄 수 있는 포맷은 RGB8/RGBA8/BGR8/BGRA8/YUYV 뿐이다
+        # D400 컬러 센서가 실제로 내줄 수 있는 포맷은 RGB8/RGBA8/BGR8/BGRA8/YUYV 뿐
         cfmt = rs.format.bgr8 if color_format == "bgr8" else rs.format.yuyv
         config.enable_stream(rs.stream.color, width, height, cfmt, fps)
     elif stream == "infrared":
@@ -257,7 +257,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                 % (exc, _who_has_camera())) from exc
         raise
 
-    # IR 점 프로젝터 제어 + depth 눈금 읽기 (둘 다 depth 센서에 달려 있다)
+    # IR 점 프로젝터 제어 + depth 눈금 읽기 (둘 다 depth 센서에 달려 있음)
     want_emitter = (stream != "infrared") if emitter is None else bool(emitter)
     depth_scale = 0.0
     try:
@@ -265,26 +265,26 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         if ds.supports(rs.option.emitter_enabled):
             ds.set_option(rs.option.emitter_enabled, 1 if want_emitter else 0)
         if want_depth:
-            # 원시 uint16 을 미터로 바꾸는 눈금. 0.001 로 박아두지 말고 장치에서 읽는다.
+            # 원시 uint16 을 미터로 바꾸는 눈금. 0.001 로 박아두지 말고 장치에서 읽음.
             depth_scale = ds.get_depth_scale()
     except Exception:
-        pass                                    # 장치에 따라 없을 수 있다
+        pass                                    # 장치에 따라 없을 수 있음
 
     intr = CameraIntrinsics.from_realsense(profile, stream, ir_index)
     align = rs.align(rs.stream.color) if (want_depth and stream == "color") else None
 
-    # 컬러 자동노출 ROI. 태그를 찾은 뒤 호출자가 roi.follow(...) 를 불러 준다.
+    # 컬러 자동노출 ROI. 태그를 찾은 뒤 호출자가 roi.follow(...) 를 불러 줌.
     roi = None
     if ae_roi:
         from ...utils.camera import ExposureROI
         roi = ExposureROI(profile, stream=stream)
 
-    # 묶음 튜닝. **pipeline.start() 뒤, 첫 wait_for_frames 전에** 건다 —
+    # 묶음 튜닝. **pipeline.start() 뒤, 첫 wait_for_frames 전에** 걺 —
     want_tune = (tune is not False and tune is not None and stream == "color")
     want_exposure = ((exposure_us is not None or ae_priority is not None)
                      and stream == "color")
 
-    # **카메라를 만지기 전에 지금 상태를 뜬다.**
+    # **카메라를 만지기 전에 지금 상태를 뜸.**
     tuning = None
     settings_before = None
     if want_tune or want_exposure:
@@ -292,7 +292,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
             from ...utils.camera import CameraSettings as _CS
             settings_before = _CS.from_sensor(profile)
         except Exception:
-            settings_before = None            # 못 뜨면 복원도 포기한다(아래 경고)
+            settings_before = None            # 못 뜨면 복원도 포기함(아래 경고)
 
     if want_tune:
         from ...utils.camera import CameraSettings, tune_for_tags
@@ -301,17 +301,17 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         elif tune is True:
             _b, tuning = tune_for_tags(profile)
         else:
-            # 숫자 = 접근속도 [m/s]. 그 속도에서 블러가 10px 를 넘지 않게 노출을 잡는다.
+            # 숫자 = 접근속도 [m/s]. 그 속도에서 블러가 10px 를 넘지 않게 노출을 잡음.
             _b, tuning = tune_for_tags(profile, speed_mps=float(tune), fx=intr.fx)
         settings_before = settings_before or _b
 
-    # 노출/AE 우선순위. **pipeline.start() 뒤, 첫 wait_for_frames 전에** 걸어야 한다.
+    # 노출/AE 우선순위. **pipeline.start() 뒤, 첫 wait_for_frames 전에** 걸어야 함.
     if want_exposure:
         from ...utils.camera import set_color_exposure
         applied = set_color_exposure(profile, exposure_us=exposure_us,
                                      ae_priority=ae_priority)
         if applied["errors"]:
-            # 조용히 실패하면 "걸었다고 믿는" 상태가 된다. 그게 제일 나쁘다.
+            # 조용히 실패하면 "걸었다고 믿는" 상태가 됨. 그게 제일 나쁨.
             import warnings
             warnings.warn("컬러 노출 설정 실패: %s" % ", ".join(applied["errors"]))
 
@@ -320,7 +320,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         warnings.warn("카메라 상태를 뜨지 못해 원상복구를 못 한다 — "
                       "끝난 뒤 realsense-viewer 가 우리 노출을 물려받는다")
 
-    # AE ROI 도 펌웨어에 남는 상태다. 걸기 전 상자를 기억해 둔다.
+    # AE ROI 도 펌웨어에 남는 상태. 걸기 전 상자를 기억해 둠.
     roi_before = None
     if roi is not None and roi.supported:
         try:
@@ -329,7 +329,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         except Exception:
             roi_before = None
 
-    # 드롭 회계는 호출자가 안 줘도 항상 돈다 — 정수 뺄셈 하나 값이다.
+    # 드롭 회계는 호출자가 안 줘도 항상 돎 — 정수 뺄셈 하나 값.
     if stats is None:
         from ...utils.camera import FrameStats
         stats = FrameStats()
@@ -346,7 +346,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
 
     def _cleanup():
         if _done:
-            return                            # close() 와 제너레이터 finally 가 둘 다 부른다
+            return                            # close() 와 제너레이터 finally 가 둘 다 부름
         _done.append(True)
         if restore:
             if roi_before is not None:
@@ -354,7 +354,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                     from ...utils.camera import aim_ae_at_bbox
                     aim_ae_at_bbox(profile, roi_before, (height, width), pad=0.0)
                 except Exception:
-                    pass                      # 되돌리기 실패로 종료를 막지는 않는다
+                    pass                      # 되돌리기 실패로 종료를 막지는 않음
             if settings_before is not None:
                 try:
                     settings_before.apply(profile)
@@ -370,7 +370,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         i = 0
         try:
             while True:
-                # wait_for_frames 는 절대 밀리지 않는다 — pipeline 의 출력 큐가
+                # wait_for_frames 는 절대 밀리지 않음 — pipeline 의 출력 큐가
                 fs = pipeline.wait_for_frames()
                 if align is not None:
                     fs = align.process(fs)
@@ -384,10 +384,10 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                 buf = np.asanyarray(f.get_data())
                 luma = None
                 if want_yuyv:
-                    # 파이썬 래퍼는 YUYV 를 (H, W) uint16 으로 준다 —
+                    # 파이썬 래퍼는 YUYV 를 (H, W) uint16 으로 줌 —
                     from ...utils.camera import yuyv_to_luma
                     luma = yuyv_to_luma(buf)
-                    # 표시/그리기용 BGR 은 여기서 만든다. 소비자 눈에는 예전과 같은
+                    # 표시/그리기용 BGR 은 여기서 만듦. 소비자 눈에는 예전과 같은
                     img = cv2.cvtColor(
                         buf.view(np.uint8).reshape(buf.shape[0], buf.shape[1], 2),
                         cv2.COLOR_YUV2BGR_YUY2)
@@ -397,13 +397,13 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                 if want_depth:
                     df = fs.get_depth_frame()
                     dm = np.asanyarray(df.get_data()) if df else None
-                # 드롭 회계를 먼저 돌려 "이 프레임 앞에서 몇 장 사라졌나"를 받아온다.
+                # 드롭 회계를 먼저 돌려 "이 프레임 앞에서 몇 장 사라졌나"를 받아옴.
                 fn = f.get_frame_number()
                 missed = stats.update(fn, ts - t0)
                 img = _attach(img, dm, depth_scale, luma=luma, frame_number=fn,
                               meta=(reader.read(f) if reader is not None else None),
                               dropped_before=missed, exposure_unit_us=exp_unit)
-                # depth 를 켜든 말든 항상 3-튜플이다. 소비자(tools/live_pose.py)가
+                # depth 를 켜든 말든 항상 3-튜플. 소비자(tools/live_pose.py)가
                 yield i, ts - t0, img
                 i += 1
         finally:
@@ -417,7 +417,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
 
 def open_bag(path, loop=False, realtime=False, stream="color",
              with_depth=False, ir_index=1, timeout_ms=2000, meta=True, tune=False):
-    """녹화 파일(.db3)을 재생한다. open_realsense 와 같은 (frames, intrinsics) 를 준다."""
+    """녹화 파일(.db3)을 재생함. open_realsense 와 같은 (frames, intrinsics) 를 줌."""
     import pyrealsense2 as rs
 
     p = Path(path)
@@ -428,12 +428,12 @@ def open_bag(path, loop=False, realtime=False, stream="color",
 
     pipeline = rs.pipeline()
     config = rs.config()
-    # 스트림을 enable_stream 으로 지정하지 않는다 — 녹화에 들어 있는 조합을
+    # 스트림을 enable_stream 으로 지정하지 않음 — 녹화에 들어 있는 조합을
     config.enable_device_from_file(str(p), repeat_playback=bool(loop))
 
     profile = pipeline.start(config)
     playback = profile.get_device().as_playback()
-    # 기본이 False 인 게 핵심이다. True 면 벽시계로 밀어붙여 프레임을 버린다.
+    # 기본이 False 인 게 핵심. True 면 벽시계로 밀어붙여 프레임을 버림.
     playback.set_real_time(bool(realtime))
 
     try:
@@ -458,7 +458,7 @@ def open_bag(path, loop=False, realtime=False, stream="color",
         reader = MetaReader()
     exp_unit = _EXPOSURE_UNIT_US.get(stream, 1.0)
 
-    # open_realsense 와 같은 이유로 껍데기가 정리를 들고 있는다 —
+    # open_realsense 와 같은 이유로 껍데기가 정리를 들고 있음 —
     _done = []
 
     def _cleanup():
@@ -475,7 +475,7 @@ def open_bag(path, loop=False, realtime=False, stream="color",
         i = 0
         try:
             while True:
-                # 파일 끝은 예외가 아니라 상태로도 온다. 둘 다 본다.
+                # 파일 끝은 예외가 아니라 상태로도 옴. 둘 다 봄.
                 try:
                     ok, fs = pipeline.try_wait_for_frames(timeout_ms)
                 except RuntimeError:
@@ -503,27 +503,27 @@ def open_bag(path, loop=False, realtime=False, stream="color",
                 img = _attach(img, dm, depth_scale, frame_number=fn,
                               meta=(reader.read(f) if reader is not None else None),
                               dropped_before=missed, exposure_unit_us=exp_unit)
-                # open_realsense 와 같은 3-튜플. 소스를 바꿔 끼워도 소비자가 그대로다.
+                # open_realsense 와 같은 3-튜플. 소스를 바꿔 끼워도 소비자가 그대로.
                 yield i, ts - t0, img
                 i += 1
         finally:
             _cleanup()
 
-    # open_realsense 와 같은 껍데기로 감싼다 — frames.stats 를 밖에서 볼 수 있게.
+    # open_realsense 와 같은 껍데기로 감쌈 — frames.stats 를 밖에서 볼 수 있게.
     settings_before = None
     if tune is not False and tune is not None:
         try:
             from ...utils.camera import CameraSettings
             settings_before = CameraSettings.from_sensor(profile)
         except Exception:
-            settings_before = None              # 녹화에 컬러 센서 정보가 없을 수 있다
+            settings_before = None              # 녹화에 컬러 센서 정보가 없을 수 있음
 
     return _FrameStream(frames(), profile=profile, stats=stats,
                         settings_before=settings_before, cleanup=_cleanup), intr
 
 
 def from_video(path, loop=False):
-    """영상 파일을 3-튜플로 흘린다. 돌려주는 건 (frames, None) 이다."""
+    """영상 파일을 3-튜플로 흘림. 돌려주는 건 (frames, None) 임."""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError("영상이 없다: %s" % p)
@@ -593,7 +593,7 @@ def depth_at(depth, u, v, patch=5, scale=None):
         return None                          # 화면 밖
 
     win = dm[y0:y1, x0:x1]
-    nz = win[win > 0]                        # 0 = 측정 실패. 평균에 섞으면 거리가 당겨진다
+    nz = win[win > 0]                        # 0 = 측정 실패. 평균에 섞으면 거리가 당겨짐
     if nz.size == 0:
         return None
     return float(np.median(nz.astype(np.float64)) * scale)
@@ -610,8 +610,8 @@ def to_gray(img, channel=None):
         if c is None:
             raise ValueError("channel 은 red/green/blue: %r" % (channel,))
         if img.ndim != 3:
-            return np.asarray(img)              # 이미 흑백이면 고를 채널이 없다
-        # 뷰가 아니라 복사여야 한다 — 검출기는 C-contiguous 버퍼를 요구한다.
+            return np.asarray(img)              # 이미 흑백이면 고를 채널이 없음
+        # 뷰가 아니라 복사여야 함 — 검출기는 C-contiguous 버퍼를 요구함.
         return np.ascontiguousarray(np.asarray(img)[:, :, c])
     luma = getattr(img, "luma", None)
     if luma is not None and luma.shape[:2] == img.shape[:2]:

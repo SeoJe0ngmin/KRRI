@@ -14,18 +14,18 @@ except Exception as exc:                                          # pragma: no c
     cv2 = None
     CV2_ERROR = exc
 
-# 결과는 한 줄에 [ PASS ] / [ FAIL ] / [ WARN ] / [ SKIP ] 로만 찍는다
+# 결과는 한 줄에 [ PASS ] / [ FAIL ] / [ WARN ] / [ SKIP ] 로만 찍음
 TALLY = {"PASS": 0, "FAIL": 0, "WARN": 0, "SKIP": 0}
 
 
 def mark(status, title, detail=""):
-    """PASS/FAIL 한 줄. detail 은 같은 줄 뒤에 붙인다."""
+    """PASS/FAIL 한 줄. detail 은 같은 줄 뒤에 붙임."""
     TALLY[status] = TALLY.get(status, 0) + 1
     print("[ %-4s ] %s%s" % (status, title, (" - " + str(detail)) if detail else ""))
 
 
 def info(text=""):
-    """PASS/FAIL 이 아닌 부연. 집계에 안 들어간다."""
+    """PASS/FAIL 이 아닌 부연. 집계에 안 들어감."""
     print(("         " + text) if text else "")
 
 
@@ -36,7 +36,7 @@ def section(n, title):
 
 
 def short(exc, limit=200):
-    """예외를 한 줄로. librealsense 메시지는 길어서 자른다."""
+    """예외를 한 줄로. librealsense 메시지는 길어서 자름."""
     s = " ".join(("%s: %s" % (type(exc).__name__, exc)).split())
     return s if len(s) <= limit else s[:limit] + " ..."
 
@@ -64,7 +64,7 @@ def step_import():
 
 
 def count_devices(rs):
-    """장치 '유무'만 센다. 상세는 rs-enumerate-devices 담당이라 여기선 안 찍는다."""
+    """장치 '유무'만 셈. 상세는 rs-enumerate-devices 담당이라 여기선 안 찍음."""
     section(2, "장치 유무")
     try:
         n = len(list(rs.context().query_devices()))
@@ -93,7 +93,7 @@ def step_gui(enabled=True):
         info("→ 화면 없이 쓸 거면 cv2.imwrite 로 파일 저장하는 경로를 써라.")
         return
 
-    # 환경변수가 있다고 창이 뜬다는 보장은 없다. 실제로 열어봐야 안다.
+    # 환경변수가 있다고 창이 뜬다는 보장은 없음. 실제로 열어봐야 앎.
     try:
         import numpy as np
         win = "realsense_check"
@@ -114,9 +114,9 @@ def step_gui(enabled=True):
             pass
 
 
-# --- 4) 프레임 메타데이터 : 이건 SDK CLI 로 못 본다. 커널 패치 유무가 여기서 갈린다 ---
+# --- 4) 프레임 메타데이터 : 이건 SDK CLI 로 못 봄. 커널 패치 유무가 여기서 갈린다 ---
 def step_frame_metadata(rs):
-    """프레임별 노출/게인/센서시각이 **실제로** 오는지 확인한다."""
+    """프레임별 노출/게인/센서시각이 **실제로** 오는지 확인함."""
     section(4, "프레임 메타데이터 / 타임스탬프")
     try:
         pipe = rs.pipeline()
@@ -164,7 +164,7 @@ def step_frame_metadata(rs):
         for n, v in got[:12]:
             info("   %-26s %s" % (n, v))
 
-        # 컬러 AE ROI - 역광 도크에서 검출률을 가르는 물건이라 따로 확인한다
+        # 컬러 AE ROI - 역광 도크에서 검출률을 가르는 물건이라 따로 확인함
         roi_ok = False
         for sen in prof.get_device().query_sensors():
             if not sen.get_info(rs.camera_info.name).lower().startswith("rgb"):
@@ -339,7 +339,7 @@ def main():
     else:
         print(" 파이썬 바인딩·GUI 정상. 카메라 상세는 rs-enumerate-devices 로 봐라.")
     print("=" * 74)
-    # 진단 도구는 종료코드로도 실패를 알린다 (스크립트에서 물려 쓰기 좋게).
+    # 진단 도구는 종료코드로도 실패를 알림 (스크립트에서 물려 쓰기 좋게).
     return 1 if (ndev == 0 or TALLY["FAIL"]) else 0
 
 
