@@ -8,7 +8,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from ...config import (DEPTH_CHECK_MAX_Z, DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M,
+from ...config import (CAM_YAW_OFFSET_DEG, DEPTH_CHECK_MAX_Z,
+                       DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M,
                       MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, MIN_TAG_PX,
                       RELIABLE_TILT_DEG)
 from ...utils.util import r2rpy, invert_T, t2pr
@@ -101,6 +102,49 @@ def pose_to_xyzrpy(T, unit='deg'):
             "distance": float(np.linalg.norm(p))}
 
 
+def pose_to_forklift(T_camera_tag, unit='deg'):
+    """4x4 -> **지게차(항공기) 기준**. 사람이 읽기 쉬운 쪽. 제어는 docking_state 를 쓸 것.
+
+        {'lateral': 1.000, 'vertical': -0.400, 'forward': 3.000,   위치 [m]
+         'roll': 0.0, 'pitch': 0.0, 'yaw': 20.0,                   자세 [도]
+         'distance': 3.187}
+
+    위치 세 개는 docking_state 와 **이름도 값도 같다** — 같은 태그 기준이라서다.
+    새로 얹는 것은 roll/pitch/yaw 뿐이다(그중 yaw 는 heading 과 같은 값).
+
+    pose_to_xyzrpy 와 뭐가 다른가:
+        저쪽은 **카메라 원점 + 카메라 축**이라 좌우 회전이 pitch 자리에 오고
+        yaw 는 180도 근처에 붙박인다. 축 이름이 항공기와 어긋나 읽기 나쁘다.
+        여기는 **태그 원점 + 항공기 축**이라 이름이 직관대로다.
+
+    yaw 는 docking_state 의 heading_deg 와 같은 값이다(둘 다 광축 방향에서 뽑는다).
+    roll/pitch 는 평평한 바닥에 카메라를 똑바로 달았으면 0 이다.
+    **0 이 아니면 장착이 기울었거나 노면이 기운 것** — 그 점검에 쓴다.
+
+    오일러 분해(r2rpy)를 안 쓴다. 축 방향을 하나씩 읽으므로 분해 순서에
+    좌우되지 않고, 카메라가 기울어도 yaw 가 오염되지 않는다.
+    """
+    T_tag_cam = invert_T(np.asarray(T_camera_tag))
+    p = T_tag_cam[:3, 3]
+    R = T_tag_cam[:3, :3]
+
+    fwd = R @ np.array([0.0, 0.0, 1.0])          # 카메라 광축이 향하는 곳
+    right = R @ np.array([1.0, 0.0, 0.0])        # 카메라의 오른쪽
+
+    yaw = np.arctan2(fwd[0], fwd[2])                       # 좌우 (= heading)
+    pitch = np.arcsin(np.clip(-fwd[1], -1.0, 1.0))         # 위아래 끄덕
+    roll = np.arctan2(-right[1], np.hypot(right[0], right[2]))   # 갸우뚱
+    if unit == 'deg':
+        roll, pitch, yaw = (np.degrees(v) for v in (roll, pitch, yaw))
+        yaw -= CAM_YAW_OFFSET_DEG          # heading 과 같은 보정
+    else:
+        yaw -= np.radians(CAM_YAW_OFFSET_DEG)
+
+    return {"lateral": float(p[0]), "vertical": float(p[1]), "forward": float(-p[2]),
+            "roll": float(roll), "pitch": float(pitch), "yaw": float(yaw),
+            "distance": float(np.linalg.norm(p))}
+
+
 def docking_state(T_camera_tag):
     """카메라 기준 태그 자세를 **도킹 제어가 쓸 형태**로 바꿈. 실측 예:
 
@@ -117,6 +161,16 @@ def docking_state(T_camera_tag):
     x,y,z 는 지게차가 고개만 돌려도 부호까지 바뀌지만 이 셋은 안 변함.
     approach 와 heading 은 독립임 — 축 위에 서서 고개를 돌리면
     approach=0 인데 heading!=0 임. 진입하려면 둘 다 0 이어야 함.
+
+    heading 은 config.CAM_YAW_OFFSET_DEG 를 뺀 값이다. 카메라가 지게차 정면과
+    어긋나게 달리면 heading 이 통째로 그만큼 밀리는데, 자리·거리·각도와 무관하게
+    늘 같은 양이라 상수로 뺄 수 있다(실측 확인).
+    **재는 법** 둘 중 하나:
+        (1) 줄자로 지게차를 태그 정면축 위에 세우고 heading 을 읽는다. 그 값이 오차.
+        (2) 태그를 보며 N m 직진한다. 똑바로 갔다면 lateral 이 안 변해야 한다.
+            변했으면 atan(변화량 / N) 이 오차.
+    tilt_deg 는 보정하지 않는다 — 화면에서 실제로 찌그러진 정도라
+    각도 신뢰도(reliable_angle) 판단에는 있는 그대로가 맞다.
     """
     T_tag_cam = invert_T(np.asarray(T_camera_tag))
     p = T_tag_cam[:3, 3]
@@ -132,7 +186,9 @@ def docking_state(T_camera_tag):
 
     # 카메라 광축(+z)이 태그 좌표계에서 어디를 향하나.
     fwd = R @ np.array([0.0, 0.0, 1.0])
-    heading = float(np.degrees(np.arctan2(fwd[0], fwd[2])))
+    # 카메라가 지게차 정면과 어긋나게 달렸으면 그만큼 통째로 밀려 읽힌다.
+    # 어느 자리에서든 같은 양이라 상수 하나로 뺀다(실측 확인).
+    heading = float(np.degrees(np.arctan2(fwd[0], fwd[2])) - CAM_YAW_OFFSET_DEG)
 
     # 각도를 믿어도 되는지는 **태그가 화면에서 얼마나 찌그러져 보이나(tilt)** 로 정함.
     tilt = tag_tilt_deg(T_camera_tag)

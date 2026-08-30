@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 from src.config import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
 from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
-                                 pose_to_xyzrpy, tag_pixel_size,
+                                 pose_to_xyzrpy, pose_to_forklift,
+                                 tag_pixel_size,
                                  ASSUMED_HFOV_DEG, DEFAULT_QUAD_BLUR,
                                  MAX_REPROJ_RMS_PX)
 from src.utils.drawing import draw_cube, draw_axes, draw_corners     # noqa: E402
@@ -203,6 +204,7 @@ def build_lines(ctx):
             add("  unavailable", "bad")
         else:
             v = pose_to_xyzrpy(T)
+            f = pose_to_forklift(T)
             st = res.docking[tid]
             qa = res.quality.get(tid, {})
             ok_ang = bool(st["reliable_angle"])
@@ -214,6 +216,15 @@ def build_lines(ctx):
             add("  roll %+7.1f  pitch %+7.1f  yaw %+7.1f  [deg]"
                 % (v["roll"], v["pitch"], v["yaw"]))
             add("  distance %.3f m%s" % (v["distance"], q), cd)
+            add("  (카메라 축이라 좌우회전이 pitch, yaw 는 180 근처)", "dim")
+            rule()
+            # 사람이 읽기 쉬운 쪽. yaw = heading, roll/pitch 는 장착 기울기.
+            add("[forklift] 항공기 축   dock -> forklift", "head")
+            add("  lateral %+7.3f  vertical %+7.3f  forward %+7.3f  [m]%s"
+                % (f["lateral"], f["vertical"], f["forward"], q), cd)
+            add("  roll    %+7.1f  pitch    %+7.1f  yaw     %+7.1f  [deg]%s"
+                % (f["roll"], f["pitch"], f["yaw"], a), ca)
+            add("  (yaw = heading. roll/pitch 는 카메라와 태그가 서로 기운 정도)", "dim")
             rule()
             add("[control] forklift -> dock", "head")
             side = "left" if st["lateral"] > 0 else "right"
