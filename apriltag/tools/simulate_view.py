@@ -1,3 +1,4 @@
+
 """시뮬레이터의 **보여주기 절반**. 숫자는 tools/simulate.py 가 만든다."""
 import argparse
 import sys

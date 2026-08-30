@@ -523,7 +523,7 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
         seen += 1
         tid = tag_id
         if tid is None:
-            tid = next(iter(res.docking), None)      # 안 주면 잡힌 것 아무거나
+            tid = next(iter(res.docking), None)   
         if tid is None or tid not in res.docking:
             if seen >= max_frames:
                 break

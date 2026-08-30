@@ -183,6 +183,33 @@ class _FrameStream:
         return self._gen.throw(*a, **kw)
 
 
+def _who_has_camera():
+    """/dev/video* 를 잡고 있는 프로세스를 이름까지 찾아 준다.
+
+    EBUSY 는 원인이 둘인데 메시지가 같다 — 우리가 안 닫았거나, 남이 잡고 있거나.
+    누가 잡고 있는지 이름이 나오면 바로 갈린다(realsense-viewer 가 흔하다).
+    """
+    import glob
+    import subprocess
+    devs = glob.glob("/dev/video*")
+    if not devs:
+        return " (/dev/video* 가 없다 — tools/wsl_attach_camera.sh 를 먼저 실행할 것)"
+    try:
+        out = subprocess.run(["fuser"] + devs, capture_output=True, text=True, timeout=3)
+        pids = sorted(set(out.stdout.split()))
+    except Exception:
+        return ""
+    if not pids:
+        return ""
+    try:
+        ps = subprocess.run(["ps", "-o", "pid=,cmd=", "-p", ",".join(pids)],
+                            capture_output=True, text=True, timeout=3).stdout.strip()
+    except Exception:
+        ps = " ".join(pids)
+    return "\n  지금 잡고 있는 프로세스:\n" + "\n".join("    " + l.strip()
+                                                       for l in ps.splitlines())
+
+
 def open_realsense(stream="color", width=None, height=None, fps=30,
                    depth=False, emitter=None, ir_index=1,
                    with_depth=False, depth_size=(1280, 720), depth_fps=None,
@@ -224,11 +251,10 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
     except RuntimeError as exc:
         if "busy" in str(exc).lower():
             raise RuntimeError(
-                "%s — 앞서 연 스트림을 아직 안 닫았을 가능성이 높다. "
-                "루프에서 break 했으면 frames.close() 를 부르거나 "
-                "`with open_realsense()[0] as frames:` 로 열어라. "
-                "(realsense-viewer 등 다른 프로세스가 잡고 있어도 같은 오류가 난다.)"
-                % exc) from exc
+                "%s — 카메라는 한 프로세스만 연다.%s\n"
+                "  같은 프로세스 안이면: 루프에서 break 했을 때 frames.close() 를 부르거나 "
+                "`with open_realsense()[0] as frames:` 로 열어라."
+                % (exc, _who_has_camera())) from exc
         raise
 
     # IR 점 프로젝터 제어 + depth 눈금 읽기 (둘 다 depth 센서에 달려 있다)

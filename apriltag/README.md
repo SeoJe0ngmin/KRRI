@@ -5,6 +5,7 @@
 ```bash
 pip install -r requirements.txt
 ./tools/wsl_attach_camera.sh          # WSL2 에서 카메라 붙이기 (재부팅마다)
+realsense-viewer                      # 가끔 카메라 점검할 때 (SDK 기본 제공)
 python tools/live_pose.py             # 화면으로 확인
 python tools/run.py --dry-run         # 도킹 순서만 (CAN 안 씀)
 python tools/run.py                   # 실제 주행
@@ -92,7 +93,6 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `verify.py` | 줄자로 잰 값과 대조 |
 | `simulate.py` | 정답을 지어내서 오차 측정 (카메라 없이) |
 | `simulate_view.py` | 위를 그림으로 |
-| `viewer.sh` | realsense-viewer 실행기 (`rsview` 로 링크) |
 | `wsl_attach_camera.sh` | WSL2 에 카메라 붙이기 |
 
 ---

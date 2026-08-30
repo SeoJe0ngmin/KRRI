@@ -100,11 +100,15 @@ from .fwd_time_model import fwd_sec_from_offset_piecewise
 #   rotate_ccw  ->  heading 이 **증가**한다
 #   rotate_cw   ->  heading 이 **감소**한다
 #
-# heading 은 atan2(fwd[0], fwd[2]) 로, 태그의 +z 에서 +x 쪽으로 잰 각이다.
-# 그게 지게차의 어느 쪽 회전인지는 태그를 어떻게 붙였느냐에 달렸다.
-# **반대면 지게차가 반대로 돈다.** 처음 한 번은 이렇게 확인할 것:
-#     measure() -> rotate_ccw 1초 -> 정지 -> measure()
-#     heading 이 커졌으면 이 약속이 맞다. 작아졌으면 아래 두 곳을 맞바꿔라.
+# 절반은 실측으로 확인했다 (work_dirs/live_pose/log/handspin.json):
+#     카메라를 손으로 반시계(왼쪽을 보게) 돌리니 heading 이 올라갔다.
+#         0.7s -1.4도 -> 3.7s +28.4도   (+10.0 도/초)
+#     되돌리니 내려갔다 (-12.5 도/초). +30.1도에서 태그를 놓쳤다(한계 +-35도).
+#   => 반시계 = heading 증가. 위 약속과 맞는다.
+#
+# 남은 절반은 실장비에서 눈으로 보면 된다:
+#     rotate_ccw 명령을 보냈을 때 지게차가 **왼쪽(반시계)** 으로 도는가?
+#     그렇다면 그대로 두면 되고, 오른쪽으로 돌면 아래 두 곳을 맞바꿔라.
 #         plan_step 의 "rotate_ccw" if head < 0 else "rotate_cw"
 #         dock 의     rotate_ccw if turn > 0 else rotate_cw
 

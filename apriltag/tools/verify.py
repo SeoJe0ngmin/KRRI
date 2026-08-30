@@ -332,8 +332,9 @@ def main():
                     help="태그 한 변 [m]. 안 주면 %.2f 로 가정한다 — 거리가 여기 정비례한다"
                          % DEFAULT_TAG_SIZE)
     ap.add_argument("--hfov", type=float, default=None)
-    ap.add_argument("--width", type=int, default=1280, help="합성 가로 / RealSense 가로")
-    ap.add_argument("--height", type=int, default=960, help="합성 세로 / RealSense 세로")
+    # 실카메라는 지원 해상도만 받는다(D435i 컬러에 1280x960 은 없다). config 를 따른다.
+    ap.add_argument("--width", type=int, default=None, help="가로. 안 주면 config.COLOR_SIZE")
+    ap.add_argument("--height", type=int, default=None, help="세로. 안 주면 config.COLOR_SIZE")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--ir-index", type=int, default=1)
     ap.add_argument("--family", default="tag36h11")
@@ -342,6 +343,9 @@ def main():
     ap.add_argument("--max-hamming", type=int, default=0)
     ap.add_argument("--method", default="auto", choices=["auto", "tag", "pnp"])
     args = ap.parse_args()
+    if args.width is None or args.height is None:
+        from src.config import COLOR_SIZE
+        args.width, args.height = COLOR_SIZE
 
     tag_size = args.tag_size if args.tag_size else DEFAULT_TAG_SIZE
     size_assumed = args.tag_size is None

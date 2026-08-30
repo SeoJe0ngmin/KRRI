@@ -1,26 +1,12 @@
 # python 3.11 (conda env: krri)
 #   /home/jeongmin/anaconda3/envs/krri/bin/python -m pip install -r requirements.txt
 
-# ── 검출·자세 ──────────────────────────────────────────────────────────────
-pupil-apriltags==1.0.4.post11   # AprilTag 3. 검출 + 자세를 한 번에 준다
-opencv-python==5.0.0.93         # 영상 입출력, solvePnP, 화면
+pupil-apriltags==1.0.4.post11  
+opencv-python==5.0.0.93        
 numpy==2.4.6
-
-# ── 카메라 ────────────────────────────────────────────────────────────────
-pyrealsense2==2.58.3.10794      # D435i. pip 휠 안에 librealsense 가 정적 링크돼 있다
-
-# ── 도구 (simulate / simulate_view / make_tag_pdf) ─────────────────────────
+pyrealsense2==2.58.3.10794     
 matplotlib==3.11.1
-apriltag==0.0.16                # AT2. simulate.py 가 합성 Detection 을 지을 때만 쓴다
-
-# ── src/utils/util.py 가 끌고 오는 것 ──────────────────────────────────────
-# 블로그 원본을 그대로 두기로 해서 남았다. 우리가 쓰는 5개 함수(invert_T, pr2t,
-# r2rpy, rpy2r, t2pr)는 numpy 만 있으면 되지만, 파일 맨 위에서 이것들을 import 한다.
+apriltag==0.0.16             
 scipy==1.17.1
 shapely==2.1.2
 ipython==9.16.1
-
-# ── 주행 (실장비에서만) ────────────────────────────────────────────────────
-# 여기(WSL2 개발 환경)에는 안 깔려 있다. tools/run.py --dry-run 은 없어도 돈다.
-# canlib                        # Kvaser CAN. 드라이버는 별도 설치
-# keyboard                      # 시작/비상정지 키. 리눅스에선 root 권한 필요

@@ -395,7 +395,7 @@ def main():
                     i, diagnose_frame(frame, fx=intr.fx, z_m=last_z,
                                       speed_mps=args.speed)))
 
-            if args.log and det is not None:
+            if args.log is not None and det is not None:
                 tid = int(det.tag_id)
                 d = res.docking.get(tid)
                 q = res.quality.get(tid, {})
