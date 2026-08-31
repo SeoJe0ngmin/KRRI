@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.config import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
+from src.config import (CAM_YAW_OFFSET_DEG, MIN_DECISION_MARGIN,        # noqa: E402
+                        MIN_TAG_PX, STABLE_TAG_PX)
 from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  pose_to_xyzrpy, pose_to_forklift,
                                  tag_pixel_size,
@@ -26,8 +28,12 @@ BAGDIR = ROOT / "work_dirs" / "live_pose" / "bag"   # --record
 
 PANEL_BG = (30, 30, 32)
 FONT = cv2.FONT_HERSHEY_PLAIN      # Hershey 중에서 제일 고정폭에 가까움
+# 패널은 DUPLEX 를 쓴다. PLAIN 은 같은 크기로도 글자 높이가 절반이라 읽기 나쁨.
+PFONT = cv2.FONT_HERSHEY_DUPLEX
 COLORS = {
     "head": (150, 220, 255),
+    "big": (255, 255, 255),
+    "bigwarn": (60, 200, 255),
     "lab": (200, 200, 200),
     "ok": (140, 255, 170),
     "warn": (60, 200, 255),
@@ -158,118 +164,174 @@ def pick_primary(res, want_id=None):
 
 # ----------------------------------------------------------------- 패널
 def build_lines(ctx):
-    """패널 한 장을 (문자열, 색키) 목록으로 만듦. 영어만 씀."""
-    L = []
-    add = lambda t, c="lab": L.append((t, c))
-    rule = lambda: L.append(("-" * 44, "rule"))
+    """패널 한 장을 항목 목록으로 만듦.
 
+    항목은 종류별 튜플이다. render_panel 이 그리고, --headless 는 글로 찍는다.
+        ("title", 글)                   맨 위 제목
+        ("rule",)                       구분선
+        ("sec", 이름)                   구역 이름 (QUALITY, SETUP ...)
+        ("big", 라벨, 값, 색, 덧말)      크게 보여줄 값 (제어에 쓰는 셋)
+        ("kv", 키, 값, 색)              작은 두 칸 줄
+        ("msg", 글, 색)                 한 줄 알림
+    """
+    L = []
     intr, tag_size = ctx["intr"], ctx["tag_size"]
     scale_bad = ctx["intr_assumed"] or ctx["size_assumed"]
     q = "?" if scale_bad else ""               # 거리 계열에 붙이는 의심 표시
-    cd = "warn" if scale_bad else "ok"
+    big_c = "warn" if scale_bad else "val"
 
-    add("APRILTAG DOCKING  -  LIVE POSE", "head")
-    add("source     : %s" % ctx["source"])
-    add("resolution : %dx%d   frame %d%s" % (ctx["w"], ctx["h"], ctx["frame"],
-                                             "  [PAUSED]" if ctx["paused"] else ""))
-    add("fps        : %5.1f  (measured)" % ctx["fps"])
-    add("intrinsics : fx=%.1f fy=%.1f" % (intr.fx, intr.fy))
-    add("             cx=%.1f cy=%.1f" % (intr.cx, intr.cy))
-    add("  origin   : %s" % ctx["intr_origin"], "warn" if ctx["intr_assumed"] else "ok")
-    if ctx["intr_assumed"]:
-        add("             ** NOT CALIBRATED - scale suspect **", "bad")
-    add("tag size   : %.3f m  (%s)" % (tag_size, "ASSUMED default" if ctx["size_assumed"]
-                                       else "user --tag-size"),
-        "warn" if ctx["size_assumed"] else "ok")
-    rule()
+    L.append(("title", "APRILTAG DOCKING"))
+    L.append(("rule",))
 
-    res = ctx["res"]
-    det = ctx["primary"]
+    res, det = ctx["res"], ctx["primary"]
+    T = None if det is None else res.poses.get(int(det.tag_id))
+
     if det is None:
-        add("[raw] camera -> tag", "head")
-        add("  no detection", "bad")
+        L.append(("msg", "  no detection", "bad"))
         if res.errors.get("detect"):
-            add("  detector failed: %s" % res.errors["detect"], "bad")
-        rule()
-        add("[control] forklift -> dock", "head")
-        add("  -", "dim")
+            L.append(("msg", "  detector failed: %s" % res.errors["detect"], "bad"))
+        L.append(("rule",))
+    elif T is None:
+        L.append(("msg", "  POSE FAILED: %s" % res.errors.get(int(det.tag_id), "unknown"),
+                  "bad"))
+        L.append(("rule",))
     else:
         tid = int(det.tag_id)
-        T = res.poses.get(tid)
-        add("[raw] camera -> tag   id=%d  margin=%.0f" % (tid, det.decision_margin), "head")
-        if T is None:
-            add("  POSE FAILED: %s" % res.errors.get(tid, "unknown"), "bad")
-            rule()
-            add("[control] forklift -> dock", "head")
-            add("  unavailable", "bad")
-        else:
-            v = pose_to_xyzrpy(T)
-            f = pose_to_forklift(T)
-            st = res.docking[tid]
-            qa = res.quality.get(tid, {})
-            ok_ang = bool(st["reliable_angle"])
-            a = "" if ok_ang else "?"
-            ca = "ok" if ok_ang else "warn"
+        v, f = pose_to_xyzrpy(T), pose_to_forklift(T)
+        st = res.docking[tid]
+        qa = res.quality.get(tid, {})
+        ok_ang = bool(st["reliable_angle"])
+        a = "" if ok_ang else "?"
 
-            add("  x %+8.3f  y %+8.3f  z %+8.3f  [m]%s"
-                % (v["x"], v["y"], v["z"], q), cd)
-            add("  roll %+7.1f  pitch %+7.1f  yaw %+7.1f  [deg]"
-                % (v["roll"], v["pitch"], v["yaw"]))
-            add("  distance %.3f m%s" % (v["distance"], q), cd)
-            add("  (카메라 축이라 좌우회전이 pitch, yaw 는 180 근처)", "dim")
-            rule()
-            # 사람이 읽기 쉬운 쪽. yaw = heading, roll/pitch 는 장착 기울기.
-            add("[forklift] 항공기 축   dock -> forklift", "head")
-            add("  lateral %+7.3f  vertical %+7.3f  forward %+7.3f  [m]%s"
-                % (f["lateral"], f["vertical"], f["forward"], q), cd)
-            add("  roll    %+7.1f  pitch    %+7.1f  yaw     %+7.1f  [deg]%s"
-                % (f["roll"], f["pitch"], f["yaw"], a), ca)
-            add("  (yaw = heading. roll/pitch 는 카메라와 태그가 서로 기운 정도)", "dim")
-            rule()
-            add("[control] forklift -> dock", "head")
-            side = "left" if st["lateral"] > 0 else "right"
-            add("  lateral  %+8.3f m%s  (%s of tag)" % (st["lateral"], q, side), cd)
-            add("  forward  %+8.3f m%s" % (st["forward"], q), cd)
-            add("  vertical %+8.3f m%s" % (st["vertical"], q), cd)
-            add("  heading  %+8.1f deg%s" % (st["heading_deg"], a), ca)
-            add("  approach %+8.1f deg%s  (unsigned)" % (st["approach_deg"], a), ca)
-            add("  tag tilt %8.1f deg   reliable: %s"
-                % (qa.get("tilt_deg", float("nan")), "yes" if ok_ang else "NO"),
-                "ok" if ok_ang else "warn")
-            # 재투영은 반드시 rms_px 로 찍음. estimate_pose 가 주는 e1 은
-            rms = qa.get("reproj_rms_px", float("nan"))
-            add("  reproj rms %5.2f px" % rms,
-                "ok" if rms <= MAX_REPROJ_RMS_PX else "warn")
-            add("  tag px   %8.1f     quality: %s"
-                % (qa.get("tag_px", float("nan")),
-                   "ok" if qa.get("ok") else ",".join(qa.get("reasons", [])) or "-"),
-                "ok" if qa.get("ok") else "warn")
-            if not ok_ang:
-                add("  ! angle < 10deg: steer on lateral", "warn")
-    rule()
+        # 제어에 쓰는 셋. 크게.
+        L.append(("big", "LATERAL", "%+.3f m%s" % (st["lateral"], q), big_c, ""))
+        L.append(("big", "FORWARD", "%+.3f m%s" % (st["forward"], q), big_c, ""))
+        L.append(("big", "HEADING", "%+.1f deg%s" % (st["heading_deg"], a),
+                  big_c if ok_ang else "warn", "" if ok_ang else "못 믿음"))
+        L.append(("rule",))
+
+        # 이 값을 믿어도 되나
+        rms = qa.get("reproj_rms_px", float("nan"))
+        tpx = qa.get("tag_px", float("nan"))
+        L.append(("sec", "QUALITY"))
+        L.append(("kv", "tag size", "%.0f px   (>=%.0f)" % (tpx, MIN_TAG_PX),
+                  "ok" if tpx >= STABLE_TAG_PX else "warn"))
+        L.append(("kv", "tilt", "%.1f deg   %s" % (qa.get("tilt_deg", float("nan")),
+                  "각도 OK" if ok_ang else "각도 못 믿음"), "ok" if ok_ang else "warn"))
+        L.append(("kv", "reproj", "%.2f px" % rms,
+                  "ok" if rms <= MAX_REPROJ_RMS_PX else "warn"))
+        L.append(("kv", "margin", "%.0f" % det.decision_margin, "ok"))
+        if not qa.get("ok", True):
+            L.append(("msg", "  ! %s" % (",".join(qa.get("reasons", [])) or "quality"), "warn"))
+        if not ok_ang:
+            L.append(("msg", "  ! 각도를 못 믿는다 — lateral 로 조종할 것", "warn"))
+        L.append(("rule",))
+
+        # 이상할 때만 보는 값
+        side = "left" if st["lateral"] > 0 else "right"
+        L.append(("sec", "REFERENCE"))
+        L.append(("kv", "forklift", "lat %+.3f  vert %+.3f  fwd %+.3f"
+                  % (f["lateral"], f["vertical"], f["forward"]), "dim"))
+        L.append(("kv", "", "roll %+.1f  pitch %+.1f  yaw %+.1f"
+                  % (f["roll"], f["pitch"], f["yaw"]), "dim"))
+        L.append(("kv", "raw cam", "x %+.3f  y %+.3f  z %+.3f"
+                  % (v["x"], v["y"], v["z"]), "dim"))
+        L.append(("kv", "", "roll %+.1f  pitch %+.1f  yaw %+.1f"
+                  % (v["roll"], v["pitch"], v["yaw"]), "dim"))
+        L.append(("kv", "approach", "%+.1f deg%s   (태그 %s 쪽)"
+                  % (st["approach_deg"], a, side), "dim"))
+        L.append(("rule",))
+
+    # 한 번 확인하고 잊는 값
     ids = res.tag_ids
-    add("detections : %d   ids: %s" % (len(ids), ids if ids else "[]"),
-        "ok" if ids else "bad")
-    add("draw: %s" % ctx["draw"], "dim")
-    for k in KEYMAP_PANEL:
-        add(k, "dim")
+    L.append(("sec", "SETUP"))
+    L.append(("kv", "source", "%s   %dx%d   %.1f fps%s"
+              % (ctx["source"], ctx["w"], ctx["h"], ctx["fps"],
+                 "  [PAUSED]" if ctx["paused"] else ""), "dim"))
+    L.append(("kv", "intrinsics", "fx %.1f  fy %.1f" % (intr.fx, intr.fy), "dim"))
+    L.append(("kv", "", "cx %.1f  cy %.1f    %s" % (intr.cx, intr.cy, ctx["intr_origin"]),
+              "warn" if ctx["intr_assumed"] else "dim"))
+    L.append(("kv", "tag", "%.0f mm   %s   ids %s"
+              % (tag_size * 1000, ctx["family"], ids if ids else "[]"),
+              "warn" if ctx["size_assumed"] else "dim"))
+    L.append(("kv", "detector", "method %s  blur %.1f  margin>=%.0f"
+              % (ctx["method"], ctx["quad_blur"], MIN_DECISION_MARGIN), "dim"))
+    L.append(("kv", "offset", "cam yaw %+.1f deg" % CAM_YAW_OFFSET_DEG, "dim"))
+    st_ = ctx.get("stats")
+    L.append(("kv", "frames", "%d%s" % (ctx["frame"],
+              "   drop %s" % st_.summary() if st_ is not None and st_.received else ""), "dim"))
+    L.append(("kv", "draw", ctx["draw"], "dim"))
+    L.append(("kv", "keys", "q quit   a cube/axes/both   s save", "dim"))
+    L.append(("kv", "", "r reset fps   SPACE pause", "dim"))
     return L
 
 
-def render_panel(lines, width, height, scale=1.15, step=21, margin=12):
-    """패널 줄을 이미지로 그림. 제일 긴 줄이 폭을 넘으면 글자를 줄여서 맞춤."""
-    inner = width - 2 * margin
-    widest = max([cv2.getTextSize(t, FONT, scale, 1)[0][0] for t, _ in lines] or [1])
-    if widest > inner:
-        scale *= inner / float(widest)
-    need = margin * 2 + step * len(lines)
-    panel = np.full((max(height, need), width, 3), PANEL_BG, np.uint8)
-    y = margin + step
-    for text, key in lines:
-        cv2.putText(panel, text, (margin, y), FONT, scale, COLORS.get(key, COLORS["lab"]),
-                    1, cv2.LINE_AA)
-        y += step
-    return panel
+def line_text(item):
+    """항목 하나를 --headless 용 한 줄 글로."""
+    k = item[0]
+    if k == "title":
+        return item[1]
+    if k == "rule":
+        return "-" * 52
+    if k == "sec":
+        return "[%s]" % item[1]
+    if k == "big":
+        return "  %-9s %s%s" % (item[1], item[2], ("   " + item[4]) if item[4] else "")
+    if k == "kv":
+        return "  %-11s %s" % (item[1], item[2])
+    return item[1]
+
+
+#: 패널 색
+PC = {"title": (150, 220, 255), "sec": (150, 150, 150), "lab": (140, 140, 140),
+      "val": (245, 245, 245), "ok": (140, 255, 170), "warn": (60, 200, 255),
+      "bad": (90, 90, 255), "dim": (105, 105, 105), "rule": (58, 58, 58)}
+
+#: 항목 종류별 줄 높이 [px]
+ROW_H = {"title": 25, "rule": 18, "sec": 24, "big": 69, "kv": 20}
+
+
+def render_panel(items, width, height, scale=1.0, margin=18):
+    """항목 목록을 패널 이미지로.
+
+    큰 값은 **라벨을 위, 숫자를 아래** 두 줄로 그린다 — 한 줄에 몰아넣으면
+    라벨과 숫자가 자리를 다투어 둘 다 작아진다.
+    작은 두 칸 줄(kv)은 키 열을 맞춰 값만 세로로 훑을 수 있게 한다.
+    """
+    need = margin * 2 + sum(ROW_H.get(i[0], 22) for i in items)
+    p = np.full((max(height, need), width, 3), PANEL_BG, np.uint8)
+    kx = margin + int(108 * scale)          # kv 의 값이 시작하는 x
+    y = margin + 14
+
+    for it in items:
+        k = it[0]
+        if k == "rule":
+            cv2.line(p, (margin, y - 7), (width - margin, y - 7), PC["rule"], 1)
+        elif k == "title":
+            cv2.putText(p, it[1], (margin, y), PFONT, 0.60 * scale, PC["title"], 1, cv2.LINE_AA)
+        elif k == "sec":
+            cv2.putText(p, it[1], (margin, y), PFONT, 0.50 * scale, PC["sec"], 1, cv2.LINE_AA)
+        elif k == "big":
+            _, lab, val, col, note = it
+            cv2.putText(p, lab, (margin, y), PFONT, 0.50 * scale, PC["lab"], 1, cv2.LINE_AA)
+            c = PC.get(col, PC["val"])
+            cv2.putText(p, val, (margin, y + 29), PFONT, 1.12 * scale, c, 2, cv2.LINE_AA)
+            if note:
+                w = cv2.getTextSize(val, PFONT, 1.12 * scale, 2)[0][0]
+                cv2.putText(p, note, (margin + w + 14, y + 29), PFONT, 0.48 * scale,
+                            c, 1, cv2.LINE_AA)
+        elif k == "kv":
+            _, key, val, col = it
+            if key:
+                cv2.putText(p, key, (margin + 6, y), PFONT, 0.46 * scale, PC["dim"],
+                            1, cv2.LINE_AA)
+            cv2.putText(p, val, (kx, y), PFONT, 0.46 * scale, PC.get(col, PC["dim"]),
+                        1, cv2.LINE_AA)
+        else:                                   # msg
+            cv2.putText(p, it[1], (margin, y), PFONT, 0.50 * scale,
+                        PC.get(it[2], PC["lab"]), 1, cv2.LINE_AA)
+        y += ROW_H.get(k, 22)
+    return p
 
 
 def compose_canvas(vis, lines, args):
@@ -426,13 +488,15 @@ def main():
                    "tag_size": tag_size, "size_assumed": size_assumed,
                    "res": res, "primary": det,
                    "paused": paused, "draw": args.draw,
+                   "family": args.family, "method": args.method,
+                   "quad_blur": args.quad_blur, "stats": pipe.stats,
                    }
             lines = build_lines(ctx)
 
             if args.headless:
                 print("===== frame %d =====" % i)
-                for text, _c in lines:
-                    print(text)
+                for it in lines:
+                    print(line_text(it))
                 print("")
                 if n_seen >= args.headless:
                     break

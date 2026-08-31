@@ -29,6 +29,10 @@ STABLE_TAG_PX = 50.0           # 이 이상이면 안정적. 통념값, 실장�
 MAX_REPROJ_RMS_PX = 2.0        # 재투영 오차 상한. 코너 노이즈 바닥 0.35px 의 약 6배
 MIN_DECISION_MARGIN = 20.0     # 저조도 하한으로만 쓴다. 거리에는 둔감하다(238->19.5px 에도 71.8~73.2)
 RELIABLE_TILT_DEG = 10.0       # 각도를 믿을 최소 기울기. tilt 2도면 좌우 변 차이가 0.3px
+CORNER_NOISE_PX = 0.07         # 코너 검출 잡음 [px]. before.json 30프레임에서 역산
+                               # (lateral 3.83mm / heading 0.156도 가 둘 다 0.07 을 가리킴)
+MAX_HEADING_SIGMA_DEG = 0.5    # 예측 heading 흔들림이 이보다 크면 각도를 안 믿는다
+SIGMA_SAMPLES = 60             # 그 예측에 쓰는 몬테카를로 표본 수
 DEFAULT_QUAD_BLUR = 0.0        # 검출 전 가우시안 블러. 9가지 비교에서 안 넣는 게 최선이었다
 
 DEPTH_TOL_COEF = 0.05          # depth 대조 허용치 = max(FLOOR, COEF*z^2). depth 오차가 z^2 로 커진다
@@ -54,7 +58,7 @@ D435I_COLOR_REF = (1920, 1080, 1359.2, 1359.0, 956.9, 571.3)   # 다른 해상�
 
 # ── 4) 도킹 (control_from_pose.py) ──────────────────────────────────────────
 
-LAT_TOL_M = 0.030              # lateral 이 이보다 작으면 됐다고 본다. 명령 하한이 17mm 라 그 밑은 무의미
+LAT_TOL_M = 0.030              # |lateral| 이 이보다 작으면 됐다고 본다. 명령 하한이 17mm 라 그 밑은 무의미
 HEAD_TOL_DEG = 2.0             # heading 허용치. 옆이동 3단계가 자동으로 0 으로 만든다
 STEP_M = 1.0                   # 직진 한 조각. 3m 를 1m 씩이면 1.46배 느려짐(측정 포함)
 STOP_M = 1.50                  # 태그1 을 놓기 전 멈출 거리. 높이차 0.4m 면 1.31m 에서 잘린다
@@ -63,6 +67,7 @@ ROT_T0_SEC = 0.5               # 회전 명령 지연 [s].  **미측정 가정�
 ROT_DEG_PER_SEC = 15.0         # 회전 각속도 [도/s]. **미측정 가정값** — 재는 법은 control_from_pose 참고
 ROT_MIN_SEC = 1.0              # 직진과 같다고 가정. 확인 필요
 ROT_MAX_SEC = 15.0
+SIDESTEP_BACKWARD_GAIN_DEG = 0.0   # 후진이 회전을 이만큼 넘게 아끼면 후진. 0 = 회전 작은 쪽
 
 # ── 5) 카메라 장착 보정 ─────────────────────────────────────────────────────
 

@@ -91,6 +91,7 @@ CAN 명령 (control_forklift_v2.py, MOVEMENT_TEMPLATES)
 
 
 from ...config import (HEAD_TOL_DEG, LAT_TOL_M, ROT_DEG_PER_SEC, ROT_MAX_SEC,
+                       SIDESTEP_BACKWARD_GAIN_DEG,
                        ROT_MIN_SEC, ROT_T0_SEC, STEP_M, STOP_M, TAG_ID)
 from .fwd_time_model import fwd_sec_from_offset_piecewise
 
@@ -150,19 +151,39 @@ def _sidestep(lat, head):
         lateral 0.08m / forward 3.0m 에서  옆이동 21.4s  vs  비스듬히 8.8s
     **일단 이 방식이 실제로 되는지 본 뒤에 고민한다.** -> (회전각[도], 거리[m], "forward"|"backward")
 
-    lateral 이 +면 태그축의 오른쪽에 있다는 뜻이라 **왼쪽(-x)** 으로 가야 한다.
+    lateral 이 +면 지게차가 태그축의 **오른쪽**에 있다는 뜻이라 왼쪽으로 가야 한다.
+    (월드에 놓고 확인: 지게차가 오른쪽 0.5m -> lateral +0.50, 태그는 화면 왼쪽에 맺힌다.)
     그 방향을 보려면 heading 이 -90도, 반대면 +90도여야 한다.
 
     전진과 후진 둘 다 되므로(CAN 에 both 있다) **회전이 작은 쪽**을 고른다.
     그러면 회전이 90도를 절대 안 넘는다 — 크게 돌수록 태그를 오래 놓친다.
     복귀 회전은 어느 쪽이든 90도다(회전 뒤 heading 이 +-90 이 되므로).
+
+    **가정: 전진과 후진 속도가 같다.** 이동 시간을 전진 모델(fwd_time_model)로
+    같이 쓴다. 후진이 실제로 느리면 그만큼 덜 간다 — 재보고 다르면 고칠 것.
+    SIDESTEP_BACKWARD_GAIN_DEG 를 올리면 그만큼 전진 쪽으로 치우친다
+    (head 가 0 근처면 두 회전이 +-90 으로 붙어서 잡음에 선택이 뒤집히므로).
     """
     face = -90.0 if lat > 0 else 90.0        # 가야 할 방향을 보는 heading
     turn_f = _norm180(face - head)            # 그대로 보고 전진
     turn_b = _norm180(face + 180.0 - head)    # 반대를 보고 후진
-    if abs(turn_f) <= abs(turn_b):
-        return turn_f, abs(lat), "forward"
-    return turn_b, abs(lat), "backward"
+    if abs(turn_f) - abs(turn_b) > SIDESTEP_BACKWARD_GAIN_DEG:
+        return turn_b, abs(lat), "backward"
+    return turn_f, abs(lat), "forward"
+
+
+def _fmt_measure(m):
+    """측정값 한 줄. 무슨 값을 보고 그 명령을 냈는지 로그에 남긴다."""
+    if not m:
+        return "태그 안 보임"
+    flag = ""
+    if not m.get("reliable_angle", True):
+        flag += "  [각도의심]"
+    if not m.get("stable", True):
+        flag += "  [불안정 %s]" % ", ".join(m.get("reasons", []))
+    return ("lat %+7.1fmm   fwd %6.3fm   head %+6.1f도   tilt %4.1f도   n %2d%s"
+            % (m["lateral"] * 1000, m["forward"], m["heading_deg"],
+               m["tilt_deg"], m["n"], flag))
 
 
 # ── 다음 동작 하나를 고른다 ─────────────────────────────────────────────────
@@ -240,7 +261,8 @@ async def dock(pipe, driver, tag_id=None, max_steps=30, log=print):
     for i in range(max_steps):
         m = await asyncio.to_thread(measure, pipe, tag_id)
         action, amount, sec, why = plan_step(m)
-        log("[%2d] %-10s %s" % (i, action, why))
+        log("[%2d] %s" % (i, _fmt_measure(m)))
+        log("     %-10s %s" % (action, why))
         history.append((action, amount, sec, why))
 
         if action == "done":
@@ -266,6 +288,118 @@ async def dock(pipe, driver, tag_id=None, max_steps=30, log=print):
         await driver.stop()
 
     log("!! %d 단계를 넘겼다. 수렴하지 않는다" % max_steps)
+    return history
+
+
+# ── 프레임 중심 루프 (화면을 띄우며 도킹) ──────────────────────────────────
+
+async def dock_live(pipe, driver, tag_id=None, max_steps=30, log=print,
+                    on_frame=None, n_frames=None):
+    """dock() 과 같은 일을 하되 **프레임을 계속 읽으며** 한다.
+
+    dock() 은 measure() 안에서 1초, 명령 실행 중 몇 초씩 프레임을 안 읽는다.
+    그동안 화면이 멈춘다. 여기서는 프레임 루프가 주인이고, 측정과 명령이
+    그 위에 얹힌다 — 명령이 도는 중에도 화면이 갱신된다.
+
+        on_frame(res, info)  프레임마다 불린다. 화면 그리는 쪽이 받는다.
+            info = {"phase": "measure"|"command"|"done", "step": n,
+                    "action": str, "why": str, "left": 남은 초, "n": 모은 프레임}
+
+    카메라는 한 프로세스만 열 수 있어서, 제어와 화면이 **한 프로세스**여야 한다.
+    """
+    import asyncio
+    import copy
+    from ...config import MEASURE_FRAMES
+    from ..detection.detection_pose import measure
+
+    tag_id = TAG_ID if tag_id is None else tag_id
+    n_frames = int(n_frames or MEASURE_FRAMES)
+    gen = iter(pipe.frames)
+
+    history, buf = [], []
+    phase, step, task, info = "measure", 0, None, {}
+    started = [0.0]
+
+    def now():
+        return asyncio.get_event_loop().time()
+
+    async def run_action(action, amount, sec):
+        if action == "sidestep":
+            turn, dist, way = amount
+            spin = driver.rotate_ccw if turn > 0 else driver.rotate_cw
+            await spin(rot_sec_from_deg(turn))
+            drive = driver.forward if way == "forward" else driver.backward
+            await drive(fwd_sec_from_offset_piecewise(dist))
+            back = driver.rotate_cw if turn > 0 else driver.rotate_ccw
+            await back(rot_sec_from_deg(90.0))
+        elif action == "forward":
+            await driver.forward(sec)
+        elif action == "rotate_ccw":
+            await driver.rotate_ccw(sec)
+        elif action == "rotate_cw":
+            await driver.rotate_cw(sec)
+        await driver.stop()
+
+    while True:
+        item = await asyncio.to_thread(next, gen, None)
+        if item is None:
+            break
+        i, ts, frame = item
+        if frame is None or getattr(frame, "size", 1) == 0:
+            continue
+        res = pipe.process(frame, index=i, timestamp=ts)
+
+        if phase == "measure":
+            d = res.docking.get(tag_id)
+            q = res.quality.get(tag_id, {})
+            if d is not None and q.get("ok", True):
+                # 이미지는 떼고 담는다 — 30프레임을 그대로 들면 1080p 에서 180MB 다
+                light = copy.copy(res)
+                light.image = None
+                buf.append(light)
+            if len(buf) >= n_frames:
+                m = measure(buf, tag_id=tag_id)
+                buf = []
+                action, amount, sec, why = plan_step(m)
+                step += 1
+                log("[%2d] %s" % (step, _fmt_measure(m)))
+                log("     %-10s %s" % (action, why))
+                history.append((action, amount, sec, why))
+                info = {"action": action, "why": why, "sec": sec}
+                if action == "done":
+                    await driver.stop()
+                    phase = "done"
+                elif action == "hold":
+                    pass                      # 다음 프레임부터 다시 모은다
+                else:
+                    task = asyncio.ensure_future(run_action(action, amount, sec))
+                    started[0] = now()
+                    phase = "command"
+                if step >= max_steps:
+                    log("!! %d 단계를 넘겼다. 수렴하지 않는다" % max_steps)
+                    phase = "done"
+        elif phase == "command":
+            if task is not None and task.done():
+                task = None
+                phase = "measure"
+
+        if on_frame is not None:
+            left = 0.0
+            if phase == "command":
+                left = max(0.0, info.get("sec", 0.0) - (now() - started[0]))
+            on_frame(res, dict(info, phase=phase, step=step, left=left,
+                               n=len(buf), need=n_frames))
+        if phase == "done":
+            break
+
+    # 끝날 때 돌던 명령이 있으면 접는다. 안 그러면 정리한 뒤에 마저 실행된다.
+    if task is not None and not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    await driver.stop()
     return history
 
 

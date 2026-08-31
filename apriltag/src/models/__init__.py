@@ -14,7 +14,7 @@ from .detection.detection_tag import (
 )
 from .detection.detection_pose import (
     estimate_pose, pose_by_pnp, pose_to_xyzrpy, pose_to_forklift,
-    docking_state, tag_tilt_deg,
+    docking_state, tag_tilt_deg, heading_sigma_deg,
     pose_quality, depth_cross_check,
     MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, RELIABLE_TILT_DEG,
     DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M, DEPTH_CHECK_MAX_Z,
@@ -28,7 +28,7 @@ __all__ = ["CameraIntrinsics", "intrinsics_from_hfov", "intrinsics_from_ref",
            "make_detector", "detect", "tag_pixel_size",
            "DEFAULT_QUAD_BLUR", "MIN_TAG_PX", "STABLE_TAG_PX",
            "estimate_pose", "pose_by_pnp", "pose_to_xyzrpy", "pose_to_forklift",
-           "docking_state", "tag_tilt_deg",
+           "docking_state", "tag_tilt_deg", "heading_sigma_deg",
            "pose_quality", "depth_cross_check",
            "MAX_REPROJ_RMS_PX", "MIN_DECISION_MARGIN", "RELIABLE_TILT_DEG",
            "DEPTH_TOL_COEF", "DEPTH_TOL_FLOOR_M", "DEPTH_CHECK_MAX_Z",

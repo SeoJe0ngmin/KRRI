@@ -145,10 +145,10 @@ def pose_to_forklift(T_camera_tag, unit='deg'):
             "distance": float(np.linalg.norm(p))}
 
 
-def docking_state(T_camera_tag):
+def docking_state(T_camera_tag, intrinsics=None, tag_size=None):
     """카메라 기준 태그 자세를 **도킹 제어가 쓸 형태**로 바꿈. 실측 예:
 
-        {'lateral':  0.104,      태그 축에서 좌우로 얼마나 벗어났나 [m]
+        {'lateral':  0.104,      태그 축에서 좌우로 벗어난 거리 [m]. + 가 오른쪽
          'vertical': -0.248,     카메라높이 - 태그높이 [m]
          'forward':  1.407,      태그면까지 남은 거리 [m]
          'distance': 1.432,      직선 거리 [m]
@@ -192,11 +192,70 @@ def docking_state(T_camera_tag):
 
     # 각도를 믿어도 되는지는 **태그가 화면에서 얼마나 찌그러져 보이나(tilt)** 로 정함.
     tilt = tag_tilt_deg(T_camera_tag)
+    # intrinsics 를 주면 프록시(tilt) 대신 heading 흔들림을 직접 예측해서 판정한다.
+    # tilt 은 태그가 화면 중심을 벗어나 생기는 원근 정보를 못 보기 때문이다.
+    sigma = float("nan")
+    reliable = tilt >= RELIABLE_TILT_DEG
+    if intrinsics is not None and tag_size:
+        from ...config import MAX_HEADING_SIGMA_DEG
+        sigma = heading_sigma_deg(T_camera_tag, intrinsics, tag_size)
+        reliable = sigma <= MAX_HEADING_SIGMA_DEG
     return {"lateral": lateral, "vertical": vertical, "forward": forward,
             "distance": distance,
             "approach_deg": approach, "heading_deg": heading,
-            "tilt_deg": tilt,
-            "reliable_angle": tilt >= RELIABLE_TILT_DEG}
+            "tilt_deg": tilt, "heading_sigma_deg": sigma,
+            "reliable_angle": bool(reliable)}
+
+
+def heading_sigma_deg(T_camera_tag, intrinsics, tag_size,
+                      corner_px=None, n=None, seed=0):
+    """이 배치에서 heading 이 코너 잡음에 얼마나 흔들리나 [도]. float 하나.
+
+    tilt 로는 못 잡는 게 있다 — 태그가 화면 중심을 벗어나기만 해도 원근 때문에
+    사다리꼴이 생겨 각도가 정확해지는데, tilt(태그 법선 vs 광축)는 그걸 0 으로 읽는다.
+    우리 배치(태그가 0.4m 위, 카메라 수평)가 정확히 그 경우라 tilt 이 항상 0 이다.
+    그래서 프록시를 쓰지 말고 직접 흘려본다: 이상적인 코너를 만들어
+    corner_px 만큼 흔들고 다시 풀기를 n 번, heading 의 표준편차를 낸다.
+
+    거리·태그크기·기울기·화면상 위치가 전부 자동으로 반영된다.
+    corner_px 는 실측으로 보정할 값이다(기본 0.2px).
+    """
+    from ...config import CORNER_NOISE_PX, SIGMA_SAMPLES
+    corner_px = CORNER_NOISE_PX if corner_px is None else float(corner_px)
+    n = int(SIGMA_SAMPLES if n is None else n)
+
+    T = np.asarray(T_camera_tag, dtype=np.float64)
+    if T.shape != (4, 4) or not np.isfinite(T).all():
+        return float("inf")
+
+    obj = _object_points(tag_size)
+    K = np.asarray(intrinsics.K, dtype=np.float64)
+    dist = (np.asarray(intrinsics.distortion, dtype=np.float64)
+            if getattr(intrinsics, "distortion", None) else np.zeros(5))
+    R, t = T[:3, :3], T[:3, 3]
+
+    cam = R @ obj.T + t[:, None]                  # 이상적인 코너를 만든다
+    if (cam[2] <= 1e-6).any():
+        return float("inf")
+    px = (K @ cam)
+    px = (px[:2] / px[2]).T
+
+    h0 = docking_state(T)["heading_deg"]
+    rng = np.random.default_rng(seed)
+    out = []
+    for _ in range(n):
+        ok, rv, tv = cv2.solvePnP(obj, (px + rng.normal(0.0, corner_px, px.shape)
+                                        ).reshape(-1, 1, 2), K, dist,
+                                  flags=cv2.SOLVEPNP_ITERATIVE)
+        if not ok:
+            continue
+        M = np.eye(4)
+        M[:3, :3] = cv2.Rodrigues(rv)[0]
+        M[:3, 3] = tv.ravel()
+        out.append(docking_state(M)["heading_deg"] - h0)
+    if len(out) < 3:
+        return float("inf")
+    return float(np.std(out))
 
 
 def tag_tilt_deg(T_camera_tag):
@@ -488,7 +547,7 @@ class TagPipeline:
                 continue
 
             res.poses[tid] = T
-            res.docking[tid] = docking_state(T)
+            res.docking[tid] = docking_state(T, intr, self.tag_size)
             if self.quality:
                 q = pose_quality(self.detector, d, intr, self.tag_size, T,
                                  method=self.method)
@@ -561,6 +620,10 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
          'reasons': []}                 stable=False 면 왜인지
         태그를 못 봤으면 None.
 
+    results 는 Result 를 흘리는 무엇이든 된다 — TagPipeline 이면 프레임을 직접
+    읽고, **이미 모아둔 리스트**면 그것만 계산한다. 화면을 그리느라 프레임 루프를
+    내줄 수 없는 쪽(dock_live)은 스스로 모은 리스트를 넘긴다.
+
     stable 이 False 면 **명령을 내지 말고 다시 재라.** 누가 지나갔거나
     조명이 깜빡였거나 아직 안 멈춘 것.
     """
@@ -570,7 +633,8 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     max_frames = int(max_frames or MEASURE_MAX_FRAMES)
 
     keys = ("lateral", "vertical", "forward", "distance",
-            "approach_deg", "heading_deg", "tilt_deg")
+            "approach_deg", "heading_deg", "tilt_deg",
+            "heading_sigma_deg")
     got = {k: [] for k in keys}
     got["z_optical"] = []
     seen = 0
@@ -613,7 +677,10 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     out = {k: med(v) for k, v in got.items()}
     out["n"] = m
     out["spread"] = {k: stderr(v) for k, v in got.items()}
-    out["reliable_angle"] = bool(out["tilt_deg"] >= RELIABLE_TILT_DEG)
+    from ...config import MAX_HEADING_SIGMA_DEG
+    sig = out.get("heading_sigma_deg", float("nan"))
+    out["reliable_angle"] = bool(sig <= MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
+        else bool(out["tilt_deg"] >= RELIABLE_TILT_DEG)
 
     reasons = []
     if m < n:
