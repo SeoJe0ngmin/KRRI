@@ -682,13 +682,31 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     out["reliable_angle"] = bool(sig <= MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
         else bool(out["tilt_deg"] >= RELIABLE_TILT_DEG)
 
+    # 흔들림 판정은 **두 조건을 같이** 본다.
+    #
+    #   ① 예측보다 훨씬 흔들리나   기하로 예측한 흔들림(heading_sigma_deg)과 대조한다.
+    #      진동·부분 가림·모션블러·태그가 흔들림 처럼 **기하가 모르는 일**은
+    #      여기서만 잡힌다. 예측 자체는 그런 걸 모른다.
+    #   ② 그게 실제로 문제가 되나  아무리 예측 대비 커도 허용치의 1/3 밑이면
+    #      명령에 영향이 없다. 가까이서 예측이 0.02도인데 3배 흔들린다고
+    #      멈추면 멀쩡한 측정을 버리는 꼴이다.
+    #
+    # 예전에는 ②만 봤는데, 그 문턱이 reliable_angle 보다 늘 느슨해서
+    # (같은 눈금으로 환산하면 3.65도 vs 0.50도) **한 번도 걸릴 수 없었다.**
+    from config.system import STABLE_SPREAD_K
     reasons = []
     if m < n:
         reasons.append("프레임 부족 %d/%d" % (m, n))
-    if out["spread"]["lateral"] > STABLE_LATERAL_M:
-        reasons.append("lateral 흔들림 %.1fmm" % (out["spread"]["lateral"] * 1000))
-    if out["spread"]["heading_deg"] > STABLE_HEADING_DEG:
-        reasons.append("heading 흔들림 %.2f도" % out["spread"]["heading_deg"])
+    pred_h = out.get("heading_sigma_deg")
+    pred_h = (pred_h / np.sqrt(m)) if (pred_h and np.isfinite(pred_h)) else None
+    obs_l, obs_h = out["spread"]["lateral"], out["spread"]["heading_deg"]
+    if obs_l > STABLE_LATERAL_M:
+        reasons.append("lateral 흔들림 %.1fmm" % (obs_l * 1000))
+    if obs_h > STABLE_HEADING_DEG:
+        reasons.append("heading 흔들림 %.2f도" % obs_h)
+    if pred_h and obs_h > max(STABLE_SPREAD_K * pred_h, STABLE_HEADING_DEG / 3.0):
+        reasons.append("예측보다 %.1f배 흔들림 (%.3f -> %.3f도)"
+                       % (obs_h / pred_h, pred_h, obs_h))
     out["stable"] = not reasons
     out["reasons"] = reasons
     return out

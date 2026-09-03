@@ -15,10 +15,36 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-PAPERS = {                     # (가로, 세로) mm
+# (가로, 세로) mm.  뒤에 L 이 붙으면 가로놓기.
+# B 계열은 한국·일본이 쓰는 JIS(KS A 5201) 치수다. ISO B 는 조금 작아서
+# 인쇄소가 ISO 를 쓰면 B4ISO / B3ISO 로 뽑을 것.
+PAPERS = {
     "A4": (210, 297), "A4L": (297, 210),
     "A3": (297, 420), "A3L": (420, 297),
+    "B4": (257, 364), "B4L": (364, 257),
+    "B3": (364, 515), "B3L": (515, 364),
+    "B4ISO": (250, 353), "B3ISO": (353, 500),
 }
+
+
+def fits(size_mm, paper):
+    """이 종이에 이 크기가 들어가나. (되나, 설명) 을 돌려준다.
+
+    검은 테두리 바깥까지가 size_mm 이고, 그 둘레에 흰 여백(quiet zone)이
+    한 칸(size/8) 있어야 검출이 안정적이다. 여백이 모자라도 흰 판에 붙이면
+    판이 여백 노릇을 하므로 실사용엔 문제가 없다 — 그래서 경고만 한다.
+    태그가 종이보다 크면 그건 거부한다(레이아웃이 깨진다).
+    """
+    pw, ph = PAPERS[paper]
+    if size_mm > min(pw, ph):
+        return False, ("%s 는 짧은 변이 %.0fmm 라 %.0fmm 태그가 안 들어간다"
+                       % (paper, min(pw, ph), size_mm))
+    margin = min((pw - size_mm) / 2, (ph - size_mm) / 2)
+    quiet = size_mm / CELLS
+    if margin < quiet:
+        return True, ("여백 %.0fmm < 권장 %.0fmm — 흰 판에 붙일 것"
+                      % (margin, quiet))
+    return True, ""
 
 
 def tag_cells(tag_id):
@@ -95,6 +121,11 @@ def main():
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
+    ok, note = fits(a.size, a.paper)
+    if not ok:
+        best = [p for p in sorted(PAPERS) if fits(a.size, p)[0]]
+        raise SystemExit("  %s\n  들어가는 용지: %s" % (note, ", ".join(best) or "없음"))
+
     # 기본 출력은 저장소 루트 기준으로 고정함. 예전엔 cwd 상대라서, 어디서
     import os
     ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -108,9 +139,14 @@ def main():
     print(f"  용지 {r['page'][0]:.0f}x{r['page'][1]:.0f}mm   태그 {r['size_mm']:.0f}mm"
           f"   여백 {r['margin']:.0f}mm (권장 {r['quiet']:.0f}mm)")
     if not r["ok"]:
+        # 여백까지 종이로 넣으려면 짧은 변이 태그의 (1 + 2/8) 배는 돼야 한다.
+        need = a.size * (1 + 2.0 / CELLS)
+        roomy = [p for p in sorted(PAPERS, key=lambda x: min(PAPERS[x]))
+                 if min(PAPERS[p]) >= need]
         print(f"  [!] 여백이 부족하다. 흰 판에 붙이면 판이 여백 역할을 하니 실사용엔 문제없다.")
-        print(f"      여백까지 종이로 넣으려면 A3 를 쓰거나 태그를 "
-              f"{min(*r['page'])/10*8:.0f}mm 로 줄여라.")
+        print(f"      여백까지 종이로 넣으려면 {roomy[0] if roomy else '더 큰 종이'}"
+              f"(짧은 변 {need:.0f}mm 이상)를 쓰거나, 이 종이에선 태그를 "
+              f"{min(*r['page']) / (1 + 2.0 / CELLS):.0f}mm 로 줄여라.")
     print(f"  인쇄 후 눈금자 100mm 를 자로 재고, 태그도 재서 실측값을 --tag-size 로 넘길 것")
 
 

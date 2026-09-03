@@ -15,6 +15,7 @@
 실제로 카메라 높이를 1.20 -> 0.50m 로 바꾸니 예전 STOP_M=1.50 이 근접 한계(2.55m)보다
 작아져서 매번 태그를 잃는 값이 됐다. 그래서 지금은 화면을 직접 본다.
 """
+from math import atan as _atan, degrees as _deg
 
 # ── 1) 현장값 ───────────────────────────────────────────────────────────────
 
@@ -34,7 +35,8 @@ MIN_DECISION_MARGIN = 20.0     # 저조도 하한으로만 쓴다. 거리에는 
 RELIABLE_TILT_DEG = 10.0       # 각도를 믿을 최소 기울기. tilt 2도면 좌우 변 차이가 0.3px
 CORNER_NOISE_PX = 0.07         # 코너 검출 잡음 [px]. before.json 30프레임에서 역산
                                # (lateral 3.83mm / heading 0.156도 가 둘 다 0.07 을 가리킴)
-MAX_HEADING_SIGMA_DEG = 0.5    # 예측 heading 흔들림이 이보다 크면 각도를 안 믿는다
+# 아래 셋은 허용치에서 나온다. "측정 흔들림은 맞춰야 할 값보다 한참 작아야 한다."
+# 따로 박아두면 허용치를 바꿀 때 안 따라와서 서로 안 맞는 조합이 된다.
 SIGMA_SAMPLES = 60             # 그 예측에 쓰는 몬테카를로 표본 수
 DEFAULT_QUAD_BLUR = 0.0        # 검출 전 가우시안 블러. 9가지 비교에서 안 넣는 게 최선이었다
 
@@ -43,9 +45,8 @@ DEPTH_TOL_FLOOR_M = 0.02       # 그 하한 [m]
 DEPTH_CHECK_MAX_Z = 1.5        # 이 거리 넘으면 허용치가 헐거워 판정이 무의미 [m]
 
 MEASURE_FRAMES = 30            # 대표값 하나를 낼 때 모으는 프레임 수. 30이면 흔들림이 1/5.5
-MEASURE_MAX_FRAMES = 150       # 이만큼 봐도 30개를 못 모으면 포기(태그를 놓친 것)
-STABLE_LATERAL_M = 0.010       # 대표값의 표준오차가 이보다 크면 명령을 내지 않는다
-STABLE_HEADING_DEG = 0.30      # 위와 같음 [도]
+MEASURE_MAX_FRAMES = MEASURE_FRAMES * 5    # 이만큼 봐도 못 모으면 포기(태그를 놓친 것)
+
 
 # ── 3) 측정·규격 ────────────────────────────────────────────────────────────
 
@@ -53,16 +54,25 @@ BLUR_CLEAN_PX = 10.0           # 실측: 여기까지 검출 100%
 BLUR_DEAD_PX = 32.0            # 실측: 여기서 0%. 12px 96% / 20px 89% / 28px 50%
 COLOR_EXPOSURE_UNIT_US = 100.0 # 컬러 노출 눈금. UVC 규격. 83=8.3ms. 뎁스/IR 은 us 라 100배 다르다
 LUMA_CLIPPED_LEVELS = 38       # bgr8 의 BT.601 변환이 죽이는 휘도 단계 (256 중 15%)
-ASSUMED_HFOV_DEG = 70.5        # D435i 16:9 실측(사양서 69도). 4:3 은 가로를 잘라내서 55.8도
 TAG_CELLS = 8                  # tag36h11 한 변의 칸 수(검은 테두리 포함)
 MM_PER_INCH = 25.4
 
 D435I_COLOR_REF = (1920, 1080, 1359.2, 1359.0, 956.9, 571.3)   # 다른 해상도는 세로 비율로 스케일(실측 0.03px 이내)
 
+# 화각은 위 fx 에서 그대로 나온다 — 따로 적어두면 둘이 어긋난다.
+# 카메라가 있으면 이 값도 안 쓴다(SDK 가 주는 fx 를 쓴다). 영상 파일용 대체값이다.
+ASSUMED_HFOV_DEG = 2.0 * _deg(_atan(D435I_COLOR_REF[0] / (2.0 * D435I_COLOR_REF[2])))
+
 # ── 4) 도킹 (control_from_pose.py) ──────────────────────────────────────────
 
 LAT_TOL_M = 0.030              # |lateral| 이 이보다 작으면 됐다고 본다. 명령 하한이 17mm 라 그 밑은 무의미
 HEAD_TOL_DEG = 2.0             # heading 허용치. 옆이동 3단계가 자동으로 0 으로 만든다
+
+STABLE_LATERAL_M = LAT_TOL_M / 3.0        # 대표값 표준오차가 이보다 크면 명령을 안 낸다
+STABLE_HEADING_DEG = HEAD_TOL_DEG / 3.0   # 위와 같음 [도]
+MAX_HEADING_SIGMA_DEG = HEAD_TOL_DEG / 4.0  # 예측 흔들림이 이보다 크면 각도를 안 믿는다
+STABLE_SPREAD_K = 3.0          # 관측 흔들림이 예측의 이 배를 넘으면 뭔가 모르는 일이 있는 것
+                               # (진동·부분 가림·모션블러). 기하 예측으로는 못 잡는다
 STEP_M = 1.0                   # 직진 한 조각. 3m 를 1m 씩이면 1.46배 느려짐(측정 포함)
 # 멈출 거리를 숫자로 안 정한다. 태그가 화면에서 잘리기 직전까지 가고, 그때
 # 다음 태그로 넘긴다. 마지막 태그면 남은 forward + DOCK_EXTRA_M 만큼 가고 선다.
