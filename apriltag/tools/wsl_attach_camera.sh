@@ -47,7 +47,7 @@ except ImportError:
                      '  conda activate krri 후 다시 실행하거나 KRRI_PY 로 지정할 것.')
 d = rs.context().query_devices()
 if len(d)==0:
-    print('  실패 - 장치가 안 보인다. src/utils/realsense_check.py 로 진단할 것.'); raise SystemExit(1)
+    print('  실패 - 장치가 안 보인다. tools/realsense_check.py 로 진단할 것.'); raise SystemExit(1)
 for x in d:
     print(f'  준비 완료 - {x.get_info(rs.camera_info.name)}  '
           f'serial {x.get_info(rs.camera_info.serial_number)}  '

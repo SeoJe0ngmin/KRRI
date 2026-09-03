@@ -12,7 +12,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.config import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
+from config.system import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
 from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  intrinsics_from_hfov, pose_to_xyzrpy,
                                  tag_tilt_deg, docking_state,
@@ -344,7 +344,7 @@ def main():
     ap.add_argument("--method", default="auto", choices=["auto", "tag", "pnp"])
     args = ap.parse_args()
     if args.width is None or args.height is None:
-        from src.config import COLOR_SIZE
+        from config.system import COLOR_SIZE
         args.width, args.height = COLOR_SIZE
 
     tag_size = args.tag_size if args.tag_size else DEFAULT_TAG_SIZE

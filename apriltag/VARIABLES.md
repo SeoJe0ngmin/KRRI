@@ -20,13 +20,16 @@
 | `TAG_HEIGHT_M` | m | 바닥에서 태그 중심까지 줄자 | 1.60 |
 | `CAM_HEIGHT_M` | m | 바닥에서 카메라 렌즈까지 줄자 | 1.20 |
 | `CAM_YAW_OFFSET_DEG` | 도 | 태그 정면에 세우고 `heading` 을 읽는다. 그 값이 곧 장착 오차 | **미측정 (0)** |
-| `ROT_DEG_PER_SEC` | 도/s | 회전 명령을 N초 주고 `heading` 변화를 나눈다 | **미측정 (15 가정)** |
-| `ROT_T0_SEC` | s | 회전 명령 후 실제로 돌기 시작할 때까지 지연 | **미측정 (0.5 가정)** |
-| `ROT_MIN_SEC` | s | 이보다 짧으면 아예 안 움직이는 하한 | **미측정 (1.0 가정)** |
+| `IMU_YAW_SIGN` | — | `tools/imu_check.py` — 반시계로 돌려 `+` 가 나오나 | 팀원 실측 −1.0 |
+| `ROT_LEAD_DEG` | 도 | `rotate_by` 가 회전마다 오버슈트를 로그에 남긴다. 그 평균 | **미측정 (0)** |
+| `ROT_DEG_PER_SEC` | 도/s | 회전 폐루프라 **결과를 안 바꾼다.** 표시·워치독용 | 미측정 (15 가정) |
+| `ROT_T0_SEC` | s | 위와 같음 | 미측정 (0.5 가정) |
+| `ROT_MIN_SEC` | s | 위와 같음 | 미측정 (1.0 가정) |
 | `CORNER_NOISE_PX` | px | 정지 상태로 100프레임 찍어 코너 좌표의 표준편차 | 0.2 가정 |
 | `APPROACH_SPEED_MPS` | m/s | 다른 팀이 주행 로그로 적합 | 0.284 실측 완료 |
 
-**미측정 네 개가 지금 가장 큰 위험이다.** 회전 셋은 `sidestep` 시간을 직접 결정한다.
+회전이 IMU 폐루프가 되면서 `ROT_*` 셋은 **결과를 안 바꾼다** — 목표각에 닿으면
+멈추기 때문이다. 지금 급한 실측은 `IMU_YAW_SIGN` 확인 하나다.
 
 ---
 
@@ -96,7 +99,14 @@
 | `LAT_TOL_M` | 0.030 | 명령 하한이 17mm 라 그 밑은 무의미 |
 | `HEAD_TOL_DEG` | 2.0 | 옆이동이 자동으로 0 으로 만듦 |
 | `STEP_M` | 1.0 | 1m 씩이면 1.46배 느려짐 |
-| `STOP_M` | 1.50 | 1.26m 보다 가까우면 태그가 화면 위로 잘림 |
+| `TAG_CUT_MARGIN_PX` | 30 | 태그가 화면 가장자리에서 이만큼 안이면 "잘리기 직전" |
+| `DOCK_EXTRA_M` | 0.0 | 마지막 태그 면을 지나 더 갈 거리. 현장에서 정할 값 |
+| `FWD_SAFETY` | 0.9 | 한 번에 남은 거리의 90%만. 지나치느니 한 번 더 잰다 |
+| `WARMUP_FRACTION` | 0.33 | 처음엔 옆정렬 말고 이만큼 먼저 다가간다 |
+| `FWD_ABORT_K` | 3.0 | 전진 중 heading 감시의 잡음 하한 배수 |
+| `SEARCH_AFTER_MISSES` | 3 | 아무 태그도 못 본 사이클. 15초쯤 |
+| `SEARCH_BACKUP_M` | 0.5 | 쓸어도 못 찾으면 후진 |
+| `SEARCH_MAX_ROUNDS` | 3 | 이만큼 하고 못 찾으면 정지·보고 |
 | `ROT_MAX_SEC` | 15 | 폭주 방지 |
 | `SIDESTEP_BACKWARD_GAIN_DEG` | 0.0 | 0 = 회전 작은 쪽 |
 
@@ -120,7 +130,28 @@
 ## 다음에 재야 할 것 — 우선순위
 
 ```
-1. ROT_DEG_PER_SEC / ROT_T0_SEC / ROT_MIN_SEC   회전 명령이 전부 여기 달려 있다
-2. CAM_YAW_OFFSET_DEG                            heading 전체가 이만큼 치우친다
-3. CORNER_NOISE_PX                               모든 오차 예측의 기준
+1. IMU_YAW_SIGN 확인          python tools/imu_check.py
+2. 회전 부호 확인              rotate_ccw 에 지게차가 왼쪽으로 도나 (눈으로)
+3. 탑재부 허용 오차            LAT_TOL_M / HEAD_TOL_DEG 의 근거. 현장에서 받아야 함
+4. 태그2 위치                  tag_layout 환산에 필요
+```
+
+**계산으로 나오는 것은 상수로 두지 않았다** — 손으로 박으면 배치가 바뀔 때
+안 따라온다. 실제로 카메라 높이를 1.20m 에서 0.50m 로 바꾸니 예전 상수
+`STOP_M = 1.50` 이 근접 한계(2.55m)보다 작아져서 매번 태그를 잃는 값이 됐다.
+
+```
+멈출 거리            없앴다       화면에서 태그가 잘리기 직전까지 간다 (tag_edge_margin_px)
+전진 중 heading 허용  기하 계산    asin(LAT_TOL_M / 남은거리), 잡음 하한 포함
+회전 워치독          각도 비례    rot_timeout_sec(deg)
+회전 멎음 판정       실측 잡음    calibrate() 의 noise_dps x 3
+회전축              중력 방향    calibrate() 가 가속도계로 잡는다
+탐색 걸음 크기       화각에서     fov_edges_deg(intr)
+```
+
+설정 파일은 둘이다.
+
+```
+config/system.py   실사용값
+config/sim.py      시뮬레이터 장면 (태그·카메라 높이). 실사용엔 안 쓴다
 ```

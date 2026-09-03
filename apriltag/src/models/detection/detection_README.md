@@ -22,7 +22,7 @@ src/utils/     camera.py      카메라 읽기·쓰기
                tag_layout.py  태그 여러 개를 한 좌표계로
                drawing.py     화면에 그리기 (표시 전용)
                util.py        블로그 원본 그대로 둔다. 5개만 씀
-               realsense_check.py / make_tag_pdf.py   실행 스크립트
+               make_tag_pdf.py                        실행 스크립트
 tools/         live_pose.py   실시간 화면          <- 실사용
                verify.py      실측 검증 (줄자)
                sim.py         가상 검증 — SCENARIO 하나로 굴린다 (--live 로 3D)

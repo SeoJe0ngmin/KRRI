@@ -19,10 +19,10 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import CAM_HEIGHT_M, TAG_HEIGHT_M                    # noqa: E402
-from src.config import TAG_CELLS as CELLS                            # noqa: E402
-from src.config import TAG_SIZE_M as DEFAULT_TAG_SIZE                # noqa: E402
-from src.config import RELIABLE_TILT_DEG                             # noqa: E402
+from config.sim import CAM_HEIGHT_M, TAG_HEIGHT_M                    # noqa: E402
+from config.system import TAG_CELLS as CELLS                            # noqa: E402
+from config.system import TAG_SIZE_M as DEFAULT_TAG_SIZE                # noqa: E402
+from config.system import RELIABLE_TILT_DEG                             # noqa: E402
 from src.models import (CameraIntrinsics, docking_state,             # noqa: E402
                         pose_to_xyzrpy, tag_pixel_size, tag_tilt_deg)
 from src.models.detection.detection_pose import _object_points       # noqa: E402

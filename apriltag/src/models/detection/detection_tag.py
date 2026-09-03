@@ -1,7 +1,7 @@
 """2. 태그 찾기 — 흑백 이미지에서 AprilTag 을 검출함."""
 import numpy as np
 import pupil_apriltags
-from ...config import DEFAULT_QUAD_BLUR, MIN_TAG_PX, STABLE_TAG_PX
+from config.system import DEFAULT_QUAD_BLUR, MIN_TAG_PX, STABLE_TAG_PX
 
 _keep_alive = []
 
@@ -20,6 +20,25 @@ def tag_pixel_size(detection):
     c = np.asarray(detection.corners, dtype=np.float64)
     edges = np.linalg.norm(c - np.roll(c, -1, axis=0), axis=1)
     return float(edges.mean())
+
+
+def tag_edge_margin_px(detection, shape):
+    """태그가 화면 가장자리에서 몇 px 떨어져 있나. 가장 가까운 쪽 하나. float.
+
+    가까이 갈수록 태그를 가파르게 올려다보게 되어 어느 지점부터 윗변이 화면
+    밖으로 나간다. AprilTag 은 네 모서리가 다 있어야 인식되므로 그 순간
+    검출이 끊긴다 — **회전으로는 복구가 안 된다**(태그가 계속 위에 있다).
+
+    거리로 계산해서 판단할 수도 있지만(태그높이·카메라높이·화각), 그러면
+    장착 pitch 나 실측 오차가 그대로 들어온다. **화면을 직접 보는 쪽이
+    무조건 맞다** — 여기 남은 px 이 0 이 되는 순간이 곧 검출이 끊기는 순간이다.
+
+    음수면 이미 밖으로 나갔다는 뜻.
+    """
+    h, w = shape[:2]
+    c = np.asarray(detection.corners, dtype=np.float64)
+    return float(min(c[:, 0].min(), c[:, 1].min(),
+                     w - 1 - c[:, 0].max(), h - 1 - c[:, 1].max()))
 
 
 def detect(detector, img_gray, min_margin=0.0, max_hamming=0,

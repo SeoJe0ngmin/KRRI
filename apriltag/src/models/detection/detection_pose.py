@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from ...config import (CAM_YAW_OFFSET_DEG, DEPTH_CHECK_MAX_Z,
+from config.system import (CAM_YAW_OFFSET_DEG, DEPTH_CHECK_MAX_Z,
                        DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M,
                       MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, MIN_TAG_PX,
                       RELIABLE_TILT_DEG)
@@ -197,7 +197,7 @@ def docking_state(T_camera_tag, intrinsics=None, tag_size=None):
     sigma = float("nan")
     reliable = tilt >= RELIABLE_TILT_DEG
     if intrinsics is not None and tag_size:
-        from ...config import MAX_HEADING_SIGMA_DEG
+        from config.system import MAX_HEADING_SIGMA_DEG
         sigma = heading_sigma_deg(T_camera_tag, intrinsics, tag_size)
         reliable = sigma <= MAX_HEADING_SIGMA_DEG
     return {"lateral": lateral, "vertical": vertical, "forward": forward,
@@ -220,7 +220,7 @@ def heading_sigma_deg(T_camera_tag, intrinsics, tag_size,
     거리·태그크기·기울기·화면상 위치가 전부 자동으로 반영된다.
     corner_px 는 실측으로 보정할 값이다(기본 0.2px).
     """
-    from ...config import CORNER_NOISE_PX, SIGMA_SAMPLES
+    from config.system import CORNER_NOISE_PX, SIGMA_SAMPLES
     corner_px = CORNER_NOISE_PX if corner_px is None else float(corner_px)
     n = int(SIGMA_SAMPLES if n is None else n)
 
@@ -627,7 +627,7 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     stable 이 False 면 **명령을 내지 말고 다시 재라.** 누가 지나갔거나
     조명이 깜빡였거나 아직 안 멈춘 것.
     """
-    from ...config import (MEASURE_FRAMES, MEASURE_MAX_FRAMES,
+    from config.system import (MEASURE_FRAMES, MEASURE_MAX_FRAMES,
                            STABLE_HEADING_DEG, STABLE_LATERAL_M)
     n = int(n or MEASURE_FRAMES)
     max_frames = int(max_frames or MEASURE_MAX_FRAMES)
@@ -677,7 +677,7 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     out = {k: med(v) for k, v in got.items()}
     out["n"] = m
     out["spread"] = {k: stderr(v) for k, v in got.items()}
-    from ...config import MAX_HEADING_SIGMA_DEG
+    from config.system import MAX_HEADING_SIGMA_DEG
     sig = out.get("heading_sigma_deg", float("nan"))
     out["reliable_angle"] = bool(sig <= MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
         else bool(out["tilt_deg"] >= RELIABLE_TILT_DEG)

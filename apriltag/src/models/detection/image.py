@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from ...config import ASSUMED_HFOV_DEG, COLOR_SIZE, D435I_COLOR_REF, IR_SIZE
+from config.system import ASSUMED_HFOV_DEG, COLOR_SIZE, D435I_COLOR_REF, IR_SIZE
 from ...utils.camera import COLOR_EXPOSURE_UNIT_US
 
 @dataclass
@@ -84,6 +84,44 @@ def intrinsics_from_hfov(shape, hfov_deg=None):
     h, w = shape[:2]
     fx = (w / 2.0) / np.tan(np.deg2rad(float(hfov_deg)) / 2.0)
     return CameraIntrinsics(fx, fx, w / 2.0, h / 2.0, w, h)
+
+
+def fov_edges_deg(intr):
+    """광축에서 화면 네 끝까지의 각 [도]. (위, 아래, 왼쪽, 오른쪽).
+
+    **위아래가 다르다.** cy 가 화면 정중앙이 아니기 때문이다 — D435i 1080p 는
+    cy=571.3 이라 중앙(540)보다 31줄 아래에 있고, 그만큼 위를 더 본다
+    (위 22.8도 / 아래 20.5도, 합이 세로화각 43.3도).
+    태그를 올려다보는 우리 배치에서는 이 차이가 그대로 근접 한계에 들어간다.
+    """
+    h = int(intr.height) or int(round(intr.cy * 2))
+    w = int(intr.width) or int(round(intr.cx * 2))
+    up = np.degrees(np.arctan(intr.cy / intr.fy))
+    down = np.degrees(np.arctan((h - intr.cy) / intr.fy))
+    left = np.degrees(np.arctan(intr.cx / intr.fx))
+    right = np.degrees(np.arctan((w - intr.cx) / intr.fx))
+    return float(up), float(down), float(left), float(right)
+
+
+def tag_visible_near_m(intr, tag_height_m, cam_height_m, tag_size_m):
+    """태그 전체가 화면에 들어오는 **가장 가까운 거리** [m].
+
+    가까이 갈수록 태그를 가파르게 올려다보게 되어, 어느 지점부터 윗변이
+    화면 위로 넘어간다. AprilTag 는 네 모서리가 다 있어야 하므로 그때부터
+    검출이 아예 안 된다. **회전으로는 절대 복구가 안 되는 실종**이라
+    STOP_M 은 반드시 이 값보다 커야 한다.
+
+        높이차 0.40m / 20cm 태그  ->  1.19m
+        높이차 0.92m / 30cm 태그  ->  2.55m
+
+    태그가 카메라보다 낮으면 아래쪽 화각으로 같은 계산을 한다.
+    """
+    up, down, _, _ = fov_edges_deg(intr)
+    dh = float(tag_height_m) - float(cam_height_m)
+    half = float(tag_size_m) / 2.0
+    edge = (dh + half) if dh >= 0 else -(dh - half)      # 광축에서 먼 쪽 변까지
+    limit = up if dh >= 0 else down
+    return float(edge / np.tan(np.radians(limit)))
 
 
 class Frame(np.ndarray):

@@ -2,7 +2,7 @@
 from dataclasses import dataclass, asdict, replace, fields
 import numpy as np
 
-from ..config import (BLUR_CLEAN_PX, BLUR_DEAD_PX, COLOR_EXPOSURE_UNIT_US,
+from config.system import (BLUR_CLEAN_PX, BLUR_DEAD_PX, COLOR_EXPOSURE_UNIT_US,
                       LUMA_CLIPPED_LEVELS)
 
 
