@@ -30,7 +30,8 @@ from config.system import MAX_STEPS                                  # noqa: E40
 from src.models.detection.image import intrinsics_from_ref        # noqa: E402                        # noqa: E402
 from src.utils.imu_yaw import GyroYaw                                    # noqa: E402
 
-PHASE_KO = {"measure": "측정 중", "command": "명령 실행 중", "done": "끝"}
+PHASE_KO = {"measure": "측정 중", "command": "명령 실행 중", "search": "Set3: 태그 찾는 중",
+           "final": "마지막 접근 중", "done": "끝", "manual": "!! 수동전환 필요 !!"}
 
 
 def make_view(args):
@@ -60,9 +61,11 @@ def make_view(args):
         head = [("sec", "%d단계   %s" % (info["step"], PHASE_KO.get(info["phase"], "")))]
         if info["phase"] == "measure":
             head.append(("kv", "모으는 중", "%d / %d 프레임" % (info["n"], info["need"]), "ok"))
-        elif info["phase"] == "command":
+        elif info["phase"] in ("command", "search", "final"):
             head.append(("kv", info.get("action", ""), "남은 %.1fs" % info["left"], "warn"))
             head.append(("kv", "", info.get("why", "")[:44], "dim"))
+        elif info["phase"] == "manual":
+            head.append(("kv", "", info.get("why", "")[:44], "bad"))
         items = items[:2] + head + [("rule",)] + items[2:]
 
         panel = L.render_panel(items, 470, vis.shape[0])
