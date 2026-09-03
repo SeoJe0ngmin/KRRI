@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config.system import (IMU_BIAS_SEC, IMU_GYRO_HZ, IMU_MOVING_DPS,
-                        TAG_ID, TAG_SIZE_M)   # noqa: E402
+from config.imu import IMU_BIAS_SEC, IMU_GYRO_HZ, IMU_MOVING_DPS  # noqa: E402
+from config.detection import TAG_ID, TAG_SIZE_M                   # noqa: E402
 from src.utils.imu_yaw import GyroYaw                                   # noqa: E402
 
 

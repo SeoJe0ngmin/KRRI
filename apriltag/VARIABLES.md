@@ -149,9 +149,16 @@
 탐색 걸음 크기       화각에서     fov_edges_deg(intr)
 ```
 
-설정 파일은 둘이다.
+설정은 성격별로 나눠 두었다. 고칠 때는 해당 파일을 연다.
 
 ```
-config/system.py   실사용값
-config/sim.py      시뮬레이터 장면 (태그·카메라 높이). 실사용엔 안 쓴다
+config/detection.py   태그를 보고 위치를 내는 값   태그 크기·번호, 해상도, 품질 문턱, 장비 규격
+config/control.py     어떻게 움직일지 정하는 값     도킹 허용치, 전진 방식, 종료, 회전, 탐색
+config/imu.py         자이로 자체에 관한 값        주파수, 부호, 보정 시간, 끊김 판정
+config/sim.py         시뮬레이터 장면              **실사용엔 안 쓴다**
+config/system.py      위 셋을 모아 부르는 자리      값은 여기 안 쓴다
 ```
+
+의존은 한 방향뿐이다 — `detection` → `control`. 검출의 흔들림 문턱이
+도킹 허용치에서 나오기 때문이다. `src/` 는 자기 갈래를 직접 부르고,
+`tools/` 는 여러 갈래가 필요하니 `config.system` 을 부른다.

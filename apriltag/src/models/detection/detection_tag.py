@@ -1,7 +1,7 @@
 """2. 태그 찾기 — 흑백 이미지에서 AprilTag 을 검출함."""
 import numpy as np
 import pupil_apriltags
-from config.system import DEFAULT_QUAD_BLUR, MIN_TAG_PX, STABLE_TAG_PX
+from config.detection import DEFAULT_QUAD_BLUR, MIN_TAG_PX, STABLE_TAG_PX
 
 _keep_alive = []
 

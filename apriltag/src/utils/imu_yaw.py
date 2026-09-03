@@ -38,7 +38,7 @@ import math
 import threading
 import time
 
-from config.system import (IMU_BIAS_SEC, IMU_CALIB_MIN_RATIO, IMU_DT_GAP_SAMPLES,
+from config.imu import (IMU_BIAS_SEC, IMU_CALIB_MIN_RATIO, IMU_DT_GAP_SAMPLES,
                       IMU_GYRO_HZ, IMU_MOVING_DPS, IMU_STALE_SEC,
                       IMU_YAW_SIGN)
 

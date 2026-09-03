@@ -78,18 +78,19 @@ import asyncio
 import copy
 import math
 
-from config.system import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY, HEAD_TOL_DEG,
-                       HOLD_RETRY_SEC, LAT_TOL_M, MAX_STEPS, TAG_SIZE_M,
-                       TAG_CUT_MARGIN_PX, WARMUP_FRACTION,
-                       MEASURE_FRAMES, MEASURE_MAX_FRAMES, ROT_DEG_PER_SEC,
-                       ROT_LEAD_DEG, ROT_MAX_SEC, ROT_MIN_SEC, ROT_POLL_SEC,
-                       ROT_SETTLE_MAX_SEC, ROT_SETTLE_MIN_SEC,
-                       ROT_SETTLE_POLL_SEC, ROT_SETTLE_RATE_FLOOR,
-                       ROT_SETTLE_RATE_K, ROT_T0_SEC, ROT_WATCHDOG_GAIN,
-                       ROT_WRONG_WAY_DEG, SEARCH_AFTER_MISSES, SEARCH_BACKUP_M,
-                       SEARCH_MAX_ROUNDS, SETTLE_SEC,
-                       SIDESTEP_BACKWARD_GAIN_DEG, STEP_M, TAG_ID,
-                       TAG2_ID)
+from config.control import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY,
+                            HEAD_TOL_DEG, HOLD_RETRY_SEC, LAT_TOL_M, MAX_STEPS,
+                            ROT_DEG_PER_SEC, ROT_LEAD_DEG, ROT_MAX_SEC,
+                            ROT_MIN_SEC, ROT_POLL_SEC, ROT_SETTLE_MAX_SEC,
+                            ROT_SETTLE_MIN_SEC, ROT_SETTLE_POLL_SEC,
+                            ROT_SETTLE_RATE_FLOOR, ROT_SETTLE_RATE_K,
+                            ROT_T0_SEC, ROT_WATCHDOG_GAIN, ROT_WRONG_WAY_DEG,
+                            SEARCH_AFTER_MISSES, SEARCH_BACKUP_M,
+                            SEARCH_MAX_ROUNDS, SETTLE_SEC,
+                            SIDESTEP_BACKWARD_GAIN_DEG, STEP_M,
+                            TAG_CUT_MARGIN_PX, WARMUP_FRACTION)
+from config.detection import (MEASURE_FRAMES, MEASURE_MAX_FRAMES, TAG_ID,
+                              TAG_SIZE_M, TAG2_ID)
 from .fwd_time_model import fwd_sec_from_offset_piecewise
 
 # ── 부호 약속 (실물 확정 2026-09-01) ────────────────────────────────────────
@@ -424,7 +425,7 @@ def _margin_px(res, tag_id):
     img = getattr(res, "image", None)
     shape = getattr(img, "shape", None)
     if shape is None:
-        from config.system import COLOR_SIZE
+        from config.detection import COLOR_SIZE
         shape = (COLOR_SIZE[1], COLOR_SIZE[0])
     for d in getattr(res, "detections", []):
         if int(getattr(d, "tag_id", -1)) == int(tag_id):
@@ -459,7 +460,7 @@ def _half_fov_deg(pipe):
     좁은 쪽(왼/오 중 작은 값)을 쓴다 — 그래야 한 걸음 돌 때 훑고 지나가는
     곳이 없다. 카메라가 주는 fx·cx 로 계산하므로 해상도를 바꿔도 따라온다.
     """
-    from config.system import COLOR_SIZE
+    from config.detection import COLOR_SIZE
     from ..detection.image import fov_edges_deg, intrinsics_from_ref
     intr = getattr(pipe, "intr", None)
     if intr is None:

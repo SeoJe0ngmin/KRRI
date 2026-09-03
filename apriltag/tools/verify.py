@@ -344,7 +344,7 @@ def main():
     ap.add_argument("--method", default="auto", choices=["auto", "tag", "pnp"])
     args = ap.parse_args()
     if args.width is None or args.height is None:
-        from config.system import COLOR_SIZE
+        from config.detection import COLOR_SIZE
         args.width, args.height = COLOR_SIZE
 
     tag_size = args.tag_size if args.tag_size else DEFAULT_TAG_SIZE

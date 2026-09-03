@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import cv2
 import numpy as np
 
-from config.system import MM_PER_INCH, TAG_CELLS as CELLS
+from config.detection import MM_PER_INCH, TAG_CELLS as CELLS
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
