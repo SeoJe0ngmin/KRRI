@@ -102,6 +102,7 @@ from config.control import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY,
                             TAG_CUT_MARGIN_PX, WARMUP_FRACTION)
 from config.detection import (MEASURE_FRAMES, MEASURE_MAX_FRAMES, TAG_ID,
                               TAG_SIZE_M, TAG2_ID)
+from ...utils.event_log import record_event
 from .fwd_time_model import fwd_sec_from_offset_piecewise
 from .rot_control import rot_sec_from_deg, rot_timeout_sec, rotate_to
 
@@ -423,7 +424,7 @@ def _half_fov_deg(pipe):
     return float(min(left, right))
 
 
-async def dock(pipe, driver, tag_id=None, max_steps=None, log=print):
+async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_path=None):
     """멈춤 -> 측정 -> 동작 하나 -> 반복. (화면 없음)
 
     **async 인 이유**: control_forklift_v2 의 TX 루프(movement 10ms, control 5ms,
@@ -434,6 +435,7 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print):
     driver 는 async forward/backward/stop(초) 에 더해 rotate_by(도) 를 갖춘 무엇이든.
     DryRunDriver 를 넣으면 CAN 없이 순서만 확인할 수 있다.
     멈출 거리는 안 받는다 — 태그가 화면에서 잘리기 직전까지 가고 거기서 끝낸다.
+    record_path 를 주면 측정값도 (회전·직진과 같은 파일에) 기록한다.
     """
     from ..detection.detection_pose import measure
     tag_id = TAG_ID if tag_id is None else tag_id
@@ -449,6 +451,7 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print):
     while i < max_steps:
         m = await asyncio.to_thread(measure, pipe, tag_id)     # 멈춰서 1초 측정
         if m:
+            record_event(record_path, "measure", tag_id=tag_id, **m)
             misses, st["drove_forward"], st["backed_up_once"] = 0, False, False
         else:
             misses += 1
@@ -487,8 +490,12 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print):
 
 
 async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
-                    on_frame=None, n_frames=None, should_stop=None):
+                    on_frame=None, n_frames=None, should_stop=None,
+                    record_path=None):
     """dock() 과 같은 일을 하되 **프레임을 계속 읽으며** 한다. (화면용, run.py 가 씀)
+
+    record_path 를 주면 측정값을 (드라이버의 회전·직진 기록과 같은 파일에)
+    utils/event_log.record_event() 로 남긴다.
 
     dock() 은 measure() 안에서 1초, 명령 실행 중 몇 초씩 프레임을 안 읽는다.
     그동안 화면이 멈춘다. 여기서는 프레임 루프가 주인이고, 측정과 명령이
@@ -583,6 +590,8 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     # n 을 같이 넘긴다 — 안 넘기면 measure 가 기본 30 으로 검사해서
                     # n_frames 를 줄였을 때 항상 '프레임 부족' 이 된다.
                     m = measure(buf, tag_id=tag_id, n=n_frames) if buf else None
+                    if m:
+                        record_event(record_path, "measure", tag_id=tag_id, **m)
                     # **아무 태그도** 안 보였을 때만 실종으로 센다.
                     # 쫓는 태그만 없는 것은 갈아타는 중일 수 있다.
                     # 창 전체를 보고 판단한다 — 마지막 한 프레임만 보면
@@ -756,9 +765,9 @@ class CanDriver:
     개루프로 떨어진다.** 그 시간 모델은 미측정 가정값이라 정상 경로가 아니다.
     run.py 가 붙여 준다.
 
-    record_path 를 주면 회전마다 결과를 JSON Lines 로 append 한다 —
-    나중에 ROT_T0 / ROT_DEG_PER_SEC / ROT_LEAD_DEG 를 실측 적합할 데이터다.
-    기록 실패(디스크 등)가 도킹을 막으면 안 되므로 조용히 무시한다.
+    record_path 를 주면 회전·직진마다 결과를 utils/event_log.record_event() 로
+    JSON Lines에 append 한다 — 나중에 ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 를
+    실측 적합할 데이터다. 기록 실패가 도킹을 막지는 않는다(event_log 가 삼킴).
     """
 
     def __init__(self, controller, yaw=None, log=None, record_path=None):
@@ -769,18 +778,6 @@ class CanDriver:
         if yaw is not None and not getattr(yaw, "calibrated", False) and log:
             log("       !! GyroYaw 가 보정 전이다 — 바이어스가 0 이라 5.5도/분 흘러간다. "
                 "정지 상태에서 calibrate() 를 부를 것")
-
-    def _record(self, result):
-        if not self.record_path:
-            return
-        import json
-        import time
-        entry = dict(result, ts=time.time())
-        try:
-            with open(self.record_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
 
     async def _hold(self, movement, sec):
         """movement 를 sec 초 유지했다가 stop 으로 되돌린다. 시간 기반 명령의 공통 몸통."""
@@ -793,6 +790,7 @@ class CanDriver:
         finally:
             self.c.current_movement = "stop"   # 예외가 나도 반드시 선다
         await asyncio.sleep(SETTLE_SEC)        # 관성이 잦아들 시간. 재기 전에 확실히 선다
+        record_event(self.record_path, "drive", movement=movement, sec=sec)
 
     async def forward(self, sec):
         await self._hold("forward", sec)
@@ -803,7 +801,8 @@ class CanDriver:
     async def rotate_by(self, deg, timeout=None):
         """deg 만큼 제자리 회전한다. +가 반시계. 실제 알고리즘은 rot_control.rotate_to()."""
         return await rotate_to(self.c, self.yaw, deg, log=self.log, timeout=timeout,
-                               record=self._record)
+                               record=lambda result: record_event(
+                                   self.record_path, "rotation", **result))
 
     async def stop(self):
         self.c.current_movement = "stop"

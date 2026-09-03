@@ -23,7 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-ROT_LOG_PATH = os.path.join(ROOT, "work_dirs", "rotations", "log.jsonl")   # --record-rotations
+EVENT_LOG_PATH = os.path.join(ROOT, "work_dirs", "docking_log", "events.jsonl")   # --record-events
 
 from config.system import TAG_ID, TAG_SIZE_M                                # noqa: E402
 from src.models import TagPipeline                                       # noqa: E402
@@ -119,6 +119,14 @@ async def main_async(args):
             print("  !! 자이로를 못 열었다 (%s) — 회전이 시간모델 개루프가 된다" % exc)
             yaw = None
 
+    # 실측치가 있는(실제로 CAN 을 보내는) 경우에만 의미가 있다 — dry-run 은
+    # 하드웨어가 안 움직이므로 기록해도 쓸 데이터가 안 된다.
+    record_path = None
+    if args.record_events and not args.dry_run:
+        os.makedirs(os.path.dirname(EVENT_LOG_PATH), exist_ok=True)
+        record_path = EVENT_LOG_PATH
+        print("  운행 기록 -> %s" % record_path)
+
     ctrl, tasks = None, []
     if args.dry_run:
         driver = DryRunDriver(realtime=True)
@@ -132,11 +140,6 @@ async def main_async(args):
         tasks = [asyncio.create_task(ctrl.control_tx_loop()),
                  asyncio.create_task(ctrl.movement_tx_loop()),
                  asyncio.create_task(ctrl.heartbeat_loop())]
-        record_path = None
-        if args.record_rotations:
-            os.makedirs(os.path.dirname(ROT_LOG_PATH), exist_ok=True)
-            record_path = ROT_LOG_PATH
-            print("  회전 기록 -> %s" % record_path)
         driver = CanDriver(ctrl, yaw=yaw, log=print, record_path=record_path)
         await asyncio.sleep(0.5)
         print("  CAN 연결됨. TX 루프 3개 가동")
@@ -146,7 +149,8 @@ async def main_async(args):
         await _wait_start(args.show)
         print("  시작\n")
         await dock_live(pipe, driver, tag_id=args.tag_id,
-                        max_steps=args.max_steps, on_frame=on_frame)
+                        max_steps=args.max_steps, on_frame=on_frame,
+                        record_path=record_path)
     except KeyboardInterrupt:
         print("\n  중단")
     finally:
@@ -177,9 +181,10 @@ def main():
     ap.add_argument("--max-steps", type=int, default=MAX_STEPS)
     ap.add_argument("--no-imu", action="store_true",
                     help="자이로를 안 연다. 회전이 미측정 시간모델 개루프가 된다")
-    ap.add_argument("--record-rotations", action="store_true",
-                    help="회전마다 target/turned/overshoot/elapsed_sec 을 %s 에 append. "
-                         "ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 실측 적합용" % ROT_LOG_PATH)
+    ap.add_argument("--record-events", action="store_true",
+                    help="회전·직진·검출을 %s 에 시간순으로 append. "
+                         "ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 등 실측 적합용. "
+                         "dry-run 에선 실측치가 없어 안 켜진다" % EVENT_LOG_PATH)
     asyncio.run(main_async(ap.parse_args()))
 
 
