@@ -755,15 +755,32 @@ class CanDriver:
     start()+calibrate() 까지 끝난 것을 받는다. **None 이면 회전이 시간 모델
     개루프로 떨어진다.** 그 시간 모델은 미측정 가정값이라 정상 경로가 아니다.
     run.py 가 붙여 준다.
+
+    record_path 를 주면 회전마다 결과를 JSON Lines 로 append 한다 —
+    나중에 ROT_T0 / ROT_DEG_PER_SEC / ROT_LEAD_DEG 를 실측 적합할 데이터다.
+    기록 실패(디스크 등)가 도킹을 막으면 안 되므로 조용히 무시한다.
     """
 
-    def __init__(self, controller, yaw=None, log=None):
+    def __init__(self, controller, yaw=None, log=None, record_path=None):
         self.c = controller           # control_forklift_v2 의 컨트롤러 객체
         self.yaw = yaw                # GyroYaw 계기판 (없으면 시간 폴백)
         self.log = log
+        self.record_path = record_path
         if yaw is not None and not getattr(yaw, "calibrated", False) and log:
             log("       !! GyroYaw 가 보정 전이다 — 바이어스가 0 이라 5.5도/분 흘러간다. "
                 "정지 상태에서 calibrate() 를 부를 것")
+
+    def _record(self, result):
+        if not self.record_path:
+            return
+        import json
+        import time
+        entry = dict(result, ts=time.time())
+        try:
+            with open(self.record_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
 
     async def _hold(self, movement, sec):
         """movement 를 sec 초 유지했다가 stop 으로 되돌린다. 시간 기반 명령의 공통 몸통."""
@@ -785,7 +802,8 @@ class CanDriver:
 
     async def rotate_by(self, deg, timeout=None):
         """deg 만큼 제자리 회전한다. +가 반시계. 실제 알고리즘은 rot_control.rotate_to()."""
-        return await rotate_to(self.c, self.yaw, deg, log=self.log, timeout=timeout)
+        return await rotate_to(self.c, self.yaw, deg, log=self.log, timeout=timeout,
+                               record=self._record)
 
     async def stop(self):
         self.c.current_movement = "stop"

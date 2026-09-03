@@ -19,8 +19,11 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+ROT_LOG_PATH = os.path.join(ROOT, "work_dirs", "rotations", "log.jsonl")   # --record-rotations
 
 from config.system import TAG_ID, TAG_SIZE_M                                # noqa: E402
 from src.models import TagPipeline                                       # noqa: E402
@@ -129,7 +132,12 @@ async def main_async(args):
         tasks = [asyncio.create_task(ctrl.control_tx_loop()),
                  asyncio.create_task(ctrl.movement_tx_loop()),
                  asyncio.create_task(ctrl.heartbeat_loop())]
-        driver = CanDriver(ctrl, yaw=yaw, log=print)
+        record_path = None
+        if args.record_rotations:
+            os.makedirs(os.path.dirname(ROT_LOG_PATH), exist_ok=True)
+            record_path = ROT_LOG_PATH
+            print("  회전 기록 -> %s" % record_path)
+        driver = CanDriver(ctrl, yaw=yaw, log=print, record_path=record_path)
         await asyncio.sleep(0.5)
         print("  CAN 연결됨. TX 루프 3개 가동")
 
@@ -169,6 +177,9 @@ def main():
     ap.add_argument("--max-steps", type=int, default=MAX_STEPS)
     ap.add_argument("--no-imu", action="store_true",
                     help="자이로를 안 연다. 회전이 미측정 시간모델 개루프가 된다")
+    ap.add_argument("--record-rotations", action="store_true",
+                    help="회전마다 target/turned/overshoot/elapsed_sec 을 %s 에 append. "
+                         "ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 실측 적합용" % ROT_LOG_PATH)
     asyncio.run(main_async(ap.parse_args()))
 
 

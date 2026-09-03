@@ -20,13 +20,20 @@ from typing import Optional
 
 from config.control import (ROT_LEAD_DEG, ROT_POLL_SEC, ROT_SETTLE_MAX_SEC,
                             ROT_SETTLE_MIN_SEC, ROT_SETTLE_POLL_SEC,
-                            ROT_SETTLE_RATE_FLOOR, ROT_SETTLE_RATE_K,
-                            ROT_WATCHDOG_GAIN, ROT_WRONG_WAY_DEG, SETTLE_SEC)
+                            ROT_SETTLE_RATE_CEIL, ROT_SETTLE_RATE_FLOOR,
+                            ROT_SETTLE_RATE_K, ROT_WATCHDOG_GAIN,
+                            ROT_WRONG_WAY_DEG, SETTLE_SEC)
 
 ROT_T0 = 0.0             # s. 명령 후 실회전 시작까지 지연. 미측정
 ROT_DEG_PER_SEC = 15.0   # deg/s. 미측정 가정값
+                         # 이 둘은 정지 판단(rotate_to)엔 안 쓴다. 다만 IMU 없을 때
+                         # 개루프 폴백엔 그대로 실행 시간이 되므로, 여기서 "안전하게
+                         # 크게" 키우면 그 폴백이 실제로 더 오래/많이 돈다 — 워치독과
+                         # 반대 방향이라 여기는 안 건드린다. 워치독 여유는 아래 둘로.
 ROT_MIN_SEC = 1.0
-ROT_MAX_SEC = 15.0
+ROT_MAX_SEC = 30.0       # 워치독 하한 [s]. 최대 회전각은 90도(Set2 가 작은 쪽만 고름).
+                         # 미실측이라 실제 속도가 가정의 1/5(3도/s)까지 느려도
+                         # 90/3=30s 안에는 들어오게 넉넉히 잡았다. 실측 후 낮출 것.
 
 
 @dataclass(frozen=True)
@@ -62,14 +69,22 @@ def rot_timeout_sec(deg) -> float:
 
 
 def _settle_threshold_dps(yaw):
-    """"회전이 멎었다" 판정 문턱 [도/s]. 보정 때 잰 잡음의 배수로 잡는다."""
+    """"회전이 멎었다" 판정 문턱 [도/s]. 보정 때 잰 잡음의 배수로 잡되, 위아래로 막는다.
+
+    하한(FLOOR) 없이 노이즈가 아주 작으면 문턱도 너무 빡빡해져 "멎었다"가 영영
+    안 나온다. 상한(CEIL) 없이 실제 현장 진동(엔진·유압)으로 noise_dps 가
+    조용한 벤치 보정보다 훨씬 크게 나오면, 그만큼 문턱도 같이 커져서 아직
+    도는 중인데 "멎었다"고 오판할 수 있다 — 그러면 그때 잰 overshoot 가
+    과소평가돼서 ROT_LEAD_DEG 를 잘못 추정하게 된다. 아직 실차로 못 재봤으니
+    상한을 걸어 둔다.
+    """
     noise = getattr(yaw, "noise_dps", None) if yaw is not None else None
     if not noise:
         return ROT_SETTLE_RATE_FLOOR
-    return max(ROT_SETTLE_RATE_FLOOR, noise * ROT_SETTLE_RATE_K)
+    return min(ROT_SETTLE_RATE_CEIL, max(ROT_SETTLE_RATE_FLOOR, noise * ROT_SETTLE_RATE_K))
 
 
-async def rotate_to(controller, yaw, deg, log=None, timeout=None):
+async def rotate_to(controller, yaw, deg, log=None, timeout=None, record=None):
     """제자리로 deg 만큼 돈다. +가 반시계. **폐루프** — IMU 를 보다가 목표각에서 멈춘다.
 
     controller 는 current_movement 를 "rotate_ccw"/"rotate_cw"/"stop" 로
@@ -81,11 +96,20 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None):
     자이로 샘플이 유실됐으면(gaps) 각도 과소집계라 실패로 강등한다.
     어느 경우든 멈추기만 하면 호출하는 쪽이 다시 계획한다.
 
-    돌려주는 것: {"target", "turned", "overshoot", "ok", "reason"}
+    record 는 매 회전 결과를 넘겨주는 콜백(선택) — CanDriver 가 여기에 파일
+    기록 함수를 꽂아서 실측 이력을 남긴다(work_dirs/rotations/log.jsonl).
+    elapsed_sec 은 명령부터 목표각 도달까지 걸린 시간 — 나중에 ROT_T0 /
+    ROT_DEG_PER_SEC 를 (각도, elapsed_sec) 로 실측 적합할 때 그대로 쓸 데이터다.
+
+    돌려주는 것: {"target", "turned", "overshoot", "ok", "reason", "elapsed_sec"}
     """
     deg = float(deg)
     if abs(deg) < 1e-9:
-        return {"target": 0.0, "turned": 0.0, "overshoot": 0.0, "ok": True, "reason": ""}
+        result = {"target": 0.0, "turned": 0.0, "overshoot": 0.0,
+                  "ok": True, "reason": "", "elapsed_sec": 0.0}
+        if record:
+            record(result)
+        return result
 
     if yaw is None:
         seconds = rot_sec_from_deg(deg)
@@ -99,15 +123,21 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None):
         finally:
             controller.current_movement = "stop"
         await asyncio.sleep(SETTLE_SEC)
-        return {"target": deg, "turned": None, "overshoot": None,
-                "ok": True, "reason": "time-fallback"}
+        result = {"target": deg, "turned": None, "overshoot": None,
+                  "ok": True, "reason": "time-fallback", "elapsed_sec": seconds}
+        if record:
+            record(result)
+        return result
 
     if not yaw.alive:
         if log:
             log("       !! rotate_to 거부 — 자이로가 %.1fs 째 안 온다. 안 돈다" % yaw.age_sec)
         controller.current_movement = "stop"
-        return {"target": deg, "turned": 0.0, "overshoot": None,
-                "ok": False, "reason": "imu-stale"}
+        result = {"target": deg, "turned": 0.0, "overshoot": None,
+                  "ok": False, "reason": "imu-stale", "elapsed_sec": 0.0}
+        if record:
+            record(result)
+        return result
 
     loop = asyncio.get_event_loop()
     timeout = rot_timeout_sec(deg) if timeout is None else float(timeout)
@@ -137,6 +167,7 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None):
                 ok, reason = False, "timeout"
                 break
     finally:
+        elapsed_sec = loop.time() - t_start    # 명령 -> 목표 도달까지 (정착 대기 전)
         controller.current_movement = "stop"
 
     threshold = _settle_threshold_dps(yaw)
@@ -155,8 +186,8 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None):
 
     if log:
         if ok:
-            log("          회전 끝: 목표 %+.1f도 -> 실제 %+.1f도 (오버슈트 %+.1f도)"
-                % (deg, turned, overshoot))
+            log("          회전 끝: 목표 %+.1f도 -> 실제 %+.1f도 (오버슈트 %+.1f도, %.2fs)"
+                % (deg, turned, overshoot, elapsed_sec))
         elif reason == "wrong-way":
             log("          !! 반대로 돌았다(%+.1f도) — CAN 회전 부호가 뒤집혔다. "
                 "CanDriver.rotate_by 안의 movement 매핑 두 곳만 맞바꿀 것" % turned)
@@ -166,4 +197,8 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None):
             log("          !! 회전 중단(%s): 목표 %+.1f도 중 %+.1f도에서 정지"
                 % (reason, deg, turned))
 
-    return {"target": deg, "turned": turned, "overshoot": overshoot, "ok": ok, "reason": reason}
+    result = {"target": deg, "turned": turned, "overshoot": overshoot,
+              "ok": ok, "reason": reason, "elapsed_sec": elapsed_sec}
+    if record:
+        record(result)
+    return result
