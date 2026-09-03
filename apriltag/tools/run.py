@@ -18,12 +18,20 @@ import argparse
 import asyncio
 import os
 import sys
+from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-EVENT_LOG_PATH = os.path.join(ROOT, "work_dirs", "docking_log", "events.jsonl")   # --record-events
+# --record-events. 실행마다 새 파일 — live_pose.py 의 --log 와 같은 방식
+# (시각으로 이름 지음). 한 파일에 계속 이어붙이면 오래된 실행과 섞여서
+# "오늘 이 세션에서 뭐가 있었나"를 보기 번거로워진다.
+EVENT_LOG_DIR = os.path.join(ROOT, "work_dirs", "docking_log")
+
+
+def _new_event_log_path():
+    return os.path.join(EVENT_LOG_DIR, "%s.jsonl" % datetime.now().strftime("%Y%m%d_%H%M%S"))
 
 from config.system import TAG_ID, TAG_SIZE_M                                # noqa: E402
 from src.models import TagPipeline                                       # noqa: E402
@@ -123,8 +131,8 @@ async def main_async(args):
     # 하드웨어가 안 움직이므로 기록해도 쓸 데이터가 안 된다.
     record_path = None
     if args.record_events and not args.dry_run:
-        os.makedirs(os.path.dirname(EVENT_LOG_PATH), exist_ok=True)
-        record_path = EVENT_LOG_PATH
+        os.makedirs(EVENT_LOG_DIR, exist_ok=True)
+        record_path = _new_event_log_path()
         print("  운행 기록 -> %s" % record_path)
 
     ctrl, tasks = None, []
@@ -182,9 +190,10 @@ def main():
     ap.add_argument("--no-imu", action="store_true",
                     help="자이로를 안 연다. 회전이 미측정 시간모델 개루프가 된다")
     ap.add_argument("--record-events", action="store_true",
-                    help="회전·직진·검출을 %s 에 시간순으로 append. "
-                         "ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 등 실측 적합용. "
-                         "dry-run 에선 실측치가 없어 안 켜진다" % EVENT_LOG_PATH)
+                    help="회전·직진·검출을 %s/시각.jsonl 에 시간순으로 기록 "
+                         "(실행마다 새 파일). ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG "
+                         "등 실측 적합용. dry-run 에선 실측치가 없어 안 켜진다"
+                         % EVENT_LOG_DIR)
     asyncio.run(main_async(ap.parse_args()))
 
 
