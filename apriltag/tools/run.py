@@ -127,12 +127,9 @@ async def main_async(args):
             print("  !! 자이로를 못 열었다 (%s) — 회전이 시간모델 개루프가 된다" % exc)
             yaw = None
 
-    # 실측치가 있는(실제로 CAN 을 보내는) 경우에만 의미가 있다 — dry-run 은
-    # 하드웨어가 안 움직이므로 기록해도 쓸 데이터가 안 된다.
+    # 기록 폴더는 여기서 만들지 않는다 — SPACE 를 눌러 실제로 주행이 시작되는
+    # 순간의 시각으로 이름을 지어야, 폴더 이름과 "몇 시에 주행했다"가 맞는다.
     record_dir = None
-    if args.record_events and not args.dry_run:
-        record_dir = _new_event_log_dir()
-        print("  운행 기록 -> %s/" % record_dir)
 
     ctrl, tasks = None, []
     if args.dry_run:
@@ -147,13 +144,19 @@ async def main_async(args):
         tasks = [asyncio.create_task(ctrl.control_tx_loop()),
                  asyncio.create_task(ctrl.movement_tx_loop()),
                  asyncio.create_task(ctrl.heartbeat_loop())]
-        driver = CanDriver(ctrl, yaw=yaw, log=print, record_dir=record_dir)
+        driver = CanDriver(ctrl, yaw=yaw, log=print)   # record_dir 는 주행 시작 때 넣는다
         await asyncio.sleep(0.5)
         print("  CAN 연결됨. TX 루프 3개 가동")
 
     on_frame, view = make_view(args)
     try:
         await _wait_start(args.show)
+        # 실측치가 있는(실제로 CAN 을 보내는) 경우에만 의미가 있다 — dry-run 은
+        # 하드웨어가 안 움직이므로 기록해도 쓸 데이터가 안 된다.
+        if args.record_events and not args.dry_run:
+            record_dir = _new_event_log_dir()          # <- 주행 시작 시각으로 이름 짓는다
+            driver.record_dir = record_dir             # CanDriver 는 기록 때마다 이 속성을 읽는다
+            print("  운행 기록 -> %s/" % record_dir)
         print("  시작\n")
         await dock_live(pipe, driver, tag_id=args.tag_id,
                         max_steps=args.max_steps, on_frame=on_frame,
