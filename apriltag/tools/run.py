@@ -30,8 +30,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 EVENT_LOG_DIR = os.path.join(ROOT, "work_dirs", "docking_log")
 
 
-def _new_event_log_path():
-    return os.path.join(EVENT_LOG_DIR, "%s.jsonl" % datetime.now().strftime("%Y%m%d_%H%M%S"))
+def _new_event_log_dir():
+    return os.path.join(EVENT_LOG_DIR, datetime.now().strftime("%Y%m%d_%H%M%S"))
 
 from config.system import TAG_ID, TAG_SIZE_M                                # noqa: E402
 from src.models import TagPipeline                                       # noqa: E402
@@ -129,11 +129,10 @@ async def main_async(args):
 
     # 실측치가 있는(실제로 CAN 을 보내는) 경우에만 의미가 있다 — dry-run 은
     # 하드웨어가 안 움직이므로 기록해도 쓸 데이터가 안 된다.
-    record_path = None
+    record_dir = None
     if args.record_events and not args.dry_run:
-        os.makedirs(EVENT_LOG_DIR, exist_ok=True)
-        record_path = _new_event_log_path()
-        print("  운행 기록 -> %s" % record_path)
+        record_dir = _new_event_log_dir()
+        print("  운행 기록 -> %s/" % record_dir)
 
     ctrl, tasks = None, []
     if args.dry_run:
@@ -148,7 +147,7 @@ async def main_async(args):
         tasks = [asyncio.create_task(ctrl.control_tx_loop()),
                  asyncio.create_task(ctrl.movement_tx_loop()),
                  asyncio.create_task(ctrl.heartbeat_loop())]
-        driver = CanDriver(ctrl, yaw=yaw, log=print, record_path=record_path)
+        driver = CanDriver(ctrl, yaw=yaw, log=print, record_dir=record_dir)
         await asyncio.sleep(0.5)
         print("  CAN 연결됨. TX 루프 3개 가동")
 
@@ -158,7 +157,7 @@ async def main_async(args):
         print("  시작\n")
         await dock_live(pipe, driver, tag_id=args.tag_id,
                         max_steps=args.max_steps, on_frame=on_frame,
-                        record_path=record_path)
+                        record_dir=record_dir)
     except KeyboardInterrupt:
         print("\n  중단")
     finally:
@@ -190,10 +189,10 @@ def main():
     ap.add_argument("--no-imu", action="store_true",
                     help="자이로를 안 연다. 회전이 미측정 시간모델 개루프가 된다")
     ap.add_argument("--record-events", action="store_true",
-                    help="회전·직진·검출을 %s/시각.jsonl 에 시간순으로 기록 "
-                         "(실행마다 새 파일). ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG "
-                         "등 실측 적합용. dry-run 에선 실측치가 없어 안 켜진다"
-                         % EVENT_LOG_DIR)
+                    help="운행 기록을 %s/시각/ 폴더에 남긴다 (실행마다 새 폴더, "
+                         "measure/rotation/drive .jsonl 로 종류별 분리, ts 로 병합 가능). "
+                         "ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 실측 적합용. "
+                         "dry-run 에선 실측치가 없어 안 켜진다" % EVENT_LOG_DIR)
     asyncio.run(main_async(ap.parse_args()))
 
 

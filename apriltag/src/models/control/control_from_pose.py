@@ -424,7 +424,7 @@ def _half_fov_deg(pipe):
     return float(min(left, right))
 
 
-async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_path=None):
+async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_dir=None):
     """멈춤 -> 측정 -> 동작 하나 -> 반복. (화면 없음)
 
     **async 인 이유**: control_forklift_v2 의 TX 루프(movement 10ms, control 5ms,
@@ -435,7 +435,8 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_path
     driver 는 async forward/backward/stop(초) 에 더해 rotate_by(도) 를 갖춘 무엇이든.
     DryRunDriver 를 넣으면 CAN 없이 순서만 확인할 수 있다.
     멈출 거리는 안 받는다 — 태그가 화면에서 잘리기 직전까지 가고 거기서 끝낸다.
-    record_path 를 주면 측정값도 (회전·직진과 같은 파일에) 기록한다.
+    record_dir 를 주면 측정값도 기록한다 (그 폴더 안에 measure.jsonl 로,
+    드라이버의 rotation/drive 기록과 같은 폴더에 종류별 파일로 나뉜다).
     """
     from ..detection.detection_pose import measure
     tag_id = TAG_ID if tag_id is None else tag_id
@@ -451,7 +452,7 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_path
     while i < max_steps:
         m = await asyncio.to_thread(measure, pipe, tag_id)     # 멈춰서 1초 측정
         if m:
-            record_event(record_path, "measure", tag_id=tag_id, **m)
+            record_event(record_dir, "measure", tag_id=tag_id, **m)
             misses, st["drove_forward"], st["backed_up_once"] = 0, False, False
         else:
             misses += 1
@@ -470,13 +471,18 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_path
         log("[%2d] %s" % (i, _fmt_measure(m)))
         log("     %-10s %s" % (action, why))
         history.append((action, amount, sec, why))
+        record_event(record_dir, "decision", step=i, action=action, why=why,
+                     misses=misses, margin_px=st.get("margin_px"))
 
         if action in ("done", "lost"):
             await driver.stop()
+            record_event(record_dir, "result",
+                         outcome="manual" if action == "lost" else "done", steps=i)
             return history
         if action == "final":
             await _execute(driver, action, amount, sec)
             log("     도착")
+            record_event(record_dir, "result", outcome="done", steps=i)
             return history
         if action == "hold":
             await asyncio.sleep(HOLD_RETRY_SEC)
@@ -486,16 +492,17 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_path
             log("     !! %s" % r["reason"])
 
     log("!! %d 단계를 넘겼다. 수렴하지 않는다" % max_steps)
+    record_event(record_dir, "result", outcome="max_steps", steps=max_steps)
     return history
 
 
 async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     on_frame=None, n_frames=None, should_stop=None,
-                    record_path=None):
+                    record_dir=None):
     """dock() 과 같은 일을 하되 **프레임을 계속 읽으며** 한다. (화면용, run.py 가 씀)
 
-    record_path 를 주면 측정값을 (드라이버의 회전·직진 기록과 같은 파일에)
-    utils/event_log.record_event() 로 남긴다.
+    record_dir 를 주면 측정값을 그 폴더의 measure.jsonl 에 남긴다 — 드라이버의
+    rotation/drive 기록과 같은 폴더, 종류별 파일. ts 로 시간순 병합이 된다.
 
     dock() 은 measure() 안에서 1초, 명령 실행 중 몇 초씩 프레임을 안 읽는다.
     그동안 화면이 멈춘다. 여기서는 프레임 루프가 주인이고, 측정과 명령이
@@ -528,6 +535,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
     waited = 0          # 이번 measure 단계에서 흘려보낸 프레임 수. 포기 판단용
     saw_any = False     # 이번 창에서 **아무 태그라도** 본 적이 있나
     misses = 0          # 그런 창이 몇 번 연속인지. 탐색 발동 기준
+    outcome = "incomplete"   # result 기록용. 정상 종료 경로마다 덮어쓴다
     margins = []        # 이번 창에서 본 화면 가장자리 여유 [px]
     abort = [None]      # 전진 중 heading 감시: 넘으면 안 되는 각 [도]
 
@@ -591,7 +599,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     # n_frames 를 줄였을 때 항상 '프레임 부족' 이 된다.
                     m = measure(buf, tag_id=tag_id, n=n_frames) if buf else None
                     if m:
-                        record_event(record_path, "measure", tag_id=tag_id, **m)
+                        record_event(record_dir, "measure", tag_id=tag_id, **m)
                     # **아무 태그도** 안 보였을 때만 실종으로 센다.
                     # 쫓는 태그만 없는 것은 갈아타는 중일 수 있다.
                     # 창 전체를 보고 판단한다 — 마지막 한 프레임만 보면
@@ -623,12 +631,16 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     log("[%2d] %s" % (step, _fmt_measure(m)))
                     log("     %-10s %s" % (action, why))
                     history.append((action, amount, sec, why))
+                    record_event(record_dir, "decision", step=step, action=action,
+                                 why=why, misses=misses, margin_px=st.get("margin_px"))
                     info = {"action": action, "why": why, "sec": sec}
                     if action == "lost":
                         await driver.stop()
+                        outcome = "manual"
                         phase = "manual"        # 수동전환. done 과 구분해서 화면에 다르게 보인다
                     elif action == "done":
                         await driver.stop()
+                        outcome = "done"
                         phase = "done"
                     elif action == "final":
                         task = asyncio.ensure_future(run_action(action, amount, sec))
@@ -642,6 +654,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                         phase = "search" if action == "search" else "command"
                     if step >= max_steps:
                         log("!! %d 단계를 넘겼다. 수렴하지 않는다" % max_steps)
+                        outcome = "max_steps"
                         phase = "done"
 
             elif phase == "final":
@@ -649,6 +662,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     task = None
                     log("     도착")
                     await driver.stop()
+                    outcome = "done"
                     phase = "done"
 
             elif phase == "command":
@@ -668,6 +682,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                         why_cut = "태그가 화면 가장자리 %.0fpx (한계 %.0fpx)" % (mg, TAG_CUT_MARGIN_PX)
                     if why_cut is not None:
                         log("     !! 전진 중단 — %s" % why_cut)
+                        record_event(record_dir, "abort", step=step, why=why_cut)
                         task.cancel()
                         try:
                             await task
@@ -697,6 +712,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                                    n=len(buf), need=n_frames, tag=tag_id))
             if should_stop is not None and should_stop():
                 log("!! 중단 요청 — 정지한다")
+                outcome = "user_stop"
                 break
             if phase in ("done", "manual"):
                 break
@@ -708,6 +724,8 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
             except asyncio.CancelledError:
                 pass
         await driver.stop()
+        # 어떻게 끝났는지 한 줄. "incomplete" 는 예외로 튕겨 나갔다는 뜻이다.
+        record_event(record_dir, "result", outcome=outcome, steps=step)
     return history
 
 
@@ -765,16 +783,17 @@ class CanDriver:
     개루프로 떨어진다.** 그 시간 모델은 미측정 가정값이라 정상 경로가 아니다.
     run.py 가 붙여 준다.
 
-    record_path 를 주면 회전·직진마다 결과를 utils/event_log.record_event() 로
-    JSON Lines에 append 한다 — 나중에 ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 를
-    실측 적합할 데이터다. 기록 실패가 도킹을 막지는 않는다(event_log 가 삼킴).
+    record_dir 를 주면 회전·직진마다 결과를 그 폴더의 rotation.jsonl /
+    drive.jsonl 에 남긴다(utils/event_log.record_event) — 나중에 ROT_T0/
+    ROT_DEG_PER_SEC/ROT_LEAD_DEG 를 실측 적합할 데이터다. 기록 실패가
+    도킹을 막지는 않는다(event_log 가 삼킴).
     """
 
-    def __init__(self, controller, yaw=None, log=None, record_path=None):
+    def __init__(self, controller, yaw=None, log=None, record_dir=None):
         self.c = controller           # control_forklift_v2 의 컨트롤러 객체
         self.yaw = yaw                # GyroYaw 계기판 (없으면 시간 폴백)
         self.log = log
-        self.record_path = record_path
+        self.record_dir = record_dir
         if yaw is not None and not getattr(yaw, "calibrated", False) and log:
             log("       !! GyroYaw 가 보정 전이다 — 바이어스가 0 이라 5.5도/분 흘러간다. "
                 "정지 상태에서 calibrate() 를 부를 것")
@@ -790,7 +809,7 @@ class CanDriver:
         finally:
             self.c.current_movement = "stop"   # 예외가 나도 반드시 선다
         await asyncio.sleep(SETTLE_SEC)        # 관성이 잦아들 시간. 재기 전에 확실히 선다
-        record_event(self.record_path, "drive", movement=movement, sec=sec)
+        record_event(self.record_dir, "drive", movement=movement, sec=sec)
 
     async def forward(self, sec):
         await self._hold("forward", sec)
@@ -802,7 +821,7 @@ class CanDriver:
         """deg 만큼 제자리 회전한다. +가 반시계. 실제 알고리즘은 rot_control.rotate_to()."""
         return await rotate_to(self.c, self.yaw, deg, log=self.log, timeout=timeout,
                                record=lambda result: record_event(
-                                   self.record_path, "rotation", **result))
+                                   self.record_dir, "rotation", **result))
 
     async def stop(self):
         self.c.current_movement = "stop"

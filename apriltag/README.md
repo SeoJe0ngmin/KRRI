@@ -99,6 +99,7 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `verify.py` | 줄자로 잰 값과 대조 |
 | `imu_check.py` | IMU 드리프트·부호 확인. `--tag` 로 태그와 교차검증 |
 | `realsense_check.py` | 환경 진단 — 어느 층에서 깨졌나 |
+| `analyze_run.py` | 운행 기록 분석 — 결과 판정, 회전·직진 파라미터 권장값 |
 | `sim.py` | 정답을 지어내서 오차 측정 (카메라 없이). `--live` 로 3D + 슬라이더 |
 | `sim_measure.py` | 배치 → 렌더 → 검출 → 오차 |
 | `sim_engine.py` | 그림과 정답을 만드는 엔진 |
