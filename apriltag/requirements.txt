@@ -10,3 +10,11 @@ apriltag==0.0.16
 scipy==1.17.1
 shapely==2.1.2
 ipython==9.16.1
+
+# ── 실주행 전용 (개발 PC 에는 불필요. --dry-run 은 아래 없이 돈다) ──
+# canlib 는 pip 만으로는 안 된다 — Kvaser 드라이버/SDK 를 OS 에 먼저 설치할 것.
+#   Windows: kvaser.com 의 "Kvaser Drivers for Windows"
+#   Linux/Jetson: Kvaser linuxcan 드라이버 빌드 + CANlib SDK
+# keyboard 는 Linux 에서 root 권한이 필요하다.
+canlib                         # CAN 통신 (control_forklift_v2 가 씀. Kvaser 전용)
+keyboard                       # SPACE/ESC 입력 (control_forklift_v2 + run.py)
