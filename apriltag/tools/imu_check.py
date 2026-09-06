@@ -31,6 +31,9 @@ def print_calib(rep):
     print("보정 완료: %d 샘플 / %.1fs" % (rep["n"], rep["sec"]))
     print("  바이어스 [도/s]  x %+6.3f  y %+6.3f  z %+6.3f" % rep["bias_dps"])
     print("  회전축          (%+.3f, %+.3f, %+.3f)  <- %s" % (rep["axis"] + (rep["axis_src"],)))
+    if rep.get("accel_mean"):
+        print("  가속도 원시평균  (%+.2f, %+.2f, %+.2f) m/s^2   <- 정지 시 y 부호가 곧 이 장치의 규약"
+              % rep["accel_mean"])
     print("  회전축 잡음     %.3f 도/s   예상 드리프트 %.2f 도/분"
           % (rep["noise_dps"], rep["drift_dpm"]))
     if "가정" in rep["axis_src"]:

@@ -218,7 +218,10 @@ class GyroYaw:
         # 표준편차만 보면 **느리게 등속 회전** 중인 것을 못 잡는다(흔들림이 없으니까).
         # 정지 자이로의 평균은 보통 0.5도/s 를 한참 밑돌므로 평균도 같이 본다.
         mean_dps = abs(deg(sum(mean[i] * axis[i] for i in range(3))))
+        accel_mean = (tuple(sum(v[i] for v in got_a) / len(got_a) for i in range(3))
+                      if got_a else None)
         return {"n": n, "sec": float(sec),
+                "accel_mean": accel_mean,     # 가속도 원시 평균 [m/s^2]. 규약 확인용
                 "bias_dps": tuple(deg(b) for b in mean),
                 "noise_dps": deg(sd),
                 # 바이어스 추정 오차(sd/sqrt(n))가 그대로 드리프트가 된다.
@@ -227,22 +230,31 @@ class GyroYaw:
                 "axis": axis, "axis_src": src}
 
     def _axis_from_gravity(self, samples):
-        """정지 가속도 평균 -> 회전을 셀 센서 축. (축, 설명) 을 돌려준다.
+        """정지 가속도 평균 -> 회전을 셀 센서 축(위쪽 단위벡터). (축, 설명).
 
-        정지 중 가속도계가 읽는 것은 중력의 반작용이라, 그 방향이 곧 '위'다.
-        제자리 회전은 그 축 둘레의 회전이므로 자이로를 여기에 투영하면 된다.
-        카메라를 위로 15도 기울여 달아도 이 축이 같이 기울어 각도가 맞는다.
+        **부호 규약에 안 기댄다.** 가속도계가 정지에서 +1g 를 주는지 -1g 를
+        주는지는 장치·SDK 마다 말이 달라서, 잘못 짚으면 축이 통째로 뒤집혀
+        모든 폐루프 회전이 wrong-way 로 죽는다. 대신 확실한 사실 하나만 쓴다 —
+        카메라를 뒤집어 달지는 않는다. 그래서 측정 벡터의 ± 둘 중
+        기본축 (0,-1,0) 과 90도 이내인 쪽을 위로 잡는다. 어느 규약이든 맞는다.
+
+        그렇게 잡아도 기울기가 60도를 넘게 나오면 가속도 자체를 못 믿는
+        상황(진동·오독)이므로 기본축으로 후퇴한다.
         """
+        default = (0.0, -1.0, 0.0)
         if not samples or len(samples) < 3:
-            return (0.0, -1.0, 0.0), "가정(카메라 수평) — 가속도 없음"
+            return default, "가정(카메라 수평) — 가속도 없음"
         n = len(samples)
         g = [sum(v[i] for v in samples) / n for i in range(3)]
         mag = math.sqrt(sum(c * c for c in g))
         if not (7.0 < mag < 12.5):            # 9.81 근처가 아니면 못 믿는다
-            return (0.0, -1.0, 0.0), "가정(카메라 수평) — 중력 크기 %.1f 이상" % mag
-        # 위쪽 단위벡터. 자이로 y 가 아래를 향하는 규약과 맞추려고 부호를 뒤집는다.
-        up = tuple(-c / mag for c in g)
+            return default, "가정(카메라 수평) — 중력 크기 %.1f" % mag
+        up = tuple(c / mag for c in g)
+        if up[1] > 0:                          # 기본축과 반대쪽이면 뒤집는다
+            up = tuple(-c for c in up)
         tilt = math.degrees(math.acos(max(-1.0, min(1.0, -up[1]))))
+        if tilt > 60.0:
+            return default, "가정(카메라 수평) — 중력축 기울기 %.0f도, 못 믿음" % tilt
         return up, "중력(기울기 %.1f도)" % tilt
 
     def zero(self):
