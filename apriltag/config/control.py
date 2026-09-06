@@ -47,4 +47,5 @@ ROT_SETTLE_RATE_CEIL = 2.0     # 그 판정의 상한 [도/s]                △
 # 쌓여 Set3(회전 탐색)로 넘어가고, 다 돌고도 못 찾으면 수동전환.
 SEARCH_BACKUP_M = 0.5          # 전진 중 관성으로 인한 실종 직후 후진 거리 [m]
 SEARCH_AFTER_MISSES = 3        # 연속 미검출 이만큼이면 Set3 시작
-SEARCH_MAX_ROUNDS = 3          # Set3 가 이만큼 돌고도 못 찾으면 수동전환
+SEARCH_MAX_ROUNDS = 3          # 1바퀴째=연속 360도(보이면 즉시 정지),
+                               # 2바퀴째부터=반화각 걸음(블러 없는 확인). 다 돌면 수동전환

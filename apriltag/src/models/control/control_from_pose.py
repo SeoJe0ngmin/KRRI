@@ -36,15 +36,24 @@ def plan_lateral_clear(lateral_m, heading_deg):
     return turn_forward, abs(lateral_m), "forward"
 
 
-def next_set3_step(half_fov_deg):
-    """Set3 — 태그가 안 보이면 반시계로 한 걸음 돈다. 걸음마다 다시 재서 확인한다."""
-    return float(half_fov_deg)
+def next_set3_step(half_fov_deg, rotations_done=0):
+    """Set3 걸음 크기. 첫 바퀴는 연속 360도 — 회전 중에도 dock_live 가
+    프레임마다 태그를 보다가 보이면 즉시 회전을 끊으므로, 돌면서 찾는다.
+    (걸음마다 서던 옛 방식은 걸음 사이 빈 측정창 5초 x 10걸음이 낭비였다.)
+
+    연속 회전이 실패하는 유일한 경우는 모션블러로 못 본 것 — 그래서
+    두 바퀴째부터는 반화각씩 끊어 "블러 없는 깨끗한 한 번" 을 보장한다.
+    """
+    return 360.0 if int(rotations_done) == 0 else float(half_fov_deg)
 
 
 def set3_rounds_done(rotations_done, half_fov_deg):
-    """Set3 걸음 수 -> 몇 바퀴(360도)째인가. SEARCH_MAX_ROUNDS 와 비교용."""
+    """Set3 걸음 수 -> 몇 바퀴째인가. 1바퀴 = 연속 1걸음, 이후 = 반화각 걸음들."""
+    r = int(rotations_done)
+    if r <= 0:
+        return 0
     steps_per_round = max(1, round(360.0 / half_fov_deg))
-    return int(rotations_done) // steps_per_round
+    return 1 + (r - 1) // steps_per_round
 
 
 def _fmt_measure(m):
@@ -93,10 +102,12 @@ def plan_step(m, state=None):
             return ("lost", 0.0, 0.0,
                     "%d바퀴 찾아도 태그가 없다. 수동전환 — 사람이 확인해야 한다"
                     % C.SEARCH_MAX_ROUNDS)
-        turn = next_set3_step(half_fov)
+        turn = next_set3_step(half_fov, rotations_done)
+        label = ("연속 1바퀴 — 보이면 즉시 정지" if turn >= 360.0
+                 else "반시계 %.0f도 걸음 (블러 없는 확인)" % turn)
         return ("search", turn, rot_sec_from_deg(turn),
-                "Set3: 반시계 %.0f도 회전 (%d바퀴째)"
-                % (turn, set3_rounds_done(rotations_done, half_fov) + 1))
+                "Set3: %s (%d바퀴째)"
+                % (label, set3_rounds_done(rotations_done, half_fov) + 1))
 
 
     if holds >= C.HOLD_MAX_CONSEC:
