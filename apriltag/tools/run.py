@@ -45,7 +45,28 @@ PHASE_KO = {"measure": "측정 중", "command": "명령 실행 중", "search": "
            "final": "마지막 접근 중", "done": "끝", "manual": "!! 수동전환 필요 !!"}
 
 
-def make_view(args):
+def imu_lines(yaw):
+    """IMU 계기판을 패널 항목으로. 자이로가 없거나 죽었으면 그 사실을 보여 준다.
+
+    회전은 이 숫자만 보고 도는 폐루프라, 화면에 안 보이면 실물에서
+    부호·드리프트·끊김을 확인할 방법이 없다.
+    """
+    if yaw is None:
+        return [("kv", "IMU", "없음 — 회전이 개루프", "bad")]
+    alive = yaw.alive
+    gaps = yaw.stats.get("gaps", 0)
+    out = [("kv", "IMU 각도", "%+.2f 도" % yaw.angle_deg, "ok" if alive else "bad"),
+           ("kv", "IMU 속도", "%+.2f 도/s" % yaw.rate_dps, "ok" if alive else "dim")]
+    if not alive:
+        out.append(("kv", "", "끊김 %.1fs 째 — 회전 금지" % yaw.age_sec, "bad"))
+    elif not yaw.calibrated:
+        out.append(("kv", "", "보정 전 — 5.5도/분 흘러간다", "warn"))
+    elif gaps:
+        out.append(("kv", "", "샘플 누락 %d회" % gaps, "warn"))
+    return out
+
+
+def make_view(args, yaw=None):
     """--show 일 때 프레임마다 그리는 함수를 만든다. 아니면 None."""
     if not args.show:
         return None, None
@@ -77,6 +98,7 @@ def make_view(args):
             head.append(("kv", "", info.get("why", "")[:44], "dim"))
         elif info["phase"] == "manual":
             head.append(("kv", "", info.get("why", "")[:44], "bad"))
+        head += imu_lines(yaw)
         items = items[:2] + head + [("rule",)] + items[2:]
 
         panel = L.render_panel(items, 470, vis.shape[0])
@@ -148,7 +170,7 @@ async def main_async(args):
         await asyncio.sleep(0.5)
         print("  CAN 연결됨. TX 루프 3개 가동")
 
-    on_frame, view = make_view(args)
+    on_frame, view = make_view(args, yaw)
     try:
         await _wait_start(args.show)
         if args.record_events:
