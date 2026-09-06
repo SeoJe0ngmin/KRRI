@@ -7,11 +7,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Optional
 
-from config.control import (ROT_LEAD_DEG, ROT_POLL_SEC, ROT_SETTLE_MAX_SEC,
-                            ROT_SETTLE_MIN_SEC, ROT_SETTLE_POLL_SEC,
-                            ROT_SETTLE_RATE_CEIL, ROT_SETTLE_RATE_FLOOR,
-                            ROT_SETTLE_RATE_K, ROT_WATCHDOG_GAIN,
-                            ROT_WRONG_WAY_DEG, SETTLE_SEC)
+from config import control as C
 
 ROT_T0 = 0.0
 ROT_DEG_PER_SEC = 15.0
@@ -49,15 +45,15 @@ def rot_sec_from_deg(deg, *, t0: Optional[float] = None,
 
 def rot_timeout_sec(deg) -> float:
     """회전 워치독 상한 [s]. 각도에 비례해서 늘어난다 — 각속도가 가정보다"""
-    return max(ROT_MAX_SEC, rot_sec_from_deg(deg) * ROT_WATCHDOG_GAIN)
+    return max(ROT_MAX_SEC, rot_sec_from_deg(deg) * C.ROT_WATCHDOG_GAIN)
 
 
 def _settle_threshold_dps(yaw):
     """"회전이 멎었다" 판정 문턱 [도/s]. 보정 때 잰 잡음의 배수로 잡되, 위아래로 막는다."""
     noise = getattr(yaw, "noise_dps", None) if yaw is not None else None
     if not noise:
-        return ROT_SETTLE_RATE_FLOOR
-    return min(ROT_SETTLE_RATE_CEIL, max(ROT_SETTLE_RATE_FLOOR, noise * ROT_SETTLE_RATE_K))
+        return C.ROT_SETTLE_RATE_FLOOR
+    return min(C.ROT_SETTLE_RATE_CEIL, max(C.ROT_SETTLE_RATE_FLOOR, noise * C.ROT_SETTLE_RATE_K))
 
 
 async def rotate_to(controller, yaw, deg, log=None, timeout=None, record=None):
@@ -81,7 +77,7 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None, record=None):
                 await asyncio.sleep(seconds)
         finally:
             controller.current_movement = "stop"
-        await asyncio.sleep(SETTLE_SEC)
+        await asyncio.sleep(C.SETTLE_SEC)
         result = {"target": deg, "turned": None, "overshoot": None,
                   "ok": True, "reason": "time-fallback", "elapsed_sec": seconds}
         if record:
@@ -103,7 +99,7 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None, record=None):
     start_angle = yaw.angle_deg
     gaps_before = yaw.stats().get("gaps", 0)
     direction = 1.0 if deg > 0 else -1.0
-    goal = abs(deg) - min(ROT_LEAD_DEG, abs(deg) / 2.0)
+    goal = abs(deg) - min(C.ROT_LEAD_DEG, abs(deg) / 2.0)
     if log:
         log("       -> rotate_to    %+7.1f도  (IMU 폐루프, 워치독 %.0fs)" % (deg, timeout))
 
@@ -112,11 +108,11 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None, record=None):
     controller.current_movement = "rotate_ccw" if deg > 0 else "rotate_cw"
     try:
         while True:
-            await asyncio.sleep(ROT_POLL_SEC)
+            await asyncio.sleep(C.ROT_POLL_SEC)
             progress = direction * (yaw.angle_deg - start_angle)
             if progress >= goal:
                 break
-            if progress <= -ROT_WRONG_WAY_DEG:
+            if progress <= -C.ROT_WRONG_WAY_DEG:
                 ok, reason = False, "wrong-way"
                 break
             if not yaw.alive:
@@ -131,9 +127,9 @@ async def rotate_to(controller, yaw, deg, log=None, timeout=None, record=None):
 
     threshold = _settle_threshold_dps(yaw)
     t_settle = loop.time()
-    while loop.time() - t_settle < ROT_SETTLE_MAX_SEC:
-        await asyncio.sleep(ROT_SETTLE_POLL_SEC)
-        if (loop.time() - t_settle >= ROT_SETTLE_MIN_SEC
+    while loop.time() - t_settle < C.ROT_SETTLE_MAX_SEC:
+        await asyncio.sleep(C.ROT_SETTLE_POLL_SEC)
+        if (loop.time() - t_settle >= C.ROT_SETTLE_MIN_SEC
                 and abs(yaw.rate_dps) < threshold):
             break
 

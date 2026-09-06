@@ -7,14 +7,8 @@ import asyncio
 import copy
 import math
 
-from config.control import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY,
-                            HEAD_TOL_DEG, HOLD_MAX_CONSEC, LAT_TOL_M, MAX_STEPS,
-                            SEARCH_AFTER_MISSES, SEARCH_BACKUP_M,
-                            SEARCH_MAX_ROUNDS, SETTLE_SEC,
-                            SIDESTEP_BACKWARD_GAIN_DEG, STEP_M,
-                            TAG_CUT_MARGIN_PX, WARMUP_FRACTION)
-from config.detection import (MAX_HEADING_SIGMA_DEG, MEASURE_FRAMES,
-                              MEASURE_MAX_FRAMES, TAG_ID, TAG_SIZE_M, TAG2_ID)
+from config import control as C
+from config import detection as D
 from ...utils.event_log import record_event
 from .fwd_time_model import fwd_sec_from_offset_piecewise
 from .rot_control import rot_sec_from_deg, rot_timeout_sec, rotate_to
@@ -37,7 +31,7 @@ def plan_lateral_clear(lateral_m, heading_deg):
     face_heading = -90.0 if lateral_m > 0 else 90.0
     turn_forward = normalize_deg(face_heading - heading_deg)
     turn_backward = normalize_deg(face_heading + 180.0 - heading_deg)
-    if abs(turn_forward) - abs(turn_backward) > SIDESTEP_BACKWARD_GAIN_DEG:
+    if abs(turn_forward) - abs(turn_backward) > C.SIDESTEP_BACKWARD_GAIN_DEG:
         return turn_backward, abs(lateral_m), "backward"
     return turn_forward, abs(lateral_m), "forward"
 
@@ -69,9 +63,9 @@ def _fmt_measure(m):
 
 def fwd_abort_deg(m, remaining_m):
     """전진 중 "이 각도를 넘으면 멈춰라" [도]. **상수가 아니라 계산이다.**"""
-    geo = math.degrees(math.asin(min(1.0, LAT_TOL_M / max(remaining_m, 1e-6))))
+    geo = math.degrees(math.asin(min(1.0, C.LAT_TOL_M / max(remaining_m, 1e-6))))
     sig = (m or {}).get("heading_sigma_deg")
-    floor = FWD_ABORT_K * sig if sig and math.isfinite(sig) else 0.0
+    floor = C.FWD_ABORT_K * sig if sig and math.isfinite(sig) else 0.0
     return max(geo, floor)
 
 
@@ -89,24 +83,24 @@ def plan_step(m, state=None):
 
 
     if misses >= 1 and drove_forward and not backed_up_once:
-        return ("recover_backup", SEARCH_BACKUP_M,
-                fwd_sec_from_offset_piecewise(SEARCH_BACKUP_M),
-                "전진 중 태그를 놓쳤다. %.1fm 후진해서 다시 본다" % SEARCH_BACKUP_M)
+        return ("recover_backup", C.SEARCH_BACKUP_M,
+                fwd_sec_from_offset_piecewise(C.SEARCH_BACKUP_M),
+                "전진 중 태그를 놓쳤다. %.1fm 후진해서 다시 본다" % C.SEARCH_BACKUP_M)
 
 
-    if misses >= SEARCH_AFTER_MISSES:
-        rotations_done = misses - SEARCH_AFTER_MISSES
-        if set3_rounds_done(rotations_done, half_fov) >= SEARCH_MAX_ROUNDS:
+    if misses >= C.SEARCH_AFTER_MISSES:
+        rotations_done = misses - C.SEARCH_AFTER_MISSES
+        if set3_rounds_done(rotations_done, half_fov) >= C.SEARCH_MAX_ROUNDS:
             return ("lost", 0.0, 0.0,
                     "%d바퀴 찾아도 태그가 없다. 수동전환 — 사람이 확인해야 한다"
-                    % SEARCH_MAX_ROUNDS)
+                    % C.SEARCH_MAX_ROUNDS)
         turn = next_set3_step(half_fov)
         return ("search", turn, rot_sec_from_deg(turn),
                 "Set3: 반시계 %.0f도 회전 (%d바퀴째)"
                 % (turn, set3_rounds_done(rotations_done, half_fov) + 1))
 
 
-    if holds >= HOLD_MAX_CONSEC:
+    if holds >= C.HOLD_MAX_CONSEC:
         return ("lost", 0.0, 0.0,
                 "%d번 연속 멈춰 있다 (마지막 이유: %s). 수동전환 — 사람이 확인해야 한다"
                 % (holds, st.get("hold_why") or "?"))
@@ -117,31 +111,31 @@ def plan_step(m, state=None):
 
     lateral_m, forward_m, heading_deg = m["lateral"], m["forward"], m["heading_deg"]
 
-    if prev_forward is not None and forward_m > prev_forward + LAT_TOL_M:
+    if prev_forward is not None and forward_m > prev_forward + C.LAT_TOL_M:
         return ("hold", 0.0, 0.0,
                 "forward 가 늘었다 (%.2f -> %.2fm). 멈추고 다시 잰다"
                 % (prev_forward, forward_m))
 
 
-    if abs(lateral_m) > LAT_TOL_M:
+    if abs(lateral_m) > C.LAT_TOL_M:
         if not m["reliable_angle"]:
 
 
             sigma = m.get("heading_sigma_deg")
-            if forward_m > STEP_M:
-                approach_m = min(forward_m * WARMUP_FRACTION, forward_m * FWD_SAFETY,
-                                 STEP_M)
+            if forward_m > C.STEP_M:
+                approach_m = min(forward_m * C.WARMUP_FRACTION, forward_m * C.FWD_SAFETY,
+                                 C.STEP_M)
                 return ("forward", approach_m,
                         fwd_sec_from_offset_piecewise(approach_m),
                         "각도 잡음 %.2f도 (한계 %.2f도) — %.2fm 다가가서 다시 잰다"
                         % (sigma if sigma is not None else float("nan"),
-                           MAX_HEADING_SIGMA_DEG, approach_m))
+                           D.MAX_HEADING_SIGMA_DEG, approach_m))
 
             return ("hold", 0.0, 0.0,
                     "%.2fm 까지 붙었는데도 각도 잡음 %.2f도 (한계 %.2f도) — "
                     "가림·조명·진동을 의심하라"
                     % (forward_m, sigma if sigma is not None else float("nan"),
-                       MAX_HEADING_SIGMA_DEG))
+                       D.MAX_HEADING_SIGMA_DEG))
         turn, distance_m, direction = plan_lateral_clear(lateral_m, heading_deg)
         estimated_sec = (rot_sec_from_deg(turn) + fwd_sec_from_offset_piecewise(distance_m)
                          + rot_sec_from_deg(90.0))
@@ -151,22 +145,22 @@ def plan_step(m, state=None):
                    "전진" if direction == "forward" else "후진"))
 
 
-    if abs(heading_deg) > HEAD_TOL_DEG and m["reliable_angle"]:
+    if abs(heading_deg) > C.HEAD_TOL_DEG and m["reliable_angle"]:
         return ("rotate_ccw" if heading_deg < 0 else "rotate_cw", abs(heading_deg),
                 rot_sec_from_deg(heading_deg), "heading %.1f도 를 지운다" % heading_deg)
 
 
-    if margin_px is not None and margin_px < TAG_CUT_MARGIN_PX:
-        final_m = forward_m + DOCK_EXTRA_M
+    if margin_px is not None and margin_px < C.TAG_CUT_MARGIN_PX:
+        final_m = forward_m + C.DOCK_EXTRA_M
         if final_m <= 0.0:
             return ("done", 0.0, 0.0, "도착. forward %.2fm" % forward_m)
         return ("final", final_m, fwd_sec_from_offset_piecewise(final_m),
                 "마지막 %.2fm (forward %.2fm + 여유 %.2fm). 그 뒤 정지"
-                % (final_m, forward_m, DOCK_EXTRA_M))
+                % (final_m, forward_m, C.DOCK_EXTRA_M))
 
 
-    if forward_m > LAT_TOL_M:
-        step_m = min(forward_m * FWD_SAFETY, STEP_M)
+    if forward_m > C.LAT_TOL_M:
+        step_m = min(forward_m * C.FWD_SAFETY, C.STEP_M)
         return ("forward", step_m, fwd_sec_from_offset_piecewise(step_m),
                 "Set1: 남은 %.2fm 중 %.2fm 전진" % (forward_m, step_m))
 
@@ -228,15 +222,15 @@ def _margin_px(res, tag_id):
 
 def _ours(res, tag_id):
     """이 프레임에 **우리가 쓰는 태그**가 하나라도 있나."""
-    ids = [tag_id] if TAG2_ID is None else [tag_id, TAG2_ID]
+    ids = [tag_id] if D.TAG2_ID is None else [tag_id, D.TAG2_ID]
     return any(t in res.docking for t in ids)
 
 
 def _next_tag(res, current):
     """지금 쫓는 태그 말고 **다음 태그**가 보이면 그 번호. 아니면 None."""
-    if TAG2_ID is None or current == TAG2_ID:
+    if D.TAG2_ID is None or current == D.TAG2_ID:
         return None
-    return TAG2_ID if _visible(res, TAG2_ID) else None
+    return D.TAG2_ID if _visible(res, D.TAG2_ID) else None
 
 
 def _half_fov_deg(pipe):
@@ -253,9 +247,9 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     record_dir=None):
     """도킹 루프 — 프레임을 계속 읽으며 측정-판단-실행을 반복한다."""
     from ..detection.detection_pose import measure
-    tag_id = TAG_ID if tag_id is None else tag_id
-    max_steps = MAX_STEPS if max_steps is None else max_steps
-    n_frames = int(n_frames or MEASURE_FRAMES)
+    tag_id = D.TAG_ID if tag_id is None else tag_id
+    max_steps = C.MAX_STEPS if max_steps is None else max_steps
+    n_frames = int(n_frames or D.MEASURE_FRAMES)
     half_fov = _half_fov_deg(pipe)
     st = {"half_fov_deg": half_fov, "warmed": False, "prev_forward": None,
           "drove_forward": False, "backed_up_once": False}
@@ -325,7 +319,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     mg = _margin_px(res, tag_id)
                     if mg is not None:
                         margins.append(mg)
-                if len(buf) >= n_frames or waited >= MEASURE_MAX_FRAMES:
+                if len(buf) >= n_frames or waited >= D.MEASURE_MAX_FRAMES:
 
 
                     m = measure(buf, tag_id=tag_id, n=n_frames) if buf else None
@@ -412,8 +406,8 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                         why_cut = ("heading %+.2f도 (허용 %.2f도)"
                                    % (d["heading_deg"], abort[0]))
                     mg = _margin_px(res, tag_id)
-                    if why_cut is None and mg is not None and mg < TAG_CUT_MARGIN_PX:
-                        why_cut = "태그가 화면 가장자리 %.0fpx (한계 %.0fpx)" % (mg, TAG_CUT_MARGIN_PX)
+                    if why_cut is None and mg is not None and mg < C.TAG_CUT_MARGIN_PX:
+                        why_cut = "태그가 화면 가장자리 %.0fpx (한계 %.0fpx)" % (mg, C.TAG_CUT_MARGIN_PX)
                     if why_cut is not None:
                         log("     !! 전진 중단 — %s" % why_cut)
                         record_event(record_dir, "abort", step=step, why=why_cut)
@@ -520,7 +514,7 @@ class CanDriver:
                 await asyncio.sleep(sec)
         finally:
             self.c.current_movement = "stop"
-        await asyncio.sleep(SETTLE_SEC)
+        await asyncio.sleep(C.SETTLE_SEC)
         record_event(self.record_dir, "drive", movement=movement, sec=sec)
 
     async def forward(self, sec):
