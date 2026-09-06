@@ -306,6 +306,8 @@ def main():
     ap = argparse.ArgumentParser(
         description="RealSense 진단 - SDK CLI 가 못 하는 것만 (절대 죽지 않는다)")
     ap.add_argument("--no-gui", dest="gui", action="store_false", help="GUI 검사 생략")
+    ap.add_argument("--force-mac", action="store_true",
+                    help="macOS 에서도 SDK 로 장치를 열어 본다 (2.56.5 는 여기서 segfault 난다)")
     args = ap.parse_args()
 
     print("=" * 74)
@@ -316,7 +318,19 @@ def main():
     print("=" * 74)
 
     rs = step_import()
-    if rs is not None:
+    if rs is not None and sys.platform == "darwin" and not args.force_mac:
+        # macOS 12+ 는 시스템 UVCAssistant 가 UVC 인터페이스를 선점한다. SDK 는
+        # 'failed to set power state' 로 못 잡고, sudo 로 뺏어도 2.56.5 는 IMU(HID)
+        # 초기화에서 segfault 난다(librealsense #14302, 2026-09-06 맥북 실측). 장치를
+        # 만드는 순간 이 도구도 같이 죽으므로 건드리지 않는다.
+        section(2, "장치 유무")
+        mark("SKIP", "장치 조회", "macOS 에서는 SDK 로 카메라를 못 연다 (--force-mac 으로 강행)")
+        info("→ UVCAssistant 가 카메라를 선점해 librealsense 가 못 잡고, sudo 로도")
+        info("   2.56.5 는 IMU 초기화에서 segfault 난다 (librealsense #14302).")
+        info("→ 컬러만 보려면  python tools/live_pose.py --source webcam   (sudo 불필요)")
+        info("→ depth / IR / IMU / bag 녹화는 Jetson 이나 Windows 에서.")
+        ndev = None                                   # 모름 — 세지 않았다
+    elif rs is not None:
         ndev = count_devices(rs)
     else:
         section(2, "장치 유무")
@@ -326,7 +340,7 @@ def main():
     step_gui(enabled=args.gui)
     if ndev == 0:
         step_no_device_help()
-    elif rs is not None:
+    elif rs is not None and ndev:
         step_frame_metadata(rs)
 
     print("\n" + "=" * 74)
@@ -336,6 +350,8 @@ def main():
         print(" 카메라를 못 찾았다. 위 4번 절차를 순서대로 밟아라.")
     elif TALLY["FAIL"]:
         print(" 파이썬 쪽 실패 단계가 있다. FAIL 줄의 '→' 안내를 따라라.")
+    elif ndev is None:
+        print(" macOS: 파이썬 바인딩·GUI 정상. 카메라는 live_pose.py --source webcam 으로 봐라.")
     else:
         print(" 파이썬 바인딩·GUI 정상. 카메라 상세는 rs-enumerate-devices 로 봐라.")
     print("=" * 74)

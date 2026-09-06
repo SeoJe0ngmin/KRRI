@@ -1,4 +1,10 @@
-"""도킹용 AprilTag 자세를 실시간 화면으로 봄."""
+"""도킹용 AprilTag 자세를 실시간 화면으로 봄.
+
+    python tools/live_pose.py                        # RealSense (Windows/Linux/Jetson)
+    python tools/live_pose.py --source webcam        # macOS: RealSense 컬러를 UVC 웹캠으로
+                                                     #   (depth/IR/IMU/녹화 없음. 이유는 open_webcam)
+    python tools/live_pose.py --source bag --path x.db3
+"""
 import argparse
 import sys
 import time
@@ -14,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 from config.main import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
 from config.main import (CAM_YAW_OFFSET_DEG, MIN_DECISION_MARGIN,        # noqa: E402
                         MIN_TAG_PX, STABLE_TAG_PX)
-from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
+from src.models import (CameraIntrinsics, TagPipeline, camera_index,   # noqa: E402
                                  pose_to_xyzrpy, pose_to_forklift,
                                  tag_pixel_size,
                                  ASSUMED_HFOV_DEG, DEFAULT_QUAD_BLUR,
@@ -97,6 +103,21 @@ def open_pipeline(args, tag_size):
             raise SystemExit("영상이 없다: %s" % args.path)
         return TagPipeline.from_video(args.path, tag_size, loop=args.loop,
                                       hfov=args.hfov, **common)
+
+    if args.source == "webcam":
+        # macOS 에서 RealSense 컬러를 보는 길 — librealsense 없이 OpenCV 로 연다.
+        # 이름 조각(기본 realsense)이나 번호. 번호는 OpenCV 순서라 이름이 안전하다.
+        if args.record is not None:
+            raise SystemExit("--record 는 --source realsense/ir 에서만 된다")
+        try:
+            idx, name = camera_index(args.path or "realsense")
+        except RuntimeError as exc:
+            raise SystemExit(str(exc))
+        label = "webcam #%d%s" % (idx, (" (%s)" % name) if name else "")
+        if args.hfov is None and "realsense" not in name.lower():
+            label += " [intrinsics: D435i 가정 — 다른 카메라면 --hfov 를 줘라]"
+        return TagPipeline.from_webcam(idx, tag_size, width=args.width, height=args.height,
+                                       fps=args.fps, hfov=args.hfov, label=label, **common)
 
     raise SystemExit("모르는 소스: %s" % args.source)
 
@@ -352,12 +373,12 @@ def compose_canvas(vis, lines, args):
 # ----------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser(description="AprilTag docking pose - live viewer")
-    ap.add_argument("--source", default="realsense", choices=["realsense", "ir", "bag", "video"])
-    ap.add_argument("--path", default=None, help="--source video/bag 일 때 파일 경로")
+    ap.add_argument("--source", default="realsense", choices=["realsense", "ir", "bag", "video", "webcam"])
+    ap.add_argument("--path", default=None, help="video/bag 은 파일 경로. webcam 은 번호나 이름 조각(기본 realsense)")
     ap.add_argument("--loop", action="store_true", help="영상/bag 끝에서 되감는다")
-    ap.add_argument("--width", type=int, default=None, help="RealSense 가로")
-    ap.add_argument("--height", type=int, default=None, help="RealSense 세로")
-    ap.add_argument("--fps", type=int, default=30, help="RealSense fps")
+    ap.add_argument("--width", type=int, default=None, help="RealSense/webcam 가로")
+    ap.add_argument("--height", type=int, default=None, help="RealSense/webcam 세로")
+    ap.add_argument("--fps", type=int, default=30, help="RealSense/webcam fps")
     ap.add_argument("--ir-index", type=int, default=1, help="적외선 1=왼쪽 2=오른쪽")
     ap.add_argument("--hfov", type=float, default=None,
                     help="보정값이 없을 때 가정할 수평화각 [deg]")

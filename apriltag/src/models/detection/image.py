@@ -3,7 +3,11 @@
 어느 소스든 `for i, ts, img in frames:` 3-튜플로 통일함.
 """
 from dataclasses import dataclass
+import json
 from pathlib import Path
+import subprocess
+import sys
+import time
 
 import cv2
 import numpy as np
@@ -601,6 +605,103 @@ def from_video(path, loop=False):
         finally:
             _cleanup()
 
+    return _FrameStream(frames(), cleanup=_cleanup), None
+
+
+# ----------------------------------------------------------------- 웹캠(UVC)
+def list_cameras():
+    """OpenCV 번호 순서대로 [(번호, 이름)]. 지금은 macOS 만 안다(다른 OS 는 []).
+
+    OpenCV 의 AVFoundation 백엔드는 장치 목록을 uniqueID 문자열 순으로 정렬해
+    번호를 매긴다(cap_avfoundation_mac.mm). system_profiler 가 주는 같은
+    uniqueID 로 똑같이 정렬하면 번호가 맞는다. 이름 순서와는 다르다 —
+    맥북에서 RealSense("0x2000…")가 FaceTime("EBB0…")보다 앞이라 0번이다.
+    """
+    if sys.platform != "darwin":
+        return []
+    try:
+        out = subprocess.run(["system_profiler", "SPCameraDataType", "-json"],
+                             capture_output=True, text=True, timeout=30).stdout
+        items = json.loads(out).get("SPCameraDataType", [])
+    except Exception:
+        return []
+    cams = sorted((str(it.get("spcamera_unique-id", "")), str(it.get("_name", "")))
+                  for it in items)
+    return [(i, name) for i, (_, name) in enumerate(cams)]
+
+
+def camera_index(spec="realsense"):
+    """'0' 같은 번호는 그대로, 'realsense' 같은 이름 조각은 목록에서 찾음.
+
+    돌려주는 건 (번호, 이름). 번호로 줬는데 목록을 모르면 이름은 ''.
+    """
+    s = str(spec).strip()
+    cams = list_cameras()
+    if s.isdigit():
+        i = int(s)
+        return i, dict(cams).get(i, "")
+    hits = [(i, n) for i, n in cams if s.lower() in n.lower()]
+    if len(hits) == 1:
+        return hits[0]
+    if not cams:
+        raise RuntimeError("카메라를 이름으로 고르는 건 macOS 에서만 된다. 번호를 줘라 (예: 0)")
+    listing = ", ".join("%d=%s" % c for c in cams)
+    if not hits:
+        raise RuntimeError("'%s' 인 카메라가 없다. 있는 것: %s" % (spec, listing))
+    raise RuntimeError("'%s' 가 여럿이다: %s. 번호로 골라라" % (spec, listing))
+
+
+def open_webcam(index=0, width=None, height=None, fps=30):
+    """UVC 웹캠을 OpenCV 로 엶. from_video 처럼 (frames, None) — 내부파라미터는 모름.
+
+    macOS 에서 RealSense 컬러를 여는 유일한 길이다. librealsense 는 macOS 12
+    이후 카메라를 못 잡지만(시스템 UVCAssistant 가 UVC 인터페이스를 선점, sudo 로
+    뺏어도 2.56.5 는 IMU 초기화에서 죽는다 — librealsense #14302) 컬러 센서
+    자체는 표준 UVC 라 macOS 가 일반 웹캠으로 띄워 준다. 2026-09-06 맥북 실측
+    1920x1080/1280x720 @30fps.
+    이 길로는 depth/IR/IMU/노출 메타데이터/bag 녹화가 없다. 내부파라미터를 안 주면
+    파이프라인이 D435i 기준값에서 역산한다 — 같은 센서·같은 모드라 RealSense 로
+    열었을 때와 같은 값이다(intrinsics_from_ref 참고).
+    """
+    backend = cv2.CAP_AVFOUNDATION if sys.platform == "darwin" else cv2.CAP_ANY
+    cap = cv2.VideoCapture(int(index), backend)
+    if not cap.isOpened():
+        raise RuntimeError("웹캠 %s 를 열 수 없다 (카메라 권한? 다른 앱이 쓰는 중?)" % index)
+    if width:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(width))
+    if height:
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(height))
+    if fps:
+        cap.set(cv2.CAP_PROP_FPS, int(fps))
+
+    _done = []
+
+    def _cleanup():
+        if _done:
+            return
+        _done.append(True)
+        try:
+            cap.release()
+        except Exception:
+            pass
+
+    def frames():
+        i = 0
+        t0 = None
+        try:
+            while True:
+                ok, bgr = cap.read()
+                if not ok:
+                    break
+                now = time.perf_counter()        # 도착 시각. 센서 시계는 못 본다
+                if t0 is None:
+                    t0 = now
+                yield i, now - t0, bgr
+                i += 1
+        finally:
+            _cleanup()
+
+    # stats 를 안 단다 — 유실을 셀 프레임 번호가 없어서 0 으로 찍히면 거짓말이 된다.
     return _FrameStream(frames(), cleanup=_cleanup), None
 
 

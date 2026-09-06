@@ -70,7 +70,8 @@ def main():
     if MAC:
         missing_drive = []
         print("   해당 없음  macOS 는 Kvaser CANlib 이 없어 실주행을 못 한다.")
-        print("              dry-run / 시뮬 / 기록분석 / 카메라·IMU 검증은 다 된다.")
+        print("              dry-run / 시뮬 / 기록분석은 된다. 카메라는 컬러만")
+        print("              (live_pose.py --source webcam). depth/IR/IMU 는 안 된다.")
     else:
         missing_drive = try_imports(DRIVE)
 
@@ -96,7 +97,7 @@ def main():
     print("─" * 66)
     if not missing_common and not missing_drive and repo_ok:
         if MAC:
-            print("판정: 개발 준비 완료 (macOS — 실주행만 불가).")
+            print("판정: 개발 준비 완료 (macOS — 실주행·RealSense SDK 불가, 컬러는 webcam 소스).")
         else:
             print("판정: 준비 완료. 현장에서는 장비만 꽂고 run.py 를 켜면 된다.")
         return 0

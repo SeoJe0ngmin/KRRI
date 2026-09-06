@@ -15,7 +15,7 @@ from config.detection import (CAM_YAW_OFFSET_DEG, DEPTH_CHECK_MAX_Z,
 from ...utils.util import r2rpy, invert_T, t2pr
 from .image import (ASSUMED_HFOV_DEG, depth_at, from_video, intrinsics_from_hfov,
                     intrinsics_from_ref,
-                    open_bag, open_realsense, to_gray)
+                    open_bag, open_realsense, open_webcam, to_gray)
 from .detection_tag import (DEFAULT_QUAD_BLUR, STABLE_TAG_PX, detect, make_detector,
                      tag_pixel_size)
 
@@ -493,6 +493,23 @@ class TagPipeline:
             raise TypeError("모르는 인자: %s" % ", ".join(sorted(_rest)))
         frames, _none = from_video(path, loop=loop)
         pipe_kw.setdefault("label", "video (%s)" % Path(path).name)
+        pipe_kw.setdefault("origin", "given" if intrinsics is not None else "")
+        return cls(frames, intrinsics=intrinsics, tag_size=tag_size, hfov=hfov,
+                   close=frames.close, **pipe_kw)
+
+    @classmethod
+    def from_webcam(cls, index, tag_size, width=None, height=None, fps=30,
+                    intrinsics=None, hfov=None, **kw):
+        """UVC 웹캠(OpenCV). macOS 에서 RealSense 컬러는 이 길뿐이다(open_webcam 참고).
+
+        내부파라미터를 안 주면 첫 프레임 크기로 D435i 기준값에서 역산한다.
+        RealSense 가 아닌 웹캠이면 hfov 를 줘라.
+        """
+        pipe_kw, _rest = cls._split_kw(kw)
+        if _rest:
+            raise TypeError("모르는 인자: %s" % ", ".join(sorted(_rest)))
+        frames, _none = open_webcam(index, width=width, height=height, fps=fps)
+        pipe_kw.setdefault("label", "webcam #%s" % index)
         pipe_kw.setdefault("origin", "given" if intrinsics is not None else "")
         return cls(frames, intrinsics=intrinsics, tag_size=tag_size, hfov=hfov,
                    close=frames.close, **pipe_kw)
