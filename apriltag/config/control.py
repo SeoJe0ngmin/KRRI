@@ -15,7 +15,6 @@ HEAD_TOL_DEG = 2.0             # 각도 허용 오차 [도] ★탑재부 사양�
 STEP_M = 1.0                   # 직진 한 조각 [m]
 FWD_SAFETY = 0.9               # 명령 거리 = 남은 거리 x 이 값 (모자라게 가는 쪽이 안전)
 
-WARMUP_FRACTION = 0.33         # 각도를 못 믿을 때 먼저 다가가는 비율
 FWD_ABORT_K = 3.0              # 전진 중 heading 감시의 잡음 하한 배수
 SIDESTEP_BACKWARD_GAIN_DEG = 0.0   # 0 = 회전이 작은 쪽을 고른다
 

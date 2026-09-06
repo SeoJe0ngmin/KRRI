@@ -117,24 +117,10 @@ def plan_step(m, state=None):
 
 
     if abs(lateral_m) > C.LAT_TOL_M:
-        if not m["reliable_angle"]:
-
-
-            sigma = m.get("heading_sigma_deg")
-            if forward_m > C.STEP_M:
-                approach_m = min(forward_m * C.WARMUP_FRACTION, forward_m * C.FWD_SAFETY,
-                                 C.STEP_M)
-                return ("forward", approach_m,
-                        fwd_sec_from_offset_piecewise(approach_m),
-                        "각도 잡음 %.2f도 (한계 %.2f도) — %.2fm 다가가서 다시 잰다"
-                        % (sigma if sigma is not None else float("nan"),
-                           D.MAX_HEADING_SIGMA_DEG, approach_m))
-
-            return ("hold", 0.0, 0.0,
-                    "%.2fm 까지 붙었는데도 각도 잡음 %.2f도 (한계 %.2f도) — "
-                    "가림·조명·진동을 의심하라"
-                    % (forward_m, sigma if sigma is not None else float("nan"),
-                       D.MAX_HEADING_SIGMA_DEG))
+        # 측정값을 그대로 믿는다 (2026-09-06 결정) — 30프레임 중앙값이면
+        # 5m 에서도 heading 오차가 도 단위 이하라 정렬 목표로 충분하고,
+        # 회전 자체는 IMU 폐루프라 목표각 오차만큼만 틀린다. 각도 신뢰
+        # 판정(reliable_angle)은 계산·기록만 하고 판단에는 안 쓴다.
         turn, distance_m, direction = plan_lateral_clear(lateral_m, heading_deg)
         estimated_sec = (rot_sec_from_deg(turn) + fwd_sec_from_offset_piecewise(distance_m)
                          + rot_sec_from_deg(90.0))
@@ -144,7 +130,7 @@ def plan_step(m, state=None):
                    "전진" if direction == "forward" else "후진"))
 
 
-    if abs(heading_deg) > C.HEAD_TOL_DEG and m["reliable_angle"]:
+    if abs(heading_deg) > C.HEAD_TOL_DEG:
         return ("rotate_ccw" if heading_deg < 0 else "rotate_cw", abs(heading_deg),
                 rot_sec_from_deg(heading_deg), "heading %.1f도 를 지운다" % heading_deg)
 

@@ -80,7 +80,7 @@ A-1 을 고치면 자동으로 따라온다.
 ### B-4. 설계 판단 — 틀려도 느려질 뿐
 
 ```
-STEP_M 1.0            FWD_SAFETY 0.9        WARMUP_FRACTION 0.33
+STEP_M 1.0            FWD_SAFETY 0.9
 FWD_ABORT_K 3.0       MAX_STEPS 30          HOLD_RETRY_SEC 0.2
 SETTLE_SEC 0.15       ROT_POLL_SEC 0.01     SEARCH_BACKUP_M 0.5
 ROT_SETTLE_MAX_SEC 1.0    ROT_SETTLE_MIN_SEC 0.2    ROT_SETTLE_POLL_SEC 0.05
