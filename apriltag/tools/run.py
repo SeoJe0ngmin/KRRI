@@ -151,11 +151,14 @@ async def main_async(args):
     on_frame, view = make_view(args)
     try:
         await _wait_start(args.show)
-        # 실측치가 있는(실제로 CAN 을 보내는) 경우에만 의미가 있다 — dry-run 은
-        # 하드웨어가 안 움직이므로 기록해도 쓸 데이터가 안 된다.
-        if args.record_events and not args.dry_run:
+        if args.record_events:
             record_dir = _new_event_log_dir()          # <- 주행 시작 시각으로 이름 짓는다
-            driver.record_dir = record_dir             # CanDriver 는 기록 때마다 이 속성을 읽는다
+            if not args.dry_run:
+                driver.record_dir = record_dir         # CanDriver 는 기록 때마다 이 속성을 읽는다
+            else:
+                # dry-run 에도 카메라 쪽 기록(measure/decision/result)은 진짜다.
+                # rotation/drive 는 하드웨어가 안 움직이므로 안 남는다(DryRunDriver 는 기록 안 함).
+                print("  (dry-run: measure/decision/result 만 기록. rotation/drive 는 실주행에서만)")
             print("  운행 기록 -> %s/" % record_dir)
         print("  시작\n")
         await dock_live(pipe, driver, tag_id=args.tag_id,
@@ -193,9 +196,8 @@ def main():
                     help="자이로를 안 연다. 회전이 미측정 시간모델 개루프가 된다")
     ap.add_argument("--record-events", action="store_true",
                     help="운행 기록을 %s/시각/ 폴더에 남긴다 (실행마다 새 폴더, "
-                         "measure/rotation/drive .jsonl 로 종류별 분리, ts 로 병합 가능). "
-                         "ROT_T0/ROT_DEG_PER_SEC/ROT_LEAD_DEG 실측 적합용. "
-                         "dry-run 에선 실측치가 없어 안 켜진다" % EVENT_LOG_DIR)
+                         "종류별 .jsonl, ts 로 병합 가능). 분석은 tools/analyze_run.py. "
+                         "dry-run 에선 카메라 쪽(measure/decision/result)만 남는다" % EVENT_LOG_DIR)
     asyncio.run(main_async(ap.parse_args()))
 
 
