@@ -180,7 +180,8 @@ class GyroYaw:
              'bias_dps': (bx, by, bz),     축별 바이어스 [도/s]
              'noise_dps': ny,              회전축 표준편차 [도/s]
              'drift_dpm': 0.9,             남는 드리프트 예상 [도/분]
-             'moving': False,              보정 중 움직인 의심 (True 면 다시 할 것)
+             'moving': False,              움직인 의심. True 면 **아무것도 커밋 안 하고**
+                                           이전 보정을 유지한다 — 세우고 다시 부를 것
              'axis': (x, y, z),            회전을 세는 센서 축
              'axis_src': '중력(기울기 4.1도)'}
         """
@@ -214,17 +215,24 @@ class GyroYaw:
         var = sum(p * p for p in proj) / max(n - 1, 1)
         sd = math.sqrt(var)
 
-        with self._lock:
-            self._bias = tuple(mean)
-            self._axis, self._axis_src = axis, src
-            self._angle_rad = 0.0             # 보정 끝 = 영점 선언
-            self._calibrated = True
-            self._noise_dps = math.degrees(sd)
-
         deg = math.degrees
         # 표준편차만 보면 **느리게 등속 회전** 중인 것을 못 잡는다(흔들림이 없으니까).
         # 정지 자이로의 평균은 보통 0.5도/s 를 한참 밑돌므로 평균도 같이 본다.
+        # 주의: 개체별 영점 오프셋(BMI055 스펙 +-1도/s급)과 실회전을 이 검사로는
+        # 못 가른다 — mean_dps 를 보고서에 실어 사람이 판단하게 한다.
         mean_dps = abs(deg(sum(mean[i] * axis[i] for i in range(3))))
+        moving = deg(sd) > IMU_MOVING_DPS or mean_dps > IMU_MOVING_DPS
+
+        # **움직인 의심이면 커밋하지 않는다.** 그 속도가 통째로 바이어스에
+        # 들어간 채 폐루프 회전이 시작되는 게 최악이다. 이전 보정(있으면)을
+        # 유지하고, 호출자는 moving=True 를 보고 다시 부른다.
+        if not moving:
+            with self._lock:
+                self._bias = tuple(mean)
+                self._axis, self._axis_src = axis, src
+                self._angle_rad = 0.0             # 보정 끝 = 영점 선언
+                self._calibrated = True
+                self._noise_dps = math.degrees(sd)
         accel_mean = (tuple(sum(v[i] for v in got_a) / len(got_a) for i in range(3))
                       if got_a else None)
         return {"n": n, "sec": float(sec),
@@ -233,7 +241,8 @@ class GyroYaw:
                 "noise_dps": deg(sd),
                 # 바이어스 추정 오차(sd/sqrt(n))가 그대로 드리프트가 된다.
                 "drift_dpm": deg(sd / math.sqrt(n)) * 60.0,
-                "moving": deg(sd) > IMU_MOVING_DPS or mean_dps > IMU_MOVING_DPS,
+                "moving": moving,             # True 면 위 값들은 **커밋 안 됨** — 다시 부를 것
+                "mean_dps": mean_dps,         # 회전축 방향 평균 [도/s]. 오프셋/실회전 구분용
                 "axis": axis, "axis_src": src}
 
     def _axis_from_gravity(self, samples):

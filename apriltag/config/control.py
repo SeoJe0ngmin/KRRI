@@ -30,7 +30,8 @@ HOLD_MAX_CONSEC = 8            # hold 가 이만큼 연속이면 수동전환 (�
 SETTLE_SEC = 0.15              # 명령 끊은 뒤 관성이 잦아들 시간
 
 # ── 회전 (IMU 폐루프. rot_control.rotate_to) ────────────────────────────────
-ROT_WATCHDOG_GAIN = 5.0        # 워치독 = 예상시간 x 이 값        △실측 후 낮춰도 됨
+ROT_WATCHDOG_GAIN = 5.0        # 워치독 = max(30s, 예상시간 x 이 값). 90도 이하 회전은
+                               # 예상 6s x 5 < 30s 라 늘 30s — △은 90도 초과에만 듣는다
 ROT_LEAD_DEG = 0.0             # 관성만큼 미리 끊는 각 [도]       ★로그의 오버슈트 평균
 ROT_WRONG_WAY_DEG = 5.0        # 반대로 이만큼 돌면 부호가 뒤집힌 것 → 즉시 정지
 ROT_POLL_SEC = 0.01            # 회전 중 IMU 확인 주기 [s]

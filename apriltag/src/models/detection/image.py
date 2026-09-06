@@ -12,7 +12,7 @@ import time
 import cv2
 import numpy as np
 
-from config.detection import ASSUMED_HFOV_DEG, COLOR_SIZE, D435I_COLOR_REF, IR_SIZE
+from config.detection import COLOR_SIZE, D435I_COLOR_REF, IR_SIZE
 from ...utils.camera import COLOR_EXPOSURE_UNIT_US
 
 @dataclass

@@ -13,7 +13,7 @@ from config.detection import (CAM_YAW_OFFSET_DEG, DEPTH_CHECK_MAX_Z,
                       MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, MIN_TAG_PX,
                       RELIABLE_TILT_DEG)
 from ...utils.util import r2rpy, invert_T, t2pr
-from .image import (ASSUMED_HFOV_DEG, depth_at, from_video, intrinsics_from_hfov,
+from .image import (depth_at, from_video, intrinsics_from_hfov,
                     intrinsics_from_ref,
                     open_bag, open_realsense, open_webcam, to_gray)
 from .detection_tag import (DEFAULT_QUAD_BLUR, STABLE_TAG_PX, detect, make_detector,

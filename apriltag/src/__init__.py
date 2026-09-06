@@ -11,7 +11,7 @@ if _ROOT not in _sys.path:
 from .models import (
     # 1) 카메라 값
     CameraIntrinsics, intrinsics_from_hfov, fov_edges_deg, tag_visible_near_m, intrinsics_from_ref,
-    ASSUMED_HFOV_DEG, D435I_COLOR_REF,
+    D435I_COLOR_REF,
     # 2) 이미지 얻기 — 어느 소스든 `for i, ts, img in frames:` 3-튜플이다
     Frame, open_realsense, open_bag, from_video,
     open_webcam, list_cameras, camera_index,
@@ -31,7 +31,7 @@ from .models import (
 )
 
 __all__ = ["CameraIntrinsics", "intrinsics_from_hfov", "fov_edges_deg", "tag_visible_near_m", "intrinsics_from_ref",
-           "ASSUMED_HFOV_DEG", "D435I_COLOR_REF",
+           "D435I_COLOR_REF",
            "Frame", "open_realsense", "open_bag", "from_video",
            "open_webcam", "list_cameras", "camera_index",
            "depth_at", "to_gray",

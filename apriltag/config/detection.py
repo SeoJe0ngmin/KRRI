@@ -8,8 +8,6 @@
 
     ★ 현장에서 확정할 것    △ 실측 후 조정 가능
 """
-from math import atan as _atan, degrees as _deg
-
 from .control import HEAD_TOL_DEG, LAT_TOL_M   # 흔들림 문턱을 도킹 허용치에서 뽑는다
 
 # ── 무엇을 보나 ─────────────────────────────────────────────────────────────
@@ -60,5 +58,3 @@ TAG_CELLS = 8                  # tag36h11 한 변의 칸 수 (테두리 포함)
 MM_PER_INCH = 25.4
 D435I_COLOR_REF = (1920, 1080, 1359.2, 1359.0, 956.9, 571.3)   # w,h,fx,fy,cx,cy
 
-# 화각은 fx 에서 나온다. 카메라가 있으면 SDK 값을 쓰고 이건 영상 파일용 대체값.
-ASSUMED_HFOV_DEG = 2.0 * _deg(_atan(D435I_COLOR_REF[0] / (2.0 * D435I_COLOR_REF[2])))

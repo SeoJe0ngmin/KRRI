@@ -23,7 +23,7 @@ from config.main import (CAM_YAW_OFFSET_DEG, MIN_DECISION_MARGIN,        # noqa:
 from src.models import (CameraIntrinsics, TagPipeline, camera_index,   # noqa: E402
                                  pose_to_xyzrpy, pose_to_forklift,
                                  tag_pixel_size,
-                                 ASSUMED_HFOV_DEG, DEFAULT_QUAD_BLUR,
+                                 DEFAULT_QUAD_BLUR,
                                  MAX_REPROJ_RMS_PX)
 from src.utils.drawing import draw_cube, draw_axes, draw_corners     # noqa: E402
 from src.utils.camera import diagnose_frame                       # noqa: E402

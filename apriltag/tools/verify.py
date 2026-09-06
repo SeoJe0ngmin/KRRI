@@ -16,7 +16,7 @@ from config.main import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
 from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  intrinsics_from_hfov, pose_to_xyzrpy,
                                  tag_tilt_deg, docking_state,
-                                 ASSUMED_HFOV_DEG, DEFAULT_QUAD_BLUR,
+                                 DEFAULT_QUAD_BLUR,
                                  RELIABLE_TILT_DEG)
 
 

@@ -24,6 +24,8 @@
 
 IMU 계기판(GyroYaw)은 `src/utils/imu_yaw.py`. 여기서 만들지 않고 run.py 가
 만들어 CanDriver 에 넣어 준다(그래서 시뮬레이션은 FakeYaw 를 꽂을 수 있다).
+calibrate() 는 보정 중 움직임이 의심되면(moving) **아무것도 커밋하지 않는다**
+— 그 속도가 통째로 바이어스에 들어간 채 폐루프가 시작되는 게 최악이라서다.
 
 ### 동작 세 묶음
 
@@ -118,9 +120,12 @@ d 만큼 직진하면 옆으로 d×sin(heading) 밀리므로 asin(허용치/남�
 
     measure  30프레임 모아 중앙값 → plan_step
     command  명령 실행 중. 프레임마다 감시:
-               heading 이 허용각을 넘으면 즉시 중단
-               화면 여유 < TAG_CUT_MARGIN_PX 면 즉시 중단
-             (1도 틀어진 채 3m 가면 52mm 밀린다)
+               heading 이 문턱을 **연속 3프레임** 넘으면 중단
+                 문턱 = max(asin(허용치/이번 걸음), HEAD_TOL_DEG) — "이번에 달릴
+                 거리" 기준이다. 남은 전체 거리로 재면 planner 가 방금 용인한
+                 heading 이 곧바로 중단을 불러 전진→중단 무한루프가 된다.
+                 3프레임 요구는 원시 1프레임 잡음(±0.45도 실측) 때문.
+               화면 여유 < TAG_CUT_MARGIN_PX 면 즉시 중단 (기하라 즉시)
     search   Set3 회전 중
     final    마지막 개루프 직진. 끝나면 곧장 done — 태그가 안 보이는 게
              정상이므로 실종 처리(recover_backup)로 가지 않는다
@@ -133,8 +138,15 @@ TagPipeline 순회는 **Result 를 뱉는다** (3-튜플이 아니다 — 그건
 쪽 계약). 검출이 to_thread 안에서 끝나므로 이벤트 루프가 안 막힌다 —
 CAN TX(5~10ms)와 heartbeat 가 검출 시간만큼 밀리면 지게차가 정지 판정을 낸다.
 
-태그 전환: 다음 태그(TAG2_ID)가 보이면 갈아탄다. 지금은 두 태그가 같은
-수직면·중심선에 있다고 보고 tag_id 만 바꾼다(아래 "아직 안 한 것").
+태그 전환: 다음 태그(TAG2_ID)가 보이면 갈아탄다. 전환 시 옛 태그의 창
+증거(margins/saw_any)와 기준값(prev_forward/margin_px)을 전부 버린다 —
+안 버리면 태그1의 가장자리 margin 이 태그2 첫 판단에 섞여 조기 final 이
+난다. 탐색 회전 중이었다면 취소를 끝까지(await·stop) 마치고 넘어간다.
+좌표는 두 태그가 같은 수직면·중심선 가정(아래 "아직 안 한 것").
+
+search/final 완료 시 회전 결과를 확인한다 — IMU 가 죽어 회전이 거부되면
+(imu-stale) 탐색이 제자리 헛돌기만 하므로 즉시 수동전환하고, final 에서
+예외가 나면 done 이 아니라 manual 로 기록한다.
 
 ---
 

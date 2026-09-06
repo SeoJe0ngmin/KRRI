@@ -262,6 +262,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
     outcome = "incomplete"
     margins = []
     abort = [None]
+    abort_hits = 0      # 전진 중 heading 이 문턱을 연속 몇 프레임 넘었나
 
     def now():
         return asyncio.get_event_loop().time()
@@ -284,8 +285,17 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
             if nxt is not None and phase in ("measure", "search"):
                 log("     태그%d -> 태그%d 로 갈아탄다" % (tag_id, nxt))
                 tag_id, buf, waited, misses = nxt, [], 0, 0
+                saw_any, margins = False, []          # 옛 태그의 창 증거를 버린다
+                st["prev_forward"] = None             # 두 태그의 forward 는 기준이 다르다
+                st["margin_px"] = None
                 if phase == "search" and task is not None and not task.done():
                     task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                    task = None
+                    await driver.stop()
                 phase = "measure"
 
             if phase == "search":
@@ -303,8 +313,23 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     misses, waited, buf = 0, 0, []
                     phase = "measure"
                 elif task is not None and task.done():
+                    exc = task.exception()
+                    r = None if exc is not None else task.result()
                     task = None
-                    phase = "measure"
+                    if exc is not None:
+                        log("!! 탐색 회전 예외: %r — 정지, 수동전환" % (exc,))
+                        await driver.stop()
+                        outcome, phase = "manual", "manual"
+                    elif isinstance(r, dict) and not r.get("ok", True):
+                        log("     !! 탐색 회전 실패(%s)" % r.get("reason"))
+                        if r.get("reason") == "imu-stale":
+                            # IMU 가 죽었다 — 탐색이 제자리 헛돌기만 한다
+                            await driver.stop()
+                            outcome, phase = "manual", "manual"
+                        else:
+                            phase = "measure"
+                    else:
+                        phase = "measure"
 
             elif phase == "measure":
                 waited += 1
@@ -340,9 +365,13 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     if action in ("forward", "final"):
                         st["drove_forward"] = True
                     if action == "forward":
-                        abort[0] = fwd_abort_deg(m, m["forward"])
+                        # 문턱은 "이번에 실제로 달릴 거리" 기준이어야 한다 — 남은
+                        # 전체 거리로 재면 planner 가 방금 용인한 heading(<=허용치)이
+                        # 곧바로 중단을 부르는 사각지대가 생긴다.
+                        abort[0] = max(fwd_abort_deg(m, amount), C.HEAD_TOL_DEG)
                     else:
                         abort[0] = None
+                    abort_hits = 0
                     if action == "recover_backup":
                         st["backed_up_once"] = True
                     if action == "hold":
@@ -387,11 +416,15 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
 
             elif phase == "final":
                 if task is not None and task.done():
+                    exc = task.exception()
                     task = None
-                    log("     도착")
                     await driver.stop()
-                    outcome = "done"
-                    phase = "done"
+                    if exc is not None:
+                        log("!! 마지막 직진 예외: %r — 수동전환" % (exc,))
+                        outcome, phase = "manual", "manual"
+                    else:
+                        log("     도착")
+                        outcome, phase = "done", "done"
 
             elif phase == "command":
 
@@ -399,9 +432,15 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                 if abort[0] is not None and task is not None and not task.done():
                     why_cut = None
                     d = res.docking.get(tag_id)
+                    # heading 은 원시 1프레임 값(잡음 +-0.45도 실측)이라 연속
+                    # 3프레임을 요구한다. 화면 여유는 기하라 즉시 끊는다.
                     if d is not None and abs(d["heading_deg"]) > abort[0]:
-                        why_cut = ("heading %+.2f도 (허용 %.2f도)"
-                                   % (d["heading_deg"], abort[0]))
+                        abort_hits += 1
+                        if abort_hits >= 3:
+                            why_cut = ("heading %+.2f도 (허용 %.2f도, 3프레임 연속)"
+                                       % (d["heading_deg"], abort[0]))
+                    elif d is not None:
+                        abort_hits = 0
                     mg = _margin_px(res, tag_id)
                     if why_cut is None and mg is not None and mg < C.TAG_CUT_MARGIN_PX:
                         why_cut = "태그가 화면 가장자리 %.0fpx (한계 %.0fpx)" % (mg, C.TAG_CUT_MARGIN_PX)

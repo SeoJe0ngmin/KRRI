@@ -54,7 +54,7 @@ def imu_lines(yaw):
     if yaw is None:
         return [("kv", "IMU", "없음 — 회전이 개루프", "bad")]
     alive = yaw.alive
-    gaps = yaw.stats.get("gaps", 0)
+    gaps = yaw.stats().get("gaps", 0)
     out = [("kv", "IMU 각도", "%+.2f 도" % yaw.angle_deg, "ok" if alive else "bad"),
            ("kv", "IMU 속도", "%+.2f 도/s" % yaw.rate_dps, "ok" if alive else "dim")]
     if not alive:
