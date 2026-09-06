@@ -3,7 +3,10 @@
 카메라로 AprilTag 을 보고 **탑재부 기준 지게차 위치**를 낸 뒤, 그 값으로 주행한다.
 
 처음 받았다면 — 현장 노트북(Windows)은 [SETUP_WINDOWS.md](SETUP_WINDOWS.md) 부터.
-현장에서 뭘 재야 하는지는 [FIELD_MEASURE.md](FIELD_MEASURE.md).
+문서는 넷뿐이다:
+[SETUP_WINDOWS.md](SETUP_WINDOWS.md) 현장 노트북 설치 ·
+[FIELD_MEASURE.md](FIELD_MEASURE.md) 값 사전(잴 것/정해진 것/카메라가 주는 것) ·
+[CODE_NOTES.md](CODE_NOTES.md) 제어 코드 설계 노트(주석은 코드가 아니라 여기 있다)
 
 ```bash
 pip install -r requirements.txt
