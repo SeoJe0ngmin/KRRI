@@ -60,7 +60,14 @@ ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh check'
    ssh ubuntu-vm 'cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/realsense_check.py --no-gui'   # depth·메타데이터·IMU
    ssh ubuntu-vm '~/miniforge3/envs/krri/bin/python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"'
    ```
-3. 화면이 필요한 것(live_pose 등)은 VM 창 안 터미널에서 돌리거나 `ssh -X ubuntu-vm` 으로 맥의 XQuartz 에 띄운다.
+3. 실행 (VS Code Remote-SSH 터미널에서, sudo 불필요):
+   ```bash
+   cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/run.py --dry-run   # CAN 안 보냄
+   cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/run.py             # 실주행
+   ```
+   SPACE 로 시작(터미널에서 직접 읽는다), Ctrl+C 로 비상정지 후 종료.
+4. 화면이 필요한 것(`--show`, live_pose)은 VM 창 안 터미널에서 돌리거나 `ssh -X ubuntu-vm` 으로 맥의 XQuartz 에 띄운다.
+   SSH 터미널에는 DISPLAY 가 없어서 `--show` 가 창을 못 연다.
 
 ## 4. 코드 갱신 (jm → jm_mac → VM)
 ```bash
