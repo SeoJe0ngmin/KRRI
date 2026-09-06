@@ -1,0 +1,30 @@
+# 맥북 전용 — Apple Silicon (M1~), macOS 15 Sequoia 이상, Python 3.11
+#
+#     python3.11 -m venv .venv && source .venv/bin/activate
+#     pip install -r requirements-macos.txt
+#     python tools/check_setup.py
+#
+# 맥북으로 되는 것 / 안 되는 것
+#     된다   카메라, 검출, IMU, 시뮬레이션, dry-run 주행, 기록 분석
+#     안 된다 실주행(CAN) — Kvaser 가 macOS 에 CANlib API 를 안 낸다.
+#            MacCAN 드라이버가 있지만 CAN API V3 라는 다른 규격이라
+#            control_forklift_v2.py 가 그대로는 못 쓴다. 실주행은 Windows 로.
+#
+# requirements.txt 와 값은 같다 — 그쪽은 마커로 OS 를 가르고, 이 파일은
+# 맥북만 놓고 풀어 쓴 것이다. 버전을 고칠 때는 두 파일을 같이 고칠 것.
+
+numpy==2.4.6
+opencv-python==5.0.0.93
+pupil-apriltags==1.0.4.post11
+pyrealsense2-macosx==2.56.5        # 공식 pyrealsense2 는 macOS 휠이 없다.
+                                   # import 이름은 그대로 pyrealsense2 라 코드는 안 고친다
+
+# 아래 넷은 분석용처럼 보이지만 **지우면 검출이 죽는다**
+# (detection_pose.py -> utils/util.py 가 최상단에서 import 한다)
+matplotlib==3.11.1
+scipy==1.17.1
+shapely==2.1.2
+ipython==9.16.1
+
+# canlib / keyboard 는 일부러 뺐다 — 위 "안 되는 것" 참고.
+# keyboard 가 없으면 run.py 는 SPACE 대신 엔터로 시작한다(자동 폴백).

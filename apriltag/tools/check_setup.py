@@ -32,6 +32,10 @@ DRIVE = [
     ("keyboard", "keyboard"),
 ]
 
+# macOS 에는 Kvaser 가 CANlib API 를 안 낸다(MacCAN 은 CAN API V3 라는 다른 규격).
+# 그래서 실주행은 애초에 불가능하고, 없다고 나무랄 일이 아니다.
+MAC = sys.platform == "darwin"
+
 
 def try_imports(pairs):
     missing = []
@@ -63,7 +67,12 @@ def main():
         repo_ok = False
 
     print("── 실주행 (CAN) " + "─" * 50)
-    missing_drive = try_imports(DRIVE)
+    if MAC:
+        missing_drive = []
+        print("   해당 없음  macOS 는 Kvaser CANlib 이 없어 실주행을 못 한다.")
+        print("              dry-run / 시뮬 / 기록분석 / 카메라·IMU 검증은 다 된다.")
+    else:
+        missing_drive = try_imports(DRIVE)
 
     print("── 장비 (지금 꽂혀 있는 것) " + "─" * 38)
     try:
@@ -86,7 +95,10 @@ def main():
 
     print("─" * 66)
     if not missing_common and not missing_drive and repo_ok:
-        print("판정: 준비 완료. 현장에서는 장비만 꽂고 run.py 를 켜면 된다.")
+        if MAC:
+            print("판정: 개발 준비 완료 (macOS — 실주행만 불가).")
+        else:
+            print("판정: 준비 완료. 현장에서는 장비만 꽂고 run.py 를 켜면 된다.")
         return 0
     if not missing_common and repo_ok:
         print("판정: 개발·dry-run 은 된다. 실주행 전에 위 [실주행] 항목을 설치할 것.")
