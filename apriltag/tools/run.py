@@ -137,7 +137,7 @@ async def _wait_start(show):
     그것도 없으면 엔터. 기다리는 동안 CAN heartbeat 루프는 계속 돈다(스레드로 읽음).
     """
     if os.name != "nt" and sys.stdin.isatty():
-        print("  SPACE 를 누르면 시작. ESC 면 중단.")
+        print("  SPACE 를 누르면 시작. ESC 면 중단.", flush=True)
         while True:
             k = await asyncio.to_thread(_read_key_tty)
             if k == " ":
