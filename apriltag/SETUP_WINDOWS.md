@@ -72,7 +72,7 @@ python tools\run.py --dry-run --show     태그 앞에 세워 두고 판단이 �
 | 증상 | 볼 곳 |
 |---|---|
 | "CAN 연결 실패" | Kvaser Drivers+SDK 설치했나 → `check_setup.py` 의 Kvaser 채널 줄. 채널 번호는 `control_forklift_v2.py` 의 `CAN_CHANNEL`(기본 0), 속도 500kbps 가 지게차와 같아야 함 |
-| **ch0 가 Virtual** 인데 실장비를 꽂았다 | 명령이 가상 버스로 빠져 지게차가 안 움직이는데 에러도 안 난다. check_setup 에서 ch0 가 `Kvaser Leaf...` 인지 반드시 확인. Virtual 이 앞자리를 차지하면 Kvaser Device Guide 에서 가상 채널을 끄거나 재부팅 |
+| "CAN 연결 실패" 인데 check_setup 은 채널이 보인다 | 그 채널이 `Virtual` 이면 정상 실패다 — openChannel 이 가상 채널을 거부한다(그램에서 실증). 실장비(Kvaser Leaf)를 꽂고 check_setup 에서 ch0 가 Leaf 로 잡히는지 확인 |
 | 회전이 wrong-way 로 계속 멈춤 | 위 "첫 주행 확인" — movement 매핑 스왑 |
 | 회전이 안 되고 시간모델 개루프 경고 | IMU 를 못 열었다 — 카메라 USB 를 다시 꽂고 재시작 |
 | 태그를 계속 못 봄 | `--show` 로 화면을 보면서 노출(`e`, `[`, `]`) 조절 |
