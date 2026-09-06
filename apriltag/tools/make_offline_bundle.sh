@@ -19,7 +19,7 @@ mkdir -p "$OUT"
 
 # --platform win_amd64: 윈도우용 휠을 받는다 (순수 파이썬 휠은 자동 포함)
 # --only-binary=:all: 소스 배포판 금지 — 노트북에서 빌드가 필요 없게
-python3 -m pip download -r requirements.txt -d "$OUT" \
+/home/jeongmin/anaconda3/envs/krri/bin/python -m pip download -r requirements.txt -d "$OUT" \
     --platform win_amd64 --python-version 3.11 \
     --implementation cp --only-binary=:all:
 

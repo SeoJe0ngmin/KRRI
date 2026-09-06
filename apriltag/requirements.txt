@@ -1,20 +1,33 @@
-# python 3.11 (conda env: krri)
-#   pip install -r requirements.txt
+# AprilTag 도킹 — 파이썬 의존성  (Python 3.11)
+#
+#   현장 노트북(Windows):  setup_windows.bat 더블클릭  (이 파일을 알아서 쓴다)
+#   수동 설치:             pip install -r requirements.txt
+#   설치 확인:             python tools/check_setup.py
+#
+# 버전을 전부 고정한 이유 — 현장에서 최신판이 깨지면 손쓸 방법이 없다.
+# 아래 전 항목은 win_amd64 / cp311 바이너리 휠이 PyPI 에 있는 것을 확인했다
+# (2026-09-06). 즉 노트북에서 소스 빌드가 시작될 일이 없다.
 
-pupil-apriltags==1.0.4.post11  
-opencv-python==5.0.0.93        
+# ── 검출·자세 (없으면 아무것도 안 된다) ──────────────────────────────
 numpy==2.4.6
-pyrealsense2==2.58.3.10794     
+opencv-python==5.0.0.93
+pupil-apriltags==1.0.4.post11      # 태그 검출기. apriltag(AT2) 는 안 쓴다
+pyrealsense2==2.58.3.10794         # D435i 컬러 + 자이로
+
+# ── src/utils/util.py 가 물고 들어오는 것 ────────────────────────────
+# 얼핏 분석용으로 보이지만 **지우면 검출이 죽는다**:
+#   detection_pose.py -> utils/util.py -> 아래 넷을 최상단에서 import 한다.
 matplotlib==3.11.1
-# apriltag==0.0.16           # 안 씀 (pupil-apriltags 만 씀). Windows 에서 빌드가 깨져서 뺐다
 scipy==1.17.1
 shapely==2.1.2
 ipython==9.16.1
 
-# ── 실주행 전용 (개발 PC 에는 불필요. --dry-run 은 아래 없이 돈다) ──
-# canlib 는 pip 만으로는 안 된다 — Kvaser 드라이버/SDK 를 OS 에 먼저 설치할 것.
-#   Windows: kvaser.com 의 "Kvaser Drivers for Windows"
-#   Linux/Jetson: Kvaser linuxcan 드라이버 빌드 + CANlib SDK
-# keyboard 는 Linux 에서 root 권한이 필요하다.
-canlib                         # CAN 통신 (control_forklift_v2 가 씀. Kvaser 전용)
-keyboard                       # SPACE/ESC 입력 (control_forklift_v2 + run.py)
+# ── 실주행 전용 (CAN 으로 지게차를 움직일 때) ────────────────────────
+# canlib 는 pip 만으로 끝나지 않는다. **Kvaser 드라이버를 OS 에 먼저 깔아야**
+# import 시점에 네이티브 DLL 을 찾는다:
+#     Windows       kvaser.com -> "Kvaser Drivers for Windows" 설치파일 실행
+#     Linux/Jetson  kvaser.com -> linuxcan 소스 받아 make && sudo make install
+# keyboard 는 리눅스에서 root 권한이 필요하다 (윈도우는 불필요).
+# 이 둘이 없어도 --dry-run / 시뮬레이션 / 기록분석은 전부 돈다.
+canlib==1.33.358                   # control_forklift_v2 가 쓴다 (Kvaser 전용)
+keyboard==0.13.5                   # SPACE 시작 / ESC 비상정지
