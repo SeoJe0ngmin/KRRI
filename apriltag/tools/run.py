@@ -9,6 +9,8 @@ live_pose.py 를 따로 띄우면 이쪽이 카메라를 못 연다. 그래서 -
 
 키보드는 시작과 비상정지, 그리고 카메라 노출 조절에만 쓴다. 주행 방향은 카메라가 정한다.
     SPACE  시작        ESC  비상정지 후 종료
+    (시작 키는 터미널에서 직접 읽는다 — SSH 로 들어온 VS Code 터미널, Jetson 에서도 된다.
+     keyboard 라이브러리는 물리 키보드 장치를 읽어서 SSH 키를 못 보므로 터미널이 없을 때만 쓴다)
     e      자동노출 켜기/끄기      [ ]  노출 -/+       - =  게인 -/+
 
 control_forklift_v2.py 는 한 줄도 안 고친다. 그쪽 TX 루프(movement 10ms /
@@ -113,8 +115,35 @@ def make_view(args, yaw=None):
     return on_frame, state
 
 
+def _read_key_tty():
+    """터미널에서 키 하나를 읽는다. 줄 단위·에코 없이. ESC 는 '\x1b' 로 온다."""
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        return sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
 async def _wait_start(show):
-    """SPACE 를 기다린다. keyboard 가 없으면 엔터로 대신한다."""
+    """SPACE 를 기다린다.
+
+    터미널이 붙어 있으면 stdin 을 키 단위로 읽는다 — SSH(VS Code Remote-SSH,
+    Jetson)에서도 된다. keyboard 라이브러리는 리눅스의 물리 키보드 장치를 직접
+    읽어서 SSH 로 친 키를 못 보고 root 까지 필요하므로, 터미널이 없을 때만 쓴다.
+    그것도 없으면 엔터. 기다리는 동안 CAN heartbeat 루프는 계속 돈다(스레드로 읽음).
+    """
+    if os.name != "nt" and sys.stdin.isatty():
+        print("  SPACE 를 누르면 시작. ESC 면 중단.")
+        while True:
+            k = await asyncio.to_thread(_read_key_tty)
+            if k == " ":
+                return
+            if k in ("\x1b", "q"):       # 화살표 키도 \x1b 로 시작하니 누르지 말 것
+                raise KeyboardInterrupt
     try:
         import keyboard
     except ImportError:

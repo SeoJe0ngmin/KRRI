@@ -18,7 +18,10 @@ pupil-apriltags==1.0.4.post11      # 태그 검출기. apriltag(AT2) 는 안 쓴
 # 갈아타도 import 이름은 그대로 pyrealsense2 라 코드는 손댈 게 없다.
 # 단 macOS 에선 실카메라를 못 연다(UVCAssistant 선점 + 2.56.5 IMU 크래시,
 # requirements-macos.txt 참고). 컬러만 live_pose.py --source webcam 으로 본다.
-pyrealsense2==2.58.3.10794         ; sys_platform != "darwin"
+# 리눅스 arm64(Jetson, 맥북의 Ubuntu VM)는 PyPI 에 휠이 없어 소스 빌드로 넣는다
+# (librealsense v2.58.3, -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=ON).
+# 그래서 그 조합은 여기서 뺀다 — 안 빼면 pip install -r 이 이 줄에서 통째로 실패한다.
+pyrealsense2==2.58.3.10794         ; sys_platform != "darwin" and platform_machine != "aarch64"
 pyrealsense2-macosx==2.56.5        ; sys_platform == "darwin"   # macOS 15+, Apple Silicon
 
 # ── src/utils/util.py 가 물고 들어오는 것 ────────────────────────────
