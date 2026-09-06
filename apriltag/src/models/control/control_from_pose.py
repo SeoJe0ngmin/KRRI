@@ -95,7 +95,8 @@ import copy
 import math
 
 from config.control import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY,
-                            HEAD_TOL_DEG, HOLD_RETRY_SEC, LAT_TOL_M, MAX_STEPS,
+                            HEAD_TOL_DEG, HOLD_MAX_CONSEC, HOLD_RETRY_SEC,
+                            LAT_TOL_M, MAX_STEPS,
                             SEARCH_AFTER_MISSES, SEARCH_BACKUP_M,
                             SEARCH_MAX_ROUNDS, SETTLE_SEC,
                             SIDESTEP_BACKWARD_GAIN_DEG, STEP_M,
@@ -237,6 +238,7 @@ def plan_step(m, state=None):
     """
     st = state or {}
     misses = int(st.get("misses", 0))
+    holds = int(st.get("holds", 0))        # 연속으로 멈춰 있은 횟수
     margin_px = st.get("margin_px")
     prev_forward = st.get("prev_forward")
     warmed = bool(st.get("warmed", False))
@@ -261,6 +263,15 @@ def plan_step(m, state=None):
         return ("search", turn, rot_sec_from_deg(turn),
                 "Set3: 반시계 %.0f도 회전 (%d바퀴째)"
                 % (turn, set3_rounds_done(rotations_done, half_fov) + 1))
+
+    # 같은 이유로 계속 멈춰 있으면 **아예 안 움직인 채로 끝난다.** 그 상태로
+    # MAX_STEPS 를 소진하면 로그에 "수렴 실패" 만 남아 원인이 안 보인다.
+    # 몇 번 만에 끊고 마지막 이유를 들고 수동전환한다 — 사람이 볼 수 있게.
+    # (태그를 아예 못 보는 경우는 위 Set3 가 먼저 가져가므로 여기 안 온다.)
+    if holds >= HOLD_MAX_CONSEC:
+        return ("lost", 0.0, 0.0,
+                "%d번 연속 멈춰 있다 (마지막 이유: %s). 수동전환 — 사람이 확인해야 한다"
+                % (holds, st.get("hold_why") or "?"))
 
     if m is None:
         return ("hold", 0.0, 0.0, "태그를 못 봤다")
@@ -485,6 +496,12 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_dir=
             st["backed_up_once"] = True
         elif action != "hold":
             st["drove_forward"] = False
+        # 연속 hold 추적 — 움직이면 리셋. 마지막 이유는 수동전환 메시지에 쓴다
+        if action == "hold":
+            st["holds"] = st.get("holds", 0) + 1
+            st["hold_why"] = why
+        else:
+            st["holds"] = 0
         if action != "search":
             i += 1
         log("[%2d] %s" % (i, _fmt_measure(m)))
@@ -646,6 +663,11 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                         abort[0] = None
                     if action == "recover_backup":
                         st["backed_up_once"] = True
+                    if action == "hold":
+                        st["holds"] = st.get("holds", 0) + 1
+                        st["hold_why"] = why
+                    else:
+                        st["holds"] = 0
                     # 탐색 걸음은 단계로 세지 않는다 (dock 과 같은 이유)
                     if action != "search":
                         step += 1
