@@ -100,8 +100,8 @@ from config.control import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY,
                             SEARCH_MAX_ROUNDS, SETTLE_SEC,
                             SIDESTEP_BACKWARD_GAIN_DEG, STEP_M,
                             TAG_CUT_MARGIN_PX, WARMUP_FRACTION)
-from config.detection import (MEASURE_FRAMES, MEASURE_MAX_FRAMES, TAG_ID,
-                              TAG_SIZE_M, TAG2_ID)
+from config.detection import (MAX_HEADING_SIGMA_DEG, MEASURE_FRAMES,
+                              MEASURE_MAX_FRAMES, TAG_ID, TAG_SIZE_M, TAG2_ID)
 from ...utils.event_log import record_event
 from .fwd_time_model import fwd_sec_from_offset_piecewise
 from .rot_control import rot_sec_from_deg, rot_timeout_sec, rotate_to
@@ -287,9 +287,28 @@ def plan_step(m, state=None):
     # 따로 0으로 만들면 카메라가 태그와 나란한 방향을 보게 되어 태그를 놓친다.
     if abs(lateral_m) > LAT_TOL_M:
         if not m["reliable_angle"]:
+            # **다가가는 것이 곧 해결이다.** 각도 잡음은 거리의 제곱으로 줄어든다
+            # (30cm 태그 기준 5m 1.49도 -> 3m 0.49도 -> 2m 0.27도). 못 믿는 각도로
+            # Set2 를 하면 잡음을 쫓아 lateral 을 오히려 키우므로, 먼저 붙는다.
+            #
+            # 여기서 멈춰 서면(옛 동작) 재도 값이 같아서 영원히 hold 였다 —
+            # 자율주행인데 "비스듬한 자리로 옮겨서 다시 재라"고 할 대상이 없다.
+            # 실제로 계획한 시작 거리(2.5~5.9m)가 전부 그 구간이었다.
+            sigma = m.get("heading_sigma_deg")
+            if forward_m > STEP_M:
+                approach_m = min(forward_m * WARMUP_FRACTION, forward_m * FWD_SAFETY,
+                                 STEP_M)
+                return ("forward", approach_m,
+                        fwd_sec_from_offset_piecewise(approach_m),
+                        "각도 잡음 %.2f도 (한계 %.2f도) — %.2fm 다가가서 다시 잰다"
+                        % (sigma if sigma is not None else float("nan"),
+                           MAX_HEADING_SIGMA_DEG, approach_m))
+            # 이만큼 붙었는데도 못 믿으면 거리 탓이 아니다 (가림·흔들림·조명).
             return ("hold", 0.0, 0.0,
-                    "각도를 못 믿는다 (tilt %.1f도). 비스듬한 자리로 옮겨서 다시 재라"
-                    % m["tilt_deg"])
+                    "%.2fm 까지 붙었는데도 각도 잡음 %.2f도 (한계 %.2f도) — "
+                    "가림·조명·진동을 의심하라"
+                    % (forward_m, sigma if sigma is not None else float("nan"),
+                       MAX_HEADING_SIGMA_DEG))
         turn, distance_m, direction = plan_lateral_clear(lateral_m, heading_deg)
         estimated_sec = (rot_sec_from_deg(turn) + fwd_sec_from_offset_piecewise(distance_m)
                          + rot_sec_from_deg(90.0))
@@ -547,13 +566,15 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
 
     try:
         while True:
-            item = await asyncio.to_thread(next, gen, None)
-            if item is None:
+            # TagPipeline 순회는 **Result 를 뱉는다** (3-튜플이 아니다 —
+            # 3-튜플은 pipe.frames 쪽 계약이다). 검출까지 이 스레드 안에서
+            # 끝나므로 이벤트 루프가 안 막힌다 — CAN TX 루프(5~10ms)와
+            # heartbeat 가 검출 시간만큼 밀리면 지게차가 정지 판정을 낸다.
+            res = await asyncio.to_thread(next, gen, None)
+            if res is None:
                 break
-            i, ts, frame = item
-            if frame is None or getattr(frame, "size", 1) == 0:
+            if res.image is None or getattr(res.image, "size", 1) == 0:
                 continue
-            res = pipe.process(frame, index=i, timestamp=ts)
 
             # 태그 전환 — 다음 태그가 보이면 갈아탄다. 어느 단계에서든 본다.
             nxt = _next_tag(res, tag_id)
