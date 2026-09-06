@@ -220,16 +220,8 @@ def _margin_px(res, tag_id):
 
 
 def _ours(res, tag_id):
-    """이 프레임에 **우리가 쓰는 태그**가 하나라도 있나."""
-    ids = [tag_id] if D.TAG2_ID is None else [tag_id, D.TAG2_ID]
-    return any(t in res.docking for t in ids)
-
-
-def _next_tag(res, current):
-    """지금 쫓는 태그 말고 **다음 태그**가 보이면 그 번호. 아니면 None."""
-    if D.TAG2_ID is None or current == D.TAG2_ID:
-        return None
-    return D.TAG2_ID if _visible(res, D.TAG2_ID) else None
+    """이 프레임에 우리가 쫓는 태그가 있나."""
+    return tag_id in res.docking
 
 
 def _half_fov_deg(pipe):
@@ -281,22 +273,6 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                 continue
 
 
-            nxt = _next_tag(res, tag_id)
-            if nxt is not None and phase in ("measure", "search"):
-                log("     태그%d -> 태그%d 로 갈아탄다" % (tag_id, nxt))
-                tag_id, buf, waited, misses = nxt, [], 0, 0
-                saw_any, margins = False, []          # 옛 태그의 창 증거를 버린다
-                st["prev_forward"] = None             # 두 태그의 forward 는 기준이 다르다
-                st["margin_px"] = None
-                if phase == "search" and task is not None and not task.done():
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-                    task = None
-                    await driver.stop()
-                phase = "measure"
 
             if phase == "search":
 
