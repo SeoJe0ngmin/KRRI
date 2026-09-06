@@ -33,11 +33,11 @@ EVENT_LOG_DIR = os.path.join(ROOT, "work_dirs", "docking_log")
 def _new_event_log_dir():
     return os.path.join(EVENT_LOG_DIR, datetime.now().strftime("%Y%m%d_%H%M%S"))
 
-from config.system import TAG_ID, TAG_SIZE_M                                # noqa: E402
+from config.main import TAG_ID, TAG_SIZE_M                                # noqa: E402
 from src.models import TagPipeline                                       # noqa: E402
 from src.models.control.control_from_pose import (CanDriver,             # noqa: E402
                                                   DryRunDriver, dock_live)
-from config.system import MAX_STEPS                                  # noqa: E402
+from config.main import MAX_STEPS                                  # noqa: E402
 from src.models.detection.image import intrinsics_from_ref        # noqa: E402                        # noqa: E402
 from src.utils.imu_yaw import GyroYaw                                    # noqa: E402
 

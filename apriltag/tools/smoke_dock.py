@@ -27,7 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
-from config.system import COLOR_SIZE                                 # noqa: E402
+from config.main import COLOR_SIZE                                 # noqa: E402
 from src.models import TagPipeline, intrinsics_from_ref              # noqa: E402
 from src.models.control.control_from_pose import (DryRunDriver,      # noqa: E402
                                                   dock_live)

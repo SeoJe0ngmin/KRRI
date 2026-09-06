@@ -52,7 +52,7 @@ def main():
 
     print("── 저장소 자체 점검 " + "─" * 46)
     try:
-        import config.system                                    # noqa: F401
+        import config.main                                    # noqa: F401
         from src.models.control.control_from_pose import plan_step   # noqa: F401
         from src.models.detection.detection_pose import measure      # noqa: F401
         print("   OK    config + 검출 + 제어 모듈이 전부 import 된다")

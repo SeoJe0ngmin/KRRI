@@ -12,7 +12,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config.system import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
+from config.main import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
 from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  intrinsics_from_hfov, pose_to_xyzrpy,
                                  tag_tilt_deg, docking_state,

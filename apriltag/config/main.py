@@ -17,7 +17,7 @@
 
 쓰는 쪽은 이 파일 하나만 보면 된다:
 
-    from config.system import LAT_TOL_M, TAG_SIZE_M, IMU_GYRO_HZ
+    from config.main import LAT_TOL_M, TAG_SIZE_M, IMU_GYRO_HZ
 
 여기 없는 것
     fx / fy / cx / cy   카메라가 직접 준다. 적어두면 해상도 바꿀 때 어긋난다

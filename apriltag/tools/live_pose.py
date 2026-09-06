@@ -11,8 +11,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config.system import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
-from config.system import (CAM_YAW_OFFSET_DEG, MIN_DECISION_MARGIN,        # noqa: E402
+from config.main import TAG_SIZE_M as DEFAULT_TAG_SIZE  # noqa: E402
+from config.main import (CAM_YAW_OFFSET_DEG, MIN_DECISION_MARGIN,        # noqa: E402
                         MIN_TAG_PX, STABLE_TAG_PX)
 from src.models import (CameraIntrinsics, TagPipeline,      # noqa: E402
                                  pose_to_xyzrpy, pose_to_forklift,
