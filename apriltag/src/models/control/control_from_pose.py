@@ -70,12 +70,9 @@ def _fmt_measure(m):
                m["tilt_deg"], m["n"], flag))
 
 
-def fwd_abort_deg(m, remaining_m):
-    """전진 중 "이 각도를 넘으면 멈춰라" [도]. **상수가 아니라 계산이다.**"""
-    geo = math.degrees(math.asin(min(1.0, C.LAT_TOL_M / max(remaining_m, 1e-6))))
-    sig = (m or {}).get("heading_sigma_deg")
-    floor = C.FWD_ABORT_K * sig if sig and math.isfinite(sig) else 0.0
-    return max(geo, floor)
+def fwd_abort_deg(step_m):
+    """전진 중 "이 각도를 넘으면 멈춰라" [도] — 이번 걸음에서 30mm 새는 각."""
+    return math.degrees(math.asin(min(1.0, C.LAT_TOL_M / max(step_m, 1e-6))))
 
 
 def plan_step(m, state=None):
@@ -341,7 +338,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                         # 문턱은 "이번에 실제로 달릴 거리" 기준이어야 한다 — 남은
                         # 전체 거리로 재면 planner 가 방금 용인한 heading(<=허용치)이
                         # 곧바로 중단을 부르는 사각지대가 생긴다.
-                        abort[0] = max(fwd_abort_deg(m, amount), C.HEAD_TOL_DEG)
+                        abort[0] = max(fwd_abort_deg(amount), C.HEAD_TOL_DEG)
                     else:
                         abort[0] = None
                     abort_hits = 0
