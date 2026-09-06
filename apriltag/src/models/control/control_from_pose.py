@@ -76,7 +76,6 @@ def plan_step(m, state=None):
     holds = int(st.get("holds", 0))
     margin_px = st.get("margin_px")
     prev_forward = st.get("prev_forward")
-    warmed = bool(st.get("warmed", False))
     half_fov = float(st.get("half_fov_deg", 35.0))
     drove_forward = bool(st.get("drove_forward", False))
     backed_up_once = bool(st.get("backed_up_once", False))
@@ -251,7 +250,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
     max_steps = C.MAX_STEPS if max_steps is None else max_steps
     n_frames = int(n_frames or D.MEASURE_FRAMES)
     half_fov = _half_fov_deg(pipe)
-    st = {"half_fov_deg": half_fov, "warmed": False, "prev_forward": None,
+    st = {"half_fov_deg": half_fov, "prev_forward": None,
           "drove_forward": False, "backed_up_once": False}
     gen = iter(pipe)
     history, buf = [], []
@@ -341,8 +340,6 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     if action in ("forward", "final"):
                         st["drove_forward"] = True
                     if action == "forward":
-                        st["warmed"] = True
-
                         abort[0] = fwd_abort_deg(m, m["forward"])
                     else:
                         abort[0] = None
