@@ -16,6 +16,8 @@ pupil-apriltags==1.0.4.post11      # 태그 검출기. apriltag(AT2) 는 안 쓴
 
 # RealSense: 공식 pyrealsense2 는 macOS 휠이 없어서 macOS 만 갈아탄다.
 # 갈아타도 import 이름은 그대로 pyrealsense2 라 코드는 손댈 게 없다.
+# 단 macOS 에선 실카메라를 못 연다(UVCAssistant 선점 + 2.56.5 IMU 크래시,
+# requirements-macos.txt 참고). 컬러만 live_pose.py --source webcam 으로 본다.
 pyrealsense2==2.58.3.10794         ; sys_platform != "darwin"
 pyrealsense2-macosx==2.56.5        ; sys_platform == "darwin"   # macOS 15+, Apple Silicon
 

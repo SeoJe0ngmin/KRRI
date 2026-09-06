@@ -14,6 +14,7 @@ from .models import (
     ASSUMED_HFOV_DEG, D435I_COLOR_REF,
     # 2) 이미지 얻기 — 어느 소스든 `for i, ts, img in frames:` 3-튜플이다
     Frame, open_realsense, open_bag, from_video,
+    open_webcam, list_cameras, camera_index,
     depth_at, to_gray,
     # 3) 태그 찾기
     make_detector, detect, tag_pixel_size, tag_edge_margin_px,
@@ -32,6 +33,7 @@ from .models import (
 __all__ = ["CameraIntrinsics", "intrinsics_from_hfov", "fov_edges_deg", "tag_visible_near_m", "intrinsics_from_ref",
            "ASSUMED_HFOV_DEG", "D435I_COLOR_REF",
            "Frame", "open_realsense", "open_bag", "from_video",
+           "open_webcam", "list_cameras", "camera_index",
            "depth_at", "to_gray",
            "make_detector", "detect", "tag_pixel_size", "tag_edge_margin_px",
            "DEFAULT_QUAD_BLUR", "MIN_TAG_PX", "STABLE_TAG_PX",
