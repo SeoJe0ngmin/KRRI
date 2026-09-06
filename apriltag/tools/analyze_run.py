@@ -81,6 +81,21 @@ def show_summary(events):
     for a in aborts:
         print("   중단 이력: [%d] %s" % (a.get("step", -1), a["why"]))
 
+    # 흔들림은 이제 주행을 멈추지 않는다 — 대신 얼마나 흔들렸는지 여기서 센다.
+    # 자주 뜨면 config 의 STABLE_* 문턱이 현장과 안 맞는다는 뜻이다.
+    decisions = [e for e in events if e["kind"] == "decision"]
+    shaky = [d for d in decisions if d.get("stable") is False]
+    if decisions:
+        print("   흔들림: %d/%d 사이클 (%.0f%%)"
+              % (len(shaky), len(decisions), 100.0 * len(shaky) / len(decisions)))
+        counts = {}
+        for d in shaky:
+            for r in (d.get("reasons") or []):
+                key = r.split()[0] + " " + (r.split()[1] if len(r.split()) > 1 else "")
+                counts[key.strip()] = counts.get(key.strip(), 0) + 1
+        for k, n in sorted(counts.items(), key=lambda kv: -kv[1])[:4]:
+            print("      %-24s %d회" % (k, n))
+
 
 def show_rotation(events):
     rots = [e for e in events if e["kind"] == "rotation"]

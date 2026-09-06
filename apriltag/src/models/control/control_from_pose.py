@@ -275,8 +275,21 @@ def plan_step(m, state=None):
 
     if m is None:
         return ("hold", 0.0, 0.0, "태그를 못 봤다")
-    if not m["stable"]:
-        return ("hold", 0.0, 0.0, "흔들린다: " + ", ".join(m["reasons"]))
+
+    # **흔들린다고 멈추지 않는다.** (2026-09-06 결정)
+    #
+    # 실차는 엔진·유압·노면 때문에 항상 흔들린다. 흔들림을 이유로 멈추면
+    # 재도 같은 값이 나와 계속 멈추고, 도킹이 시작조차 안 된다 — 안 움직이는
+    # 것이 잘못 움직이는 것보다 나쁘다. 게다가 우리가 쓰는 값은 30프레임
+    # 중앙값이라 원래 흔들림에 강하고(1프레임 +-9mm -> 30프레임 +-1.4mm),
+    # 한 걸음이 짧아(<=1m) 다음 사이클에 고칠 수 있다.
+    #
+    # 흔들림 판정 자체는 계속 계산한다 — 화면(_fmt_measure 의 [불안정 ...])과
+    # 기록(measure.jsonl 의 stable/reasons, decision.jsonl)에 남아서 나중에
+    # "그때 얼마나 흔들렸나" 를 볼 수 있다. 판단에만 안 쓴다.
+    #
+    # 여전히 막아 주는 것들: 전진 중 heading 감시(fwd_abort_deg), 화면 잘림
+    # 감시(TAG_CUT_MARGIN_PX), forward 가 늘면 정지, 회전 wrong-way 정지.
 
     lateral_m, forward_m, heading_deg = m["lateral"], m["forward"], m["heading_deg"]
 
@@ -508,7 +521,9 @@ async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_dir=
         log("     %-10s %s" % (action, why))
         history.append((action, amount, sec, why))
         record_event(record_dir, "decision", step=i, action=action, why=why,
-                     misses=misses, margin_px=st.get("margin_px"))
+                     misses=misses, margin_px=st.get("margin_px"),
+                     stable=(m or {}).get("stable"),
+                     reasons=(m or {}).get("reasons"))
 
         if action in ("done", "lost"):
             await driver.stop()
@@ -675,7 +690,9 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     log("     %-10s %s" % (action, why))
                     history.append((action, amount, sec, why))
                     record_event(record_dir, "decision", step=step, action=action,
-                                 why=why, misses=misses, margin_px=st.get("margin_px"))
+                                 why=why, misses=misses, margin_px=st.get("margin_px"),
+                                 stable=(m or {}).get("stable"),
+                                 reasons=(m or {}).get("reasons"))
                     info = {"action": action, "why": why, "sec": sec}
                     if action == "lost":
                         await driver.stop()
