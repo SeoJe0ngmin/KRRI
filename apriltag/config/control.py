@@ -34,6 +34,7 @@ ROT_WATCHDOG_GAIN = 5.0        # 워치독 = 예상시간 x 이 값        △�
 ROT_LEAD_DEG = 0.0             # 관성만큼 미리 끊는 각 [도]       ★로그의 오버슈트 평균
 ROT_WRONG_WAY_DEG = 5.0        # 반대로 이만큼 돌면 부호가 뒤집힌 것 → 즉시 정지
 ROT_POLL_SEC = 0.01            # 회전 중 IMU 확인 주기 [s]
+
 ROT_SETTLE_MAX_SEC = 1.0       # 멎기를 기다리는 상한 [s]
 ROT_SETTLE_MIN_SEC = 0.2       # 최소 대기 [s] (명령 반영 지연)
 ROT_SETTLE_POLL_SEC = 0.05     # 멎었나 확인 주기 [s]
