@@ -344,3 +344,25 @@ class _V:
 
     def __init__(self, x, y, z):
         self.x, self.y, self.z = x, y, z
+
+
+def imu_panel_lines(yaw):
+    """IMU 계기판을 화면 패널 항목(tuple)으로. run.py 와 live_pose.py 공용.
+
+    회전은 이 숫자만 보고 도는 폐루프라, 화면에 안 보이면 실물에서
+    부호·드리프트·끊김을 확인할 방법이 없다. yaw 가 None(미장착/실패)이어도
+    그 사실을 표시한다.
+    """
+    if yaw is None:
+        return [("kv", "IMU", "없음 — 회전이 개루프", "bad")]
+    alive = yaw.alive
+    gaps = yaw.stats().get("gaps", 0)
+    out = [("kv", "IMU 각도", "%+.2f 도" % yaw.angle_deg, "ok" if alive else "bad"),
+           ("kv", "IMU 속도", "%+.2f 도/s" % yaw.rate_dps, "ok" if alive else "dim")]
+    if not alive:
+        out.append(("kv", "", "끊김 %.1fs 째 — 회전 금지" % yaw.age_sec, "bad"))
+    elif not yaw.calibrated:
+        out.append(("kv", "", "보정 전 — 5.5도/분 흘러간다", "warn"))
+    elif gaps:
+        out.append(("kv", "", "샘플 누락 %d회" % gaps, "warn"))
+    return out
