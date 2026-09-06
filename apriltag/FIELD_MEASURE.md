@@ -51,7 +51,7 @@
 ```
 COLOR_SIZE (1920,1080)   IR_SIZE          D435I_COLOR_REF     ASSUMED_HFOV_DEG(계산)
 TAG_CELLS 8              MM_PER_INCH      COLOR_EXPOSURE_UNIT_US 100.0
-TAG_ID 1                 TAG2_ID 2        LUMA_CLIPPED_LEVELS 38
+TAG_ID 1                 TAG2_ID 2
 ```
 장비 스펙·수학 상수·우리가 부여한 번호.
 

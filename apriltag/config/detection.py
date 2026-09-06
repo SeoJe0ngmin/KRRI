@@ -56,7 +56,6 @@ CAM_YAW_OFFSET_DEG = 0.0       # 광축이 지게차 정면과 어긋난 각 [�
 BLUR_CLEAN_PX = 10.0           # 여기까지 검출 100%
 BLUR_DEAD_PX = 32.0            # 여기서 0%
 COLOR_EXPOSURE_UNIT_US = 100.0 # 컬러 노출 눈금 (UVC 규격). 83 = 8.3ms
-LUMA_CLIPPED_LEVELS = 38       # bgr8 의 BT.601 변환이 죽이는 휘도 단계
 TAG_CELLS = 8                  # tag36h11 한 변의 칸 수 (테두리 포함)
 MM_PER_INCH = 25.4
 D435I_COLOR_REF = (1920, 1080, 1359.2, 1359.0, 956.9, 571.3)   # w,h,fx,fy,cx,cy

@@ -2,8 +2,7 @@
 from dataclasses import dataclass, asdict, replace, fields
 import numpy as np
 
-from config.detection import (BLUR_CLEAN_PX, BLUR_DEAD_PX, COLOR_EXPOSURE_UNIT_US,
-                      LUMA_CLIPPED_LEVELS)
+from config.detection import BLUR_CLEAN_PX, BLUR_DEAD_PX, COLOR_EXPOSURE_UNIT_US
 
 
 # 1. YUYV 원본 휘도
