@@ -2,7 +2,7 @@
 
 카메라로 AprilTag 을 보고 **탑재부 기준 지게차 위치**를 낸 뒤, 그 값으로 주행한다.
 
-처음 받았다면 [SETUP.md](SETUP.md) 부터.
+처음 받았다면 — 현장 노트북(Windows)은 [SETUP_WINDOWS.md](SETUP_WINDOWS.md) 부터.
 
 ```bash
 pip install -r requirements.txt

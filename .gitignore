@@ -22,3 +22,4 @@ __pycache__/
 # 환경
 .venv/
 .env
+apriltag/offline_wheels/
