@@ -34,7 +34,7 @@
 |---|---|---|
 | `ROT_LEAD_DEG` | 0.0 | analyze_run 의 "오버슈트 평균" → 그 값을 넣는다 (관성만큼 미리 끊기) |
 | `ROT_WATCHDOG_GAIN` | 5.0 | 지금은 넉넉하게 크게. 회전 시간이 안정되면 낮춰도 된다 |
-| `ROT_SETTLE_RATE_K` / `_FLOOR` / `_CEIL` | 3.0 / 1.0 / 2.0 | 실차 진동에서 "멎었다" 판정이 너무 이르거나 늦으면 조정 |
+| `ROT_SETTLE_RATE_K` / `ROT_SETTLE_RATE_FLOOR` / `ROT_SETTLE_RATE_CEIL` | 3.0 / 1.0 / 2.0 | 실차 진동에서 "멎었다" 판정이 너무 이르거나 늦으면 조정 |
 | `CAM_YAW_OFFSET_DEG` | 0.0 | 도킹이 **매번 같은 방향으로** 삐뚤면 그 각도. 랜덤이면 이 문제가 아니다 |
 | `CORNER_NOISE_PX` | 0.07 | 실장비 로그로 역산해 다시 넣을 수 있다 (거리마다 달라진다) |
 
@@ -82,11 +82,12 @@ A-1 을 고치면 자동으로 따라온다.
 ```
 STEP_M 1.0            FWD_SAFETY 0.9        WARMUP_FRACTION 0.33
 FWD_ABORT_K 3.0       MAX_STEPS 30          HOLD_RETRY_SEC 0.2
-SETTLE_SEC 0.15       ROT_POLL_SEC 0.01     ROT_SETTLE_MAX/MIN/POLL_SEC
-SEARCH_BACKUP_M 0.5   SEARCH_AFTER_MISSES 3 SEARCH_MAX_ROUNDS 3
-MEASURE_FRAMES 30     SIGMA_SAMPLES 60      STABLE_SPREAD_K 3.0
-SIDESTEP_BACKWARD_GAIN_DEG 0.0              TAG_CUT_MARGIN_PX 30.0
-DEPTH_TOL_COEF/FLOOR/MAX_Z                  STABLE_TAG_PX 50.0
+SETTLE_SEC 0.15       ROT_POLL_SEC 0.01     SEARCH_BACKUP_M 0.5
+ROT_SETTLE_MAX_SEC 1.0    ROT_SETTLE_MIN_SEC 0.2    ROT_SETTLE_POLL_SEC 0.05
+SEARCH_AFTER_MISSES 3     SEARCH_MAX_ROUNDS 3       MEASURE_FRAMES 30
+SIGMA_SAMPLES 60          STABLE_SPREAD_K 3.0       STABLE_TAG_PX 50.0
+SIDESTEP_BACKWARD_GAIN_DEG 0.0                      TAG_CUT_MARGIN_PX 30.0
+DEPTH_TOL_COEF 0.05       DEPTH_TOL_FLOOR_M 0.02    DEPTH_CHECK_MAX_Z 1.5
 RELIABLE_TILT_DEG 10.0 (폴백 전용)
 ROT_WRONG_WAY_DEG 5.0 (안전장치)
 ```
