@@ -200,7 +200,14 @@ class GyroYaw:
         n = len(got)
         mean = [sum(v[i] for v in got) / n for i in range(3)]      # 평균 = 바이어스
 
-        axis, src = self._axis_from_gravity(got_a)
+        if not self.use_accel:
+            axis, src = ((0.0, -1.0, 0.0),
+                         "가정(카메라 수평) — accel 스트림이 안 열림 (동시 스트림 거부, 자이로 단독)")
+        elif got_a is not None and len(got_a) < 3:
+            axis, src = ((0.0, -1.0, 0.0),
+                         "가정(카메라 수평) — accel 스트림은 열렸는데 샘플이 %d개뿐" % len(got_a))
+        else:
+            axis, src = self._axis_from_gravity(got_a)
 
         # 회전축 성분의 표준편차. 축이 정해진 뒤에 재야 의미가 맞는다.
         proj = [sum((v[i] - mean[i]) * axis[i] for i in range(3)) for v in got]
