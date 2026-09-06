@@ -277,6 +277,10 @@ def build_lines(ctx):
               "warn" if ctx["size_assumed"] else "dim"))
     L.append(("kv", "detector", "method %s  blur %.1f  margin>=%.0f"
               % (ctx["method"], ctx["quad_blur"], MIN_DECISION_MARGIN), "dim"))
+    if ctx.get("yaw_dev") is not None:
+        from src.utils.imu_yaw import imu_panel_lines
+        L.append(("sec", "IMU (자이로)"))
+        L.extend(imu_panel_lines(ctx["yaw_dev"]))
     L.append(("kv", "offset", "cam yaw %+.1f deg" % CAM_YAW_OFFSET_DEG, "dim"))
     st_ = ctx.get("stats")
     L.append(("kv", "frames", "%d%s" % (ctx["frame"],
@@ -387,6 +391,8 @@ def main():
                          % DEFAULT_TAG_SIZE)
     ap.add_argument("--tag-id", type=int, default=None, help="패널에 고정으로 띄울 태그")
     ap.add_argument("--family", default="tag36h11")
+    ap.add_argument("--no-imu", action="store_true",
+                    help="자이로 계기판을 끈다 (realsense 소스에서만 켜짐)")
     ap.add_argument("--quad-blur", type=float, default=DEFAULT_QUAD_BLUR,
                     help="노이즈 심한 실촬영은 2~4")
     ap.add_argument("--min-margin", type=float, default=0.0)
@@ -434,6 +440,22 @@ def main():
                          % (args.source, type(exc).__name__, exc))
 
     fps = FpsMeter()
+
+    # 자이로 계기판 — 실카메라일 때만. 부호·드리프트를 눈으로 확인하는 용도라
+    # run.py 와 같은 공용 표시(imu_panel_lines)를 쓴다.
+    yaw_dev = None
+    if args.source == "realsense" and not args.no_imu:
+        try:
+            from src.utils.imu_yaw import GyroYaw
+            yaw_dev = GyroYaw().start()
+            print("gyro       : 열림. 2.0초 정지 보정 — 카메라를 가만히 둘 것...")
+            rep = yaw_dev.calibrate()
+            print("             축 %s / 잡음 %.3f도/s%s"
+                  % (rep["axis_src"], rep["noise_dps"],
+                     "  !! 움직임 의심 — 커밋 안 됨" if rep["moving"] else ""))
+        except Exception as exc:
+            print("gyro       : 못 엶 (%s) — IMU 줄 없이 진행" % exc)
+            yaw_dev = None
 
     print("source     : %s" % pipe.label)
     print("tag size   : %.3f m%s" % (tag_size, "  (ASSUMED default)" if size_assumed else ""))
@@ -511,6 +533,7 @@ def main():
                    "paused": paused, "draw": args.draw,
                    "family": args.family, "method": args.method,
                    "quad_blur": args.quad_blur, "stats": pipe.stats,
+                   "yaw_dev": yaw_dev,
                    }
             lines = build_lines(ctx)
 
@@ -552,6 +575,8 @@ def main():
     except RuntimeError as exc:               # 소스가 첫 프레임에서야 터지는 경우
         print("capture failed: %s" % exc)
     finally:
+        if yaw_dev is not None:
+            yaw_dev.close()
         pipe.close()                   # 제너레이터를 닫아야 파이프라인/캡처가 풀림
         cv2.destroyAllWindows()
 

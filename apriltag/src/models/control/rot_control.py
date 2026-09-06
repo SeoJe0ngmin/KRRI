@@ -9,7 +9,7 @@ from typing import Optional
 
 from config import control as C
 
-ROT_T0 = 0.0
+ROT_T0 = 0.5             # 명령→실회전 지연 [s]. 전진 모델 실측 FWD_T0=0.507 준용 (같은 CAN·유압 경로)
 ROT_DEG_PER_SEC = 15.0
 
 
