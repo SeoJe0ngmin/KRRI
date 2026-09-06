@@ -27,7 +27,6 @@ DOCK_EXTRA_M = 0.0             # 태그면을 지나 더 갈 거리 [m]  ★현�
 MAX_STEPS = 30                 # 넘기면 수렴 실패 (탐색 걸음은 안 셈)
 HOLD_MAX_CONSEC = 8            # hold 가 이만큼 연속이면 수동전환 (약 10초).
                                # 없으면 "안 움직인 채 30단계 소진" 으로 끝나 원인이 안 보인다
-HOLD_RETRY_SEC = 0.2           # hold 뒤 재측정 간격 (dock 전용)
 SETTLE_SEC = 0.15              # 명령 끊은 뒤 관성이 잦아들 시간
 
 # ── 회전 (IMU 폐루프. rot_control.rotate_to) ────────────────────────────────

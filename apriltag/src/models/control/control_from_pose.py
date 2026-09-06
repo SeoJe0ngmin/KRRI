@@ -95,8 +95,7 @@ import copy
 import math
 
 from config.control import (DOCK_EXTRA_M, FWD_ABORT_K, FWD_SAFETY,
-                            HEAD_TOL_DEG, HOLD_MAX_CONSEC, HOLD_RETRY_SEC,
-                            LAT_TOL_M, MAX_STEPS,
+                            HEAD_TOL_DEG, HOLD_MAX_CONSEC, LAT_TOL_M, MAX_STEPS,
                             SEARCH_AFTER_MISSES, SEARCH_BACKUP_M,
                             SEARCH_MAX_ROUNDS, SETTLE_SEC,
                             SIDESTEP_BACKWARD_GAIN_DEG, STEP_M,
@@ -465,97 +464,15 @@ def _half_fov_deg(pipe):
         intr = intrinsics_from_ref((COLOR_SIZE[1], COLOR_SIZE[0]))
     _, _, left, right = fov_edges_deg(intr)
     return float(min(left, right))
-
-
-async def dock(pipe, driver, tag_id=None, max_steps=None, log=print, record_dir=None):
-    """멈춤 -> 측정 -> 동작 하나 -> 반복. (화면 없음)
-
-    **async 인 이유**: control_forklift_v2 의 TX 루프(movement 10ms, control 5ms,
-    heartbeat 200ms)가 같은 이벤트 루프에서 계속 돌아야 한다. 멈추면 수신기
-    워치독이 물어서 지게차가 선다. measure() 는 30프레임 = 약 1초 블로킹이라
-    to_thread 로 빼서 TX 가 안 끊기게 한다.
-
-    driver 는 async forward/backward/stop(초) 에 더해 rotate_by(도) 를 갖춘 무엇이든.
-    DryRunDriver 를 넣으면 CAN 없이 순서만 확인할 수 있다.
-    멈출 거리는 안 받는다 — 태그가 화면에서 잘리기 직전까지 가고 거기서 끝낸다.
-    record_dir 를 주면 측정값도 기록한다 (그 폴더 안에 measure.jsonl 로,
-    드라이버의 rotation/drive 기록과 같은 폴더에 종류별 파일로 나뉜다).
-    """
-    from ..detection.detection_pose import measure
-    tag_id = TAG_ID if tag_id is None else tag_id
-    max_steps = MAX_STEPS if max_steps is None else max_steps
-    half_fov = _half_fov_deg(pipe)
-    history, misses, i = [], 0, 0
-    st = {"half_fov_deg": half_fov, "warmed": False, "prev_forward": None,
-          "drove_forward": False, "backed_up_once": False}
-
-    # 탐색 걸음은 max_steps 에서 빼지 않는다 — max_steps 는 "도킹이 수렴하나"를
-    # 보는 값이고, 탐색은 SEARCH_MAX_ROUNDS 가 따로 막는다. 같이 세면 탐색이
-    # 잘려서 안전망이 제 역할을 못 한다.
-    while i < max_steps:
-        m = await asyncio.to_thread(measure, pipe, tag_id)     # 멈춰서 1초 측정
-        if m:
-            record_event(record_dir, "measure", tag_id=tag_id, **m)
-            misses, st["drove_forward"], st["backed_up_once"] = 0, False, False
-        else:
-            misses += 1
-        st["misses"] = misses
-        action, amount, sec, why = plan_step(m, st)
-        if m:
-            st["prev_forward"] = m["forward"]
-        if action in ("forward", "final"):
-            st["warmed"], st["drove_forward"] = True, True
-        elif action == "recover_backup":
-            st["backed_up_once"] = True
-        elif action != "hold":
-            st["drove_forward"] = False
-        # 연속 hold 추적 — 움직이면 리셋. 마지막 이유는 수동전환 메시지에 쓴다
-        if action == "hold":
-            st["holds"] = st.get("holds", 0) + 1
-            st["hold_why"] = why
-        else:
-            st["holds"] = 0
-        if action != "search":
-            i += 1
-        log("[%2d] %s" % (i, _fmt_measure(m)))
-        log("     %-10s %s" % (action, why))
-        history.append((action, amount, sec, why))
-        record_event(record_dir, "decision", step=i, action=action, why=why,
-                     misses=misses, margin_px=st.get("margin_px"),
-                     stable=(m or {}).get("stable"),
-                     reasons=(m or {}).get("reasons"))
-
-        if action in ("done", "lost"):
-            await driver.stop()
-            record_event(record_dir, "result",
-                         outcome="manual" if action == "lost" else "done", steps=i)
-            return history
-        if action == "final":
-            await _execute(driver, action, amount, sec)
-            log("     도착")
-            record_event(record_dir, "result", outcome="done", steps=i)
-            return history
-        if action == "hold":
-            await asyncio.sleep(HOLD_RETRY_SEC)
-            continue
-        r = await _execute(driver, action, amount, sec)        # 실행
-        if not r["ok"]:
-            log("     !! %s" % r["reason"])
-
-    log("!! %d 단계를 넘겼다. 수렴하지 않는다" % max_steps)
-    record_event(record_dir, "result", outcome="max_steps", steps=max_steps)
-    return history
-
-
 async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     on_frame=None, n_frames=None, should_stop=None,
                     record_dir=None):
-    """dock() 과 같은 일을 하되 **프레임을 계속 읽으며** 한다. (화면용, run.py 가 씀)
+    """도킹 루프 — 프레임을 계속 읽으며 측정-판단-실행을 반복한다.
 
     record_dir 를 주면 측정값을 그 폴더의 measure.jsonl 에 남긴다 — 드라이버의
     rotation/drive 기록과 같은 폴더, 종류별 파일. ts 로 시간순 병합이 된다.
 
-    dock() 은 measure() 안에서 1초, 명령 실행 중 몇 초씩 프레임을 안 읽는다.
+    측정할 때만 읽고 명령 중엔 눈을 감으면(예전 dock() 이 그랬다),
     그동안 화면이 멈춘다. 여기서는 프레임 루프가 주인이고, 측정과 명령이
     그 안에서 상태(phase)로 돈다.
 
@@ -683,7 +600,8 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                         st["hold_why"] = why
                     else:
                         st["holds"] = 0
-                    # 탐색 걸음은 단계로 세지 않는다 (dock 과 같은 이유)
+                    # 탐색 걸음은 단계로 세지 않는다 — 30단계를 탐색만으로
+                    # 소진하면 정작 도킹할 몫이 안 남는다
                     if action != "search":
                         step += 1
                     log("[%2d] %s" % (step, _fmt_measure(m)))
@@ -889,4 +807,4 @@ class CanDriver:
 
 __all__ = ["rot_sec_from_deg", "rot_timeout_sec", "fwd_abort_deg",
            "drive_distance", "plan_lateral_clear", "plan_step",
-           "dock", "dock_live", "DryRunDriver", "CanDriver"]
+           "dock_live", "DryRunDriver", "CanDriver"]
