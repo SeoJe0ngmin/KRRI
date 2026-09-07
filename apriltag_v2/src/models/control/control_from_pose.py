@@ -1,4 +1,4 @@
-"""도킹값 + IMU 회전각 -> 주행 명령.
+"""도킹값 + IMU 회전각 -> 주행 명령.  (v2: 조준-전진, lateral 을 직접 안 잡는다)
 
 한 사이클: [측정] 30프레임 -> [판단] plan_step() -> [실행] 동작 하나 -> 반복.
 설계 이유·부호 약속·용어·실측 기록은 전부 ../../../CODE_NOTES.md 에 있다.
@@ -75,6 +75,79 @@ def fwd_abort_deg(step_m):
     return math.degrees(math.asin(min(1.0, C.LAT_TOL_M / max(step_m, 1e-6))))
 
 
+def plan_aim(lateral_m, forward_m, heading_deg, margin_px, st):
+    """v2 조준-전진. 측정 하나 -> 동작 하나. 순수 함수.
+
+    부호: lateral + 는 태그가 오른쪽(트럭이 축의 왼쪽), heading/회전 + 는 반시계.
+    T 는 축 위, 태그에서 AIM_STANDOFF_M 앞. 트럭에서 본 T 의 방위각(반시계 +)은
+    atan2(-lateral, forward - S) 다. 회전량 = 방위각 - heading.
+    """
+    S = C.AIM_STANDOFF_M
+    dx = forward_m - S                                   # T 까지 축 방향 거리
+    bearing = math.degrees(math.atan2(-lateral_m, dx))   # T 방위각, 반시계 +
+    dist_t = math.hypot(lateral_m, dx)
+    st["aim_bearing"], st["aim_dist_t"] = bearing, dist_t
+    tag_cut = margin_px is not None and margin_px < C.TAG_CUT_MARGIN_PX
+
+    if dist_t <= C.AIM_AT_T_M or dx <= C.AIM_AT_T_M or tag_cut:
+        # T 도착(또는 태그가 화면 위로 나가기 직전 = 더 가까이선 카메라가 못 본다).
+        # 순서가 중요하다: lateral -> heading -> 마지막 직진. 정렬 전에 직진하면
+        # 틀어진 각도 그대로 도크로 들어간다(시뮬레이션에서 24도 채 1m 달려 lateral 0.45m).
+        if C.LAT_TOL_M < abs(lateral_m) <= C.AIM_FINAL_MAX_LAT_M:
+            # 조금 벗어남: 축과 나란히 서는 대신 태그를 직접 겨냥해 들어간다. 도착 heading 은
+            # atan(lateral/forward) 로 작다. 후진-재조준으로는 회전 잔차 때문에 되풀이만 한다.
+            h_star = math.degrees(math.atan2(-lateral_m, forward_m))
+            turn = normalize_deg(h_star - heading_deg)
+            if abs(turn) > C.AIM_FINAL_TOL_DEG:
+                return ("rotate_ccw" if turn > 0 else "rotate_cw", abs(turn), rot_sec_from_deg(turn),
+                        "정렬(태그 겨냥): lateral %.0fmm -> 목표 heading %+.1f도, 지금 %+.1f도 -> %+.1f도 회전"
+                        % (lateral_m * 1000, h_star, heading_deg, turn))
+            final_m = math.hypot(lateral_m, forward_m) + C.DOCK_EXTRA_M
+            return ("final", final_m, fwd_sec_from_offset_piecewise(final_m),
+                    "태그 겨냥 끝(heading %+.1f도). 마지막 %.2fm. 그 뒤 정지" % (heading_deg, final_m))
+        if abs(lateral_m) > C.AIM_FINAL_MAX_LAT_M:
+            # 많이 벗어남: 여기서 lateral 은 조준으로 못 고친다(방위각이 90도에 가깝다). 물러나서 다시.
+            if int(st.get("aim_backups", 0)) >= C.AIM_MAX_BACKUPS:
+                return ("lost", 0.0, 0.0,
+                        "T 에서 lateral %.0fmm 이 %d번 후진해도 안 맞는다. 수동전환"
+                        % (lateral_m * 1000, C.AIM_MAX_BACKUPS))
+            return ("aim_backup", C.AIM_BACKUP_M, fwd_sec_from_offset_piecewise(C.AIM_BACKUP_M),
+                    "T 근처인데 lateral %.0fmm — %.1fm 후진해 다시 조준"
+                    % (lateral_m * 1000, C.AIM_BACKUP_M))
+        if abs(heading_deg) > C.HEAD_TOL_DEG:
+            return ("rotate_ccw" if heading_deg < 0 else "rotate_cw", abs(heading_deg),
+                    rot_sec_from_deg(heading_deg),
+                    "정렬: T 에서 heading %+.1f도 를 지운다" % heading_deg)
+        final_m = forward_m + C.DOCK_EXTRA_M
+        if final_m <= 0.0:
+            return ("done", 0.0, 0.0, "도착. forward %.2fm" % forward_m)
+        return ("final", final_m, fwd_sec_from_offset_piecewise(final_m),
+                "정렬 끝. 마지막 %.2fm (forward %.2fm + 여유 %.2fm). 그 뒤 정지"
+                % (final_m, forward_m, C.DOCK_EXTRA_M))
+
+    if abs(bearing) > C.AIM_MAX_BEARING_DEG:
+        # 태그 옆/뒤에서 시작 — 조준으로는 태그를 크게 비스듬히 보게 된다. v1 사이드스텝 폴백
+        turn, distance_m, direction = plan_lateral_clear(lateral_m, heading_deg)
+        estimated_sec = (rot_sec_from_deg(turn) + fwd_sec_from_offset_piecewise(distance_m)
+                         + rot_sec_from_deg(90.0))
+        return ("sidestep", (turn, distance_m, direction), estimated_sec,
+                "폴백 Set2 (T 방위각 %.0f도 > %.0f): lateral %.0fmm -> %+.1f도 회전 -> %.0fmm %s -> 90도 복귀"
+                % (abs(bearing), C.AIM_MAX_BEARING_DEG, lateral_m * 1000, turn,
+                   distance_m * 1000, "전진" if direction == "forward" else "후진"))
+
+    turn = normalize_deg(bearing - heading_deg)
+    if abs(turn) > C.AIM_TOL_DEG:
+        return ("rotate_ccw" if turn > 0 else "rotate_cw", abs(turn), rot_sec_from_deg(turn),
+                "조준: T 방위각 %+.1f도, heading %+.1f도 -> %+.1f도 회전 (T 까지 %.2fm)"
+                % (bearing, heading_deg, turn, dist_t))
+
+    d = min(C.AIM_CHUNK_MAX_M, dist_t)
+    stop_forward = forward_m - d * math.cos(math.radians(bearing))
+    return ("aim_drive", (d, bearing, stop_forward), fwd_sec_from_offset_piecewise(d),
+            "조준 직진 %.2fm (T 까지 %.2fm, 방위각 %+.1f도). 카메라 forward %.2fm 에서 조기 정지"
+            % (d, dist_t, bearing, stop_forward))
+
+
 def plan_step(m, state=None):
     """측정값 하나 -> 다음 동작 하나. 순수 함수 (하드웨어 없이 계산만)."""
     st = state or {}
@@ -118,46 +191,16 @@ def plan_step(m, state=None):
 
     lateral_m, forward_m, heading_deg = m["lateral"], m["forward"], m["heading_deg"]
 
-    if prev_forward is not None and forward_m > prev_forward + C.LAT_TOL_M:
+    # forward 가 늘었으면 잘못 간 것 — 단, 직전 동작이 직진일 때만 본다. 회전 뒤에는
+    # 카메라가 뒷바퀴 축을 중심으로 호를 그려 forward 가 몇 cm 늘어나는 게 정상이다
+    # (2026-09-07 로그: 90도 사이드스텝 뒤 +0.05~0.26m 로 매번 hold 한 스텝 낭비).
+    if (prev_forward is not None and st.get("last_action") in ("forward", "final", "aim_drive")
+            and forward_m > prev_forward + C.LAT_TOL_M):
         return ("hold", 0.0, 0.0,
                 "forward 가 늘었다 (%.2f -> %.2fm). 멈추고 다시 잰다"
                 % (prev_forward, forward_m))
 
-
-    if abs(lateral_m) > C.LAT_TOL_M:
-        # 측정값을 그대로 믿는다 (2026-09-06 결정) — 30프레임 중앙값이면
-        # 5m 에서도 heading 오차가 도 단위 이하라 정렬 목표로 충분하고,
-        # 회전 자체는 IMU 폐루프라 목표각 오차만큼만 틀린다. 각도 신뢰
-        # 판정(reliable_angle)은 계산·기록만 하고 판단에는 안 쓴다.
-        turn, distance_m, direction = plan_lateral_clear(lateral_m, heading_deg)
-        estimated_sec = (rot_sec_from_deg(turn) + fwd_sec_from_offset_piecewise(distance_m)
-                         + rot_sec_from_deg(90.0))
-        return ("sidestep", (turn, distance_m, direction), estimated_sec,
-                "Set2: lateral %.0fmm -> %+.1f도 회전 -> %.0fmm %s -> 90도 복귀"
-                % (lateral_m * 1000, turn, distance_m * 1000,
-                   "전진" if direction == "forward" else "후진"))
-
-
-    if abs(heading_deg) > C.HEAD_TOL_DEG:
-        return ("rotate_ccw" if heading_deg < 0 else "rotate_cw", abs(heading_deg),
-                rot_sec_from_deg(heading_deg), "heading %.1f도 를 지운다" % heading_deg)
-
-
-    if margin_px is not None and margin_px < C.TAG_CUT_MARGIN_PX:
-        final_m = forward_m + C.DOCK_EXTRA_M
-        if final_m <= 0.0:
-            return ("done", 0.0, 0.0, "도착. forward %.2fm" % forward_m)
-        return ("final", final_m, fwd_sec_from_offset_piecewise(final_m),
-                "마지막 %.2fm (forward %.2fm + 여유 %.2fm). 그 뒤 정지"
-                % (final_m, forward_m, C.DOCK_EXTRA_M))
-
-
-    if forward_m > C.LAT_TOL_M:
-        step_m = min(forward_m * C.FWD_SAFETY, C.STEP_M)
-        return ("forward", step_m, fwd_sec_from_offset_piecewise(step_m),
-                "Set1: 남은 %.2fm 중 %.2fm 전진" % (forward_m, step_m))
-
-    return ("done", 0.0, 0.0, "도착. forward %.2fm" % forward_m)
+    return plan_aim(lateral_m, forward_m, heading_deg, margin_px, st)
 
 
 async def _execute(driver, action, amount, sec):
@@ -175,6 +218,11 @@ async def _execute(driver, action, amount, sec):
             ok, why = False, "복귀 회전 실패(%s) — 태그를 등졌을 수 있다" % result.get("reason", "")
     elif action in ("forward", "final"):
         await drive_distance(driver, amount, "forward")
+    elif action == "aim_drive":
+        d, _bearing, _stop = amount
+        await drive_distance(driver, d, "forward")
+    elif action == "aim_backup":
+        await drive_distance(driver, amount, "backward")
     elif action == "recover_backup":
         await drive_distance(driver, amount, "backward")
     elif action == "search":
@@ -249,6 +297,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
     margins = []
     abort = [None]
     abort_hits = 0      # 전진 중 heading 이 문턱을 연속 몇 프레임 넘었나
+    aim_heading, aim_stop, stop_hits = 0.0, None, 0   # 조준 직진의 목표 heading / 조기정지 forward
 
     def now():
         return asyncio.get_event_loop().time()
@@ -332,16 +381,25 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     action, amount, sec, why = plan_step(m, st)
                     if m:
                         st["prev_forward"] = m["forward"]
-                    if action in ("forward", "final"):
+                    if action in ("forward", "final", "aim_drive"):
                         st["drove_forward"] = True
+                    aim_heading, aim_stop, stop_hits = 0.0, None, 0
                     if action == "forward":
                         # 문턱은 "이번에 실제로 달릴 거리" 기준이어야 한다 — 남은
                         # 전체 거리로 재면 planner 가 방금 용인한 heading(<=허용치)이
                         # 곧바로 중단을 부르는 사각지대가 생긴다.
                         abort[0] = max(fwd_abort_deg(amount), C.HEAD_TOL_DEG)
+                    elif action == "aim_drive":
+                        # 비스듬히 달리는 동안 heading 은 방위각이 정상. 편차로 본다.
+                        # 카메라 forward 가 목표에 닿으면 시간 모델보다 먼저 정지한다.
+                        _d, aim_heading, aim_stop = amount
+                        abort[0] = max(fwd_abort_deg(_d), C.HEAD_TOL_DEG)
                     else:
                         abort[0] = None
                     abort_hits = 0
+                    if action == "aim_backup":
+                        st["aim_backups"] = int(st.get("aim_backups", 0)) + 1
+                    st["last_action"] = action
                     if action == "recover_backup":
                         st["backed_up_once"] = True
                     if action == "hold":
@@ -359,7 +417,8 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     record_event(record_dir, "decision", step=step, action=action,
                                  why=why, misses=misses, margin_px=st.get("margin_px"),
                                  stable=(m or {}).get("stable"),
-                                 reasons=(m or {}).get("reasons"))
+                                 reasons=(m or {}).get("reasons"),
+                                 bearing_deg=st.get("aim_bearing"), dist_t=st.get("aim_dist_t"))
                     info = {"action": action, "why": why, "sec": sec}
                     if action == "lost":
                         await driver.stop()
@@ -404,19 +463,34 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     d = res.docking.get(tag_id)
                     # heading 은 원시 1프레임 값(잡음 +-0.45도 실측)이라 연속
                     # 3프레임을 요구한다. 화면 여유는 기하라 즉시 끊는다.
-                    if d is not None and abs(d["heading_deg"]) > abort[0]:
+                    dev = None if d is None else normalize_deg(d["heading_deg"] - aim_heading)
+                    if dev is not None and abs(dev) > abort[0]:
                         abort_hits += 1
                         if abort_hits >= 3:
-                            why_cut = ("heading %+.2f도 (허용 %.2f도, 3프레임 연속)"
-                                       % (d["heading_deg"], abort[0]))
+                            why_cut = ("heading %+.2f도 (목표 %+.1f, 허용 %.2f도, 3프레임 연속)"
+                                       % (d["heading_deg"], aim_heading, abort[0]))
                     elif d is not None:
                         abort_hits = 0
+                    reached = False
+                    if d is not None and aim_stop is not None and why_cut is None:
+                        if d["forward"] <= aim_stop + C.AIM_STOP_LEAD_M:
+                            stop_hits += 1
+                            if stop_hits >= C.AIM_STOP_CONFIRM:
+                                reached = True
+                                why_cut = ("카메라 forward %.2fm <= 목표 %.2fm + %.2f — 조기 정지"
+                                           % (d["forward"], aim_stop, C.AIM_STOP_LEAD_M))
+                        else:
+                            stop_hits = 0
                     mg = _margin_px(res, tag_id)
                     if why_cut is None and mg is not None and mg < C.TAG_CUT_MARGIN_PX:
                         why_cut = "태그가 화면 가장자리 %.0fpx (한계 %.0fpx)" % (mg, C.TAG_CUT_MARGIN_PX)
                     if why_cut is not None:
-                        log("     !! 전진 중단 — %s" % why_cut)
-                        record_event(record_dir, "abort", step=step, why=why_cut)
+                        if reached:
+                            log("     %s" % why_cut)
+                            record_event(record_dir, "stop", step=step, why=why_cut)
+                        else:
+                            log("     !! 전진 중단 — %s" % why_cut)
+                            record_event(record_dir, "abort", step=step, why=why_cut)
                         task.cancel()
                         try:
                             await task

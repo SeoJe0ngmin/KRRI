@@ -1,4 +1,4 @@
-"""도킹 자동 실행 — 시작만 키보드, 그 뒤는 카메라가 정한다.
+"""도킹 자동 실행 (v2: 조준-전진) — 시작만 키보드, 그 뒤는 카메라가 정한다.
 
     python tools/run.py --dry-run --show    화면 보며 순서 확인 (CAN 안 씀)
     python tools/run.py --show              실제 주행 + 화면
@@ -140,6 +140,22 @@ async def _wait_start(show):
         await asyncio.sleep(0.02)
 
 
+
+def _check_can_templates():
+    """보내기 전에 CAN 템플릿을 눈으로 확인한다. 2026-09-07 실차에서 byte4 가 포크
+    리프트였다(회전 명령이 포크를 올림). 우리가 쓰는 다섯 동작은 byte1(조향)·byte2(주행)만
+    쓰고 나머지 바이트는 중립이어야 한다. 아니면 출발 자체를 막는다."""
+    from src.models.control.control_forklift_v2 import MOVEMENT_TEMPLATES as M, AN_NEUTRAL
+    for name in ("stop", "forward", "backward", "rotate_ccw", "rotate_cw"):
+        bad = [i for i in (0, 3, 4, 5, 6, 7) if M[name][i] != AN_NEUTRAL]
+        if bad:
+            raise SystemExit("!! CAN 템플릿 %s 의 byte%s 가 중립(%d)이 아니다 — byte4 는 이 지게차에서 "
+                             "포크 리프트다. 출발하지 않는다" % (name, bad, AN_NEUTRAL))
+    print("  CAN 템플릿 확인: rotate_ccw byte1=%d  rotate_cw byte1=%d  forward byte2=%d  "
+          "backward byte2=%d  (그 외 바이트 전부 중립)"
+          % (M["rotate_ccw"][1], M["rotate_cw"][1], M["forward"][2], M["backward"][2]))
+
+
 async def main_async(args):
     # 카메라보다 IMU 를 먼저 연다 — RSUSB 백엔드(맥북 VM, Jetson 소스 빌드)는
     # 먼저 연 device 객체가 IMU(HID) 인터페이스를 갖는다. 컬러 파이프라인이 먼저면
@@ -171,6 +187,14 @@ async def main_async(args):
     # 기록 폴더는 여기서 만들지 않는다 — SPACE 를 눌러 실제로 주행이 시작되는
     # 순간의 시각으로 이름을 지어야, 폴더 이름과 "몇 시에 주행했다"가 맞는다.
     record_dir = None
+
+    # CAN 템플릿 안전장치는 dry-run 에서도 찍는다 (canlib 없는 맥에서는 건너뜀)
+    try:
+        _check_can_templates()
+    except ImportError as exc:
+        if not args.dry_run:
+            raise
+        print("  (canlib 없음 — 템플릿 확인 생략: %s)" % exc)
 
     ctrl, tasks = None, []
     if args.dry_run:
