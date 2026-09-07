@@ -1,0 +1,413 @@
+import argparse
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+import cv2
+import numpy as np
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from config.main import TAG_SIZE_M as DEFAULT_TAG_SIZE
+from config.main import CAM_YAW_OFFSET_DEG, MIN_DECISION_MARGIN, MIN_TAG_PX, STABLE_TAG_PX
+from src.models import CameraIntrinsics, TagPipeline, camera_index, pose_to_xyzrpy, pose_to_forklift, tag_pixel_size, DEFAULT_QUAD_BLUR, MAX_REPROJ_RMS_PX
+from src.utils.drawing import draw_cube, draw_axes, draw_corners
+from src.utils.camera import diagnose_frame
+OUTDIR = ROOT / 'work_dirs' / 'live_pose'
+LOGDIR = ROOT / 'work_dirs' / 'live_pose' / 'log'
+BAGDIR = ROOT / 'work_dirs' / 'live_pose' / 'bag'
+PANEL_BG = (30, 30, 32)
+FONT = cv2.FONT_HERSHEY_PLAIN
+PFONT = cv2.FONT_HERSHEY_DUPLEX
+COLORS = {'head': (150, 220, 255), 'big': (255, 255, 255), 'bigwarn': (60, 200, 255), 'lab': (200, 200, 200), 'ok': (140, 255, 170), 'warn': (60, 200, 255), 'bad': (90, 90, 255), 'dim': (130, 130, 130), 'rule': (80, 80, 80)}
+KEYMAP = 'q quit | a axes/cube | s save | r reset fps | SPACE pause'
+KEYMAP_PANEL = ['keys: q quit | a cube/axes/both | s save', '      r reset fps | SPACE pause']
+
+def _resolve(val, outdir, ext):
+    if not val:
+        return outdir / ('%s%s' % (datetime.now().strftime('%Y%m%d_%H%M%S'), ext))
+    p = Path(val)
+    if not (p.is_absolute() or '/' in val):
+        p = outdir / val
+    return p if p.suffix == ext else p.with_suffix(ext)
+
+def open_pipeline(args, tag_size):
+    common = dict(families=args.family, quad_blur=args.quad_blur, method=args.method, min_margin=args.min_margin, max_hamming=args.max_hamming)
+    if args.source in ('realsense', 'ir'):
+        stream = 'color' if args.source == 'realsense' else 'infrared'
+        label = 'realsense/%s' % stream
+        if args.exposure_ms is not None:
+            label += ' (exp %.1fms 고정)' % args.exposure_ms
+        if args.ae_roi:
+            label += ' (AE ROI)'
+        if stream == 'infrared':
+            label += ' (ir%d, emitter auto-off)' % args.ir_index
+        return TagPipeline.from_realsense(tag_size, stream=stream, width=args.width, height=args.height, fps=args.fps, ir_index=args.ir_index, ae_roi=args.ae_roi, exposure_us=None if args.exposure_ms is None else args.exposure_ms * 1000.0, ae_priority=args.ae_priority, label=label, record=None if args.record is None else str(_resolve(args.record, BAGDIR, '.db3')), **common)
+    if args.source == 'bag':
+        if not args.path:
+            raise SystemExit('--source bag 은 --path 가 필요하다')
+        if not Path(args.path).exists():
+            raise SystemExit('bag 이 없다: %s' % args.path)
+        return TagPipeline.from_bag(args.path, tag_size, loop=args.loop, **common)
+    if args.source == 'video':
+        if not args.path:
+            raise SystemExit('--source video 는 --path 가 필요하다')
+        if not Path(args.path).exists():
+            raise SystemExit('영상이 없다: %s' % args.path)
+        return TagPipeline.from_video(args.path, tag_size, loop=args.loop, hfov=args.hfov, **common)
+    if args.source == 'webcam':
+        if args.record is not None:
+            raise SystemExit('--record 는 --source realsense/ir 에서만 된다')
+        try:
+            idx, name = camera_index(args.path or 'realsense')
+        except RuntimeError as exc:
+            raise SystemExit(str(exc))
+        label = 'webcam #%d%s' % (idx, ' (%s)' % name if name else '')
+        if args.hfov is None and 'realsense' not in name.lower():
+            label += ' [intrinsics: D435i 가정 — 다른 카메라면 --hfov 를 줘라]'
+        return TagPipeline.from_webcam(idx, tag_size, width=args.width, height=args.height, fps=args.fps, hfov=args.hfov, label=label, **common)
+    raise SystemExit('모르는 소스: %s' % args.source)
+
+class FpsMeter:
+
+    def __init__(self, alpha=0.15):
+        self.alpha = alpha
+        self.reset()
+
+    def reset(self):
+        self._dt = None
+        self._last = None
+        self.n = 0
+
+    def tick(self):
+        now = time.perf_counter()
+        if self._last is not None:
+            dt = now - self._last
+            if dt > 0:
+                self._dt = dt if self._dt is None else self.alpha * dt + (1 - self.alpha) * self._dt
+        self._last = now
+        self.n += 1
+
+    @property
+    def fps(self):
+        return 0.0 if not self._dt else 1.0 / self._dt
+DRAW_MODES = ('cube', 'axes', 'both')
+
+def draw_overlay(res, tag_size, mode='cube'):
+    img = np.asarray(res.image)
+    vis = img.copy() if img.ndim == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    for d in res.detections:
+        try:
+            draw_corners(vis, d)
+            T = res.poses.get(int(d.tag_id))
+            if T is not None:
+                if mode in ('cube', 'both'):
+                    draw_cube(vis, res.intrinsics.params, tag_size, T)
+                if mode in ('axes', 'both'):
+                    draw_axes(vis, res.intrinsics.params, tag_size, T)
+        except Exception:
+            pass
+    return vis
+
+def pick_primary(res, want_id=None):
+    if not res.detections:
+        return None
+    if want_id is not None:
+        for d in res.detections:
+            if int(d.tag_id) == int(want_id):
+                return d
+    return max(res.detections, key=tag_pixel_size)
+
+def build_lines(ctx):
+    L = []
+    intr, tag_size = (ctx['intr'], ctx['tag_size'])
+    scale_bad = ctx['intr_assumed'] or ctx['size_assumed']
+    q = '?' if scale_bad else ''
+    big_c = 'warn' if scale_bad else 'val'
+    L.append(('title', 'APRILTAG DOCKING'))
+    L.append(('rule',))
+    res, det = (ctx['res'], ctx['primary'])
+    T = None if det is None else res.poses.get(int(det.tag_id))
+    if det is None:
+        L.append(('msg', '  no detection', 'bad'))
+        if res.errors.get('detect'):
+            L.append(('msg', '  detector failed: %s' % res.errors['detect'], 'bad'))
+        L.append(('rule',))
+    elif T is None:
+        L.append(('msg', '  POSE FAILED: %s' % res.errors.get(int(det.tag_id), 'unknown'), 'bad'))
+        L.append(('rule',))
+    else:
+        tid = int(det.tag_id)
+        v, f = (pose_to_xyzrpy(T), pose_to_forklift(T))
+        st = res.docking[tid]
+        qa = res.quality.get(tid, {})
+        ok_ang = bool(st['reliable_angle'])
+        a = '' if ok_ang else '?'
+        L.append(('big', 'LATERAL', '%+.3f m%s' % (st['lateral'], q), big_c, ''))
+        L.append(('big', 'FORWARD', '%+.3f m%s' % (st['forward'], q), big_c, ''))
+        L.append(('big', 'HEADING', '%+.1f deg%s' % (st['heading_deg'], a), big_c if ok_ang else 'warn', '' if ok_ang else '못 믿음'))
+        L.append(('rule',))
+        rms = qa.get('reproj_rms_px', float('nan'))
+        tpx = qa.get('tag_px', float('nan'))
+        L.append(('sec', 'QUALITY'))
+        L.append(('kv', 'tag size', '%.0f px   (>=%.0f)' % (tpx, MIN_TAG_PX), 'ok' if tpx >= STABLE_TAG_PX else 'warn'))
+        L.append(('kv', 'tilt', '%.1f deg   %s' % (qa.get('tilt_deg', float('nan')), '각도 OK' if ok_ang else '각도 못 믿음'), 'ok' if ok_ang else 'warn'))
+        L.append(('kv', 'reproj', '%.2f px' % rms, 'ok' if rms <= MAX_REPROJ_RMS_PX else 'warn'))
+        L.append(('kv', 'margin', '%.0f' % det.decision_margin, 'ok'))
+        if not qa.get('ok', True):
+            L.append(('msg', '  ! %s' % (','.join(qa.get('reasons', [])) or 'quality'), 'warn'))
+        if not ok_ang:
+            L.append(('msg', '  ! 각도를 못 믿는다 — lateral 로 조종할 것', 'warn'))
+        L.append(('rule',))
+        side = 'left' if st['lateral'] > 0 else 'right'
+        L.append(('sec', 'REFERENCE'))
+        L.append(('kv', 'forklift', 'lat %+.3f  vert %+.3f  fwd %+.3f' % (f['lateral'], f['vertical'], f['forward']), 'dim'))
+        L.append(('kv', '', 'roll %+.1f  pitch %+.1f  yaw %+.1f' % (f['roll'], f['pitch'], f['yaw']), 'dim'))
+        L.append(('kv', 'raw cam', 'x %+.3f  y %+.3f  z %+.3f' % (v['x'], v['y'], v['z']), 'dim'))
+        L.append(('kv', '', 'roll %+.1f  pitch %+.1f  yaw %+.1f' % (v['roll'], v['pitch'], v['yaw']), 'dim'))
+        L.append(('kv', 'approach', '%+.1f deg%s   (태그 %s 쪽)' % (st['approach_deg'], a, side), 'dim'))
+        L.append(('rule',))
+    ids = res.tag_ids
+    L.append(('sec', 'SETUP'))
+    L.append(('kv', 'source', '%s   %dx%d   %.1f fps%s' % (ctx['source'], ctx['w'], ctx['h'], ctx['fps'], '  [PAUSED]' if ctx['paused'] else ''), 'dim'))
+    L.append(('kv', 'intrinsics', 'fx %.1f  fy %.1f' % (intr.fx, intr.fy), 'dim'))
+    L.append(('kv', '', 'cx %.1f  cy %.1f    %s' % (intr.cx, intr.cy, ctx['intr_origin']), 'warn' if ctx['intr_assumed'] else 'dim'))
+    L.append(('kv', 'tag', '%.0f mm   %s   ids %s' % (tag_size * 1000, ctx['family'], ids if ids else '[]'), 'warn' if ctx['size_assumed'] else 'dim'))
+    L.append(('kv', 'detector', 'method %s  blur %.1f  margin>=%.0f' % (ctx['method'], ctx['quad_blur'], MIN_DECISION_MARGIN), 'dim'))
+    if ctx.get('yaw_dev') is not None:
+        from src.utils.imu_yaw import imu_panel_lines
+        L.append(('sec', 'IMU (자이로)'))
+        L.extend(imu_panel_lines(ctx['yaw_dev']))
+    L.append(('kv', 'offset', 'cam yaw %+.1f deg' % CAM_YAW_OFFSET_DEG, 'dim'))
+    st_ = ctx.get('stats')
+    L.append(('kv', 'frames', '%d%s' % (ctx['frame'], '   drop %s' % st_.summary() if st_ is not None and st_.received else ''), 'dim'))
+    L.append(('kv', 'draw', ctx['draw'], 'dim'))
+    L.append(('kv', 'keys', 'q quit   a cube/axes/both   s save', 'dim'))
+    L.append(('kv', '', 'r reset fps   SPACE pause', 'dim'))
+    return L
+
+def line_text(item):
+    k = item[0]
+    if k == 'title':
+        return item[1]
+    if k == 'rule':
+        return '-' * 52
+    if k == 'sec':
+        return '[%s]' % item[1]
+    if k == 'big':
+        return '  %-9s %s%s' % (item[1], item[2], '   ' + item[4] if item[4] else '')
+    if k == 'kv':
+        return '  %-11s %s' % (item[1], item[2])
+    return item[1]
+PC = {'title': (150, 220, 255), 'sec': (150, 150, 150), 'lab': (140, 140, 140), 'val': (245, 245, 245), 'ok': (140, 255, 170), 'warn': (60, 200, 255), 'bad': (90, 90, 255), 'dim': (105, 105, 105), 'rule': (58, 58, 58)}
+ROW_H = {'title': 25, 'rule': 18, 'sec': 24, 'big': 69, 'kv': 20}
+
+def render_panel(items, width, height, scale=1.0, margin=18):
+    need = margin * 2 + sum((ROW_H.get(i[0], 22) for i in items))
+    p = np.full((max(height, need), width, 3), PANEL_BG, np.uint8)
+    kx = margin + int(108 * scale)
+    y = margin + 14
+    for it in items:
+        k = it[0]
+        if k == 'rule':
+            cv2.line(p, (margin, y - 7), (width - margin, y - 7), PC['rule'], 1)
+        elif k == 'title':
+            cv2.putText(p, it[1], (margin, y), PFONT, 0.6 * scale, PC['title'], 1, cv2.LINE_AA)
+        elif k == 'sec':
+            cv2.putText(p, it[1], (margin, y), PFONT, 0.5 * scale, PC['sec'], 1, cv2.LINE_AA)
+        elif k == 'big':
+            _, lab, val, col, note = it
+            cv2.putText(p, lab, (margin, y), PFONT, 0.5 * scale, PC['lab'], 1, cv2.LINE_AA)
+            c = PC.get(col, PC['val'])
+            cv2.putText(p, val, (margin, y + 29), PFONT, 1.12 * scale, c, 2, cv2.LINE_AA)
+            if note:
+                w = cv2.getTextSize(val, PFONT, 1.12 * scale, 2)[0][0]
+                cv2.putText(p, note, (margin + w + 14, y + 29), PFONT, 0.48 * scale, c, 1, cv2.LINE_AA)
+        elif k == 'kv':
+            _, key, val, col = it
+            if key:
+                cv2.putText(p, key, (margin + 6, y), PFONT, 0.46 * scale, PC['dim'], 1, cv2.LINE_AA)
+            cv2.putText(p, val, (kx, y), PFONT, 0.46 * scale, PC.get(col, PC['dim']), 1, cv2.LINE_AA)
+        else:
+            cv2.putText(p, it[1], (margin, y), PFONT, 0.5 * scale, PC.get(it[2], PC['lab']), 1, cv2.LINE_AA)
+        y += ROW_H.get(k, 22)
+    return p
+
+def compose_canvas(vis, lines, args):
+    h, w = vis.shape[:2]
+    if h > args.view_height:
+        s = args.view_height / float(h)
+        vis = cv2.resize(vis, (int(round(w * s)), args.view_height), interpolation=cv2.INTER_AREA)
+        h, w = vis.shape[:2]
+    panel = render_panel(lines, args.panel_width, h)
+    H = max(h, panel.shape[0])
+    canvas = np.full((H, w + panel.shape[1], 3), PANEL_BG, np.uint8)
+    canvas[:h, :w] = vis
+    canvas[:panel.shape[0], w:] = panel
+    return canvas
+
+def main():
+    ap = argparse.ArgumentParser(description='AprilTag docking pose - live viewer')
+    ap.add_argument('--source', default='realsense', choices=['realsense', 'ir', 'bag', 'video', 'webcam'])
+    ap.add_argument('--path', default=None, help='video/bag 은 파일 경로. webcam 은 번호나 이름 조각(기본 realsense)')
+    ap.add_argument('--loop', action='store_true', help='영상/bag 끝에서 되감는다')
+    ap.add_argument('--width', type=int, default=None, help='RealSense/webcam 가로')
+    ap.add_argument('--height', type=int, default=None, help='RealSense/webcam 세로')
+    ap.add_argument('--fps', type=int, default=30, help='RealSense/webcam fps')
+    ap.add_argument('--ir-index', type=int, default=1, help='적외선 1=왼쪽 2=오른쪽')
+    ap.add_argument('--hfov', type=float, default=None, help='보정값이 없을 때 가정할 수평화각 [deg]')
+    ap.add_argument('--tag-size', type=float, default=None, help='태그 한 변 [m], 검은 테두리 포함. 안 주면 %.2f 로 가정한다' % DEFAULT_TAG_SIZE)
+    ap.add_argument('--tag-id', type=int, default=None, help='패널에 고정으로 띄울 태그')
+    ap.add_argument('--family', default='tag36h11')
+    ap.add_argument('--no-imu', action='store_true', help='자이로 계기판을 끈다 (realsense 소스에서만 켜짐)')
+    ap.add_argument('--quad-blur', type=float, default=DEFAULT_QUAD_BLUR, help='노이즈 심한 실촬영은 2~4')
+    ap.add_argument('--min-margin', type=float, default=0.0)
+    ap.add_argument('--max-hamming', type=int, default=0)
+    ap.add_argument('--method', default='auto', choices=['auto', 'tag', 'pnp'])
+    ap.add_argument('--ae-roi', action='store_true', help='자동노출을 태그에만 건다. 역광 도크에서 검출률을 가른다')
+    ap.add_argument('--exposure-ms', type=float, default=None, metavar='MS', help='컬러 수동노출 [ms]. 모션블러를 끊는 유일한 수단이다. 실측: 블러 10px 까지 100%%, 32px 에서 0%%. 1.0m/s·z=1m 이면 7.4ms 로 끊어야 10px 이다. (주의: 고정하면 자동노출이 꺼진다)')
+    ap.add_argument('--ae-priority', type=int, default=None, choices=[0, 1], help='0=fps 사수(노출이 프레임시간을 못 넘음), 1=어두우면 fps 를 떨굼')
+    ap.add_argument('--diagnose', action='store_true', help='검출 실패 프레임마다 원인(노출/게인/드롭)을 한 줄 찍는다')
+    ap.add_argument('--speed', type=float, default=0.5, metavar='MPS', help='--diagnose 의 블러 환산에 쓸 가정 주행속도 [m/s]')
+    ap.add_argument('--draw', default='cube', choices=DRAW_MODES, help='시작 표시. a 키로 cube -> axes -> both 순환')
+    ap.add_argument('--view-height', type=int, default=720, help='화면에 띄울 영상 높이')
+    ap.add_argument('--panel-width', type=int, default=500)
+    ap.add_argument('--record', nargs='?', const='', default=None, metavar='PATH', help='RealSense 스트림을 .db3 로 녹화한다(영상+depth+내부파라미터). 나중에 --source bag 으로 똑같이 재생된다. 이름만 주면 work_dirs/live_pose/bag/ 아래. 무압축이라 1080p 는 11GB/분이다 — 길게 찍으려면 해상도를 낮춰라')
+    ap.add_argument('--log', nargs='?', const='', default=None, metavar='PATH', help='프레임별 도킹값을 JSON 으로 저장한다. 값이 얼마나 흔들리는지 보려고. 이름만 주면 work_dirs/live_pose/log/ 아래, 안 주면 시각으로 짓는다')
+    ap.add_argument('--headless', type=int, default=0, metavar='N', help='창 없이 N 프레임만 처리하고 패널을 stdout 으로 찍는다')
+    args = ap.parse_args()
+    tag_size = args.tag_size if args.tag_size else DEFAULT_TAG_SIZE
+    size_assumed = args.tag_size is None
+    yaw_dev = None
+    if args.source == 'realsense' and (not args.no_imu):
+        try:
+            from src.utils.imu_yaw import GyroYaw
+            yaw_dev = GyroYaw().start()
+            print('gyro       : 열림. 2.0초 정지 보정 — 카메라를 가만히 둘 것...')
+            rep = yaw_dev.calibrate()
+            print('             축 %s / 잡음 %.3f도/s%s' % (rep['axis_src'], rep['noise_dps'], '  !! 움직임 의심 — 커밋 안 됨' if rep['moving'] else ''))
+        except Exception as exc:
+            print('gyro       : 못 엶 (%s) — IMU 줄 없이 진행' % exc)
+            yaw_dev = None
+    try:
+        pipe = open_pipeline(args, tag_size)
+    except BaseException as exc:
+        if yaw_dev is not None:
+            yaw_dev.close()
+        if isinstance(exc, SystemExit):
+            raise
+        raise SystemExit('소스를 열지 못했다 (%s): %s: %s' % (args.source, type(exc).__name__, exc))
+    fps = FpsMeter()
+    print('source     : %s' % pipe.label)
+    print('tag size   : %.3f m%s' % (tag_size, '  (ASSUMED default)' if size_assumed else ''))
+    print('intrinsics : %s' % (pipe.origin or 'pending (first frame)'))
+    print('keys       : %s' % KEYMAP)
+    if args.record is not None:
+        _bag = _resolve(args.record, BAGDIR, '.db3')
+        print('record     : %s  (무압축 %s)' % (_bag, '약 11GB/분 @1080p' if (args.height or 1080) >= 1080 else '약 5GB/분 @720p'))
+    if args.headless:
+        print('headless   : %d frames, no window\n' % args.headless)
+    else:
+        print('')
+    win = 'AprilTag live pose'
+    if not args.headless:
+        cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+    paused = False
+    canvas = None
+    lines = []
+    n_seen = n_hit = 0
+    dists = []
+    log_rows = []
+    last_z = None
+    try:
+        for i, ts, frame in pipe.frames:
+            if frame is None or frame.size == 0:
+                continue
+            fps.tick()
+            n_seen += 1
+            res = pipe.process(frame, index=i, timestamp=ts)
+            intr = res.intrinsics
+            det = pick_primary(res, args.tag_id)
+            if res.detections:
+                n_hit += 1
+            T = None if det is None else res.poses.get(int(det.tag_id))
+            if T is not None:
+                last_z = float(pose_to_xyzrpy(T)['distance'])
+                dists.append(last_z)
+            roi = pipe.ae_roi
+            if roi is not None and res.detections:
+                roi.follow(res.detections, frame.shape)
+            if args.diagnose and (not res.detections):
+                print('frame %d 검출실패: %s' % (i, diagnose_frame(frame, fx=intr.fx, z_m=last_z, speed_mps=args.speed)))
+            if args.log is not None and det is not None:
+                tid = int(det.tag_id)
+                d = res.docking.get(tid)
+                q = res.quality.get(tid, {})
+                if d is not None:
+                    log_rows.append({'frame': int(i), 't': float(ts), 'tag_id': tid, **{k: float(v) if isinstance(v, (int, float)) else v for k, v in d.items()}, 'z_optical': float(T[2, 3]), 'ok': bool(q.get('ok', False)), 'tag_px': float(q.get('tag_px', 0.0)), 'reproj_rms_px': float(q.get('reproj_rms_px', 0.0)), 'decision_margin': float(q.get('decision_margin', 0.0))})
+            ctx = {'source': pipe.label, 'w': frame.shape[1], 'h': frame.shape[0], 'frame': i, 'fps': fps.fps, 'intr': intr, 'intr_origin': pipe.origin, 'intr_assumed': pipe.intrinsics_assumed, 'tag_size': tag_size, 'size_assumed': size_assumed, 'res': res, 'primary': det, 'paused': paused, 'draw': args.draw, 'family': args.family, 'method': args.method, 'quad_blur': args.quad_blur, 'stats': pipe.stats, 'yaw_dev': yaw_dev}
+            lines = build_lines(ctx)
+            if args.headless:
+                print('===== frame %d =====' % i)
+                for it in lines:
+                    print(line_text(it))
+                print('')
+                if n_seen >= args.headless:
+                    break
+                continue
+            canvas = compose_canvas(draw_overlay(res, tag_size, args.draw), lines, args)
+            cv2.imshow(win, canvas)
+            while True:
+                key = cv2.waitKey(1 if not paused else 30) & 255
+                if key in (ord('q'), 27):
+                    raise KeyboardInterrupt
+                if key == ord('a'):
+                    args.draw = DRAW_MODES[(DRAW_MODES.index(args.draw) + 1) % len(DRAW_MODES)]
+                if key == ord('r'):
+                    fps.reset()
+                if key == ord('s'):
+                    OUTDIR.mkdir(parents=True, exist_ok=True)
+                    name = '%s_f%06d.png' % (datetime.now().strftime('%Y%m%d_%H%M%S'), i)
+                    cv2.imwrite(str(OUTDIR / name), canvas)
+                    print('saved: %s' % (OUTDIR / name))
+                if key == ord(' '):
+                    paused = not paused
+                if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                    raise KeyboardInterrupt
+                if not paused:
+                    break
+    except KeyboardInterrupt:
+        pass
+    except RuntimeError as exc:
+        print('capture failed: %s' % exc)
+    finally:
+        if yaw_dev is not None:
+            yaw_dev.close()
+        pipe.close()
+        cv2.destroyAllWindows()
+    hit = 100.0 * n_hit / max(1, n_seen)
+    print('frames %d, detected %d (%.0f%%)' % (n_seen, n_hit, hit))
+    st = pipe.stats
+    if st is not None and st.received:
+        print('frames(SDK): %s' % st.summary())
+    if args.record is not None:
+        _b = _resolve(args.record, BAGDIR, '.db3')
+        if _b.exists():
+            print('record: %s (%.0f MB)' % (_b, _b.stat().st_size / 1000000.0))
+    if args.log is not None:
+        import json, statistics as st_
+        out = _resolve(args.log, LOGDIR, '.json')
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({'source': pipe.label, 'tag_size': tag_size, 'intrinsics_assumed': bool(pipe.intrinsics_assumed), 'n': len(log_rows), 'rows': log_rows}, ensure_ascii=False, indent=1))
+        print('log: %s (%d rows)' % (out, len(log_rows)))
+        keys = ('lateral', 'forward', 'heading_deg', 'tilt_deg', 'z_optical')
+        if len(log_rows) >= 2:
+            print('  %-14s%10s%10s%10s' % ('', '평균', '표준편차', '최대-최소'))
+            for k in keys:
+                v = [r[k] for r in log_rows]
+                u, f = ('mm', 1000.0) if k in ('lateral', 'forward', 'z_optical') else ('도', 1.0)
+                v = [x * f for x in v]
+                print('  %-14s%9.2f%s%9.2f%10.2f' % (k, st_.mean(v), u, st_.pstdev(v), max(v) - min(v)))
+    if dists:
+        print('distance: min %.3f  max %.3f  mean %.3f m%s' % (min(dists), max(dists), sum(dists) / len(dists), '   (ASSUMED intrinsics/tag size)' if pipe.intrinsics_assumed or size_assumed else ''))
+if __name__ == '__main__':
+    main()

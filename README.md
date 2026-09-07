@@ -1,0 +1,115 @@
+# AprilTag 지게차 도킹
+
+카메라로 AprilTag 을 보고 **탑재부 기준 지게차 위치**를 낸 뒤, 그 값으로 주행한다.
+
+## 두 버전 (검출은 같고 제어 판단만 다르다)
+- `apriltag_v1/` — **사이드스텝**(lateral_yes). lateral 을 90도 회전+직진+복귀로 직접 잡는다. 처음 방식, 동결.
+- `apriltag_v2/` — **조준-전진**(lateral_no). 태그 정면축 앞 목표점을 겨냥해 비스듬히 직진하며 수렴한다. **활성 개발**.
+  검출 파이프라인(image→detection_tag→detection_pose)은 둘이 같고, `control_from_pose.py` 의 판단 규칙만 다르다.
+  아래 명령·구조는 **v2 기준**(tools 가 check/·etc/ 로 나뉨). v1 은 tools/ 평면이라 `tools/live_pose.py` 처럼 쓴다.
+
+```bash
+pip install -r requirements.txt        # 리포 루트
+cd apriltag_v2                         # (또는 apriltag_v1). 아래는 v2 경로
+python tools/check/device_check.py     # 카메라·IMU 점검 (v1: tools/realsense_check.py, imu_check.py)
+python tools/check/live_pose.py        # 실시간 화면으로 확인
+python tools/run.py --show --record-events   # 실제 주행 (SPACE 시작, Ctrl+C 비상정지). 화면 띄우고 기록 남김
+```
+
+---
+
+## 실사용 흐름
+
+```
+image.py  ->  detection_tag.py  ->  detection_pose.py  ->  control_from_pose.py
+ 프레임         태그 찾기            자세 + 도킹값          주행 명령
+```
+
+### detection 이 내놓는 것
+
+`measure()` 가 30프레임을 모아 중앙값 하나를 낸다. 한 프레임은 못 쓴다 —
+`lateral` 이 ±9mm 흔들리기 때문이다. 30프레임이면 ±0.7mm.
+
+```python
+{'lateral':  0.104,   # 태그 축에서 좌우로 벗어난 거리 [m]. +가 오른쪽
+ 'forward':  1.407,   # 태그면까지 남은 거리 [m]
+ 'heading_deg': 2.04, # 지게차가 태그 축과 몇 도 틀어졌나
+ 'tilt_deg': 23.1,    # 태그가 화면에서 찌그러진 정도. 각도 신뢰도 판단용
+ 'distance': 1.432, 'vertical': -0.248, 'z_optical': 1.388,
+ 'n': 30,                        # 실제로 쓴 프레임 수
+ 'spread': {'lateral': 0.0007, ...},   # 대표값의 표준오차
+ 'reliable_angle': True,         # tilt >= 10도. False 면 heading 을 믿지 마라
+ 'stable': True, 'reasons': []}  # False 면 명령 내지 말고 다시 재라
+```
+
+### control 이 받는 것
+
+위 딕셔너리 하나를 그대로 받는다. 쓰는 값은 **세 개**다.
+
+```python
+plan_step(m) -> (동작, 양, 명령시간[s], 이유)
+```
+
+| 쓰는 값 | 무엇에 |
+|---|---|
+| `lateral` | 옆으로 얼마나 벗어났나 → 옆이동 |
+| `forward` | 얼마나 더 가야 하나 → 전진 |
+| `heading_deg` | 얼마나 틀어졌나 → 회전 각도 |
+| `reliable_angle`, `stable` | 이 값을 써도 되나 |
+
+동작은 CAN 명령 다섯 개로만 나온다 — 정지 / 전진 / 후진 / 제자리좌회전 / 제자리우회전.
+명령에 양이 없어서 "얼마나"는 **시간**으로 준다.
+
+```
+거리 -> 시간   fwd_time_model.py       실측 적합 (다른 팀). 직진은 개루프
+각도 -> 각도   CanDriver.rotate_by()   IMU 를 보며 목표각에서 멈춤. **폐루프**
+```
+
+회전은 시간으로 안 바꾼다 — 각속도를 몰라도 IMU 가 목표각에서 끊는다.
+그래서 `ROT_DEG_PER_SEC` 같은 미측정 값이 결과를 안 바꾼다.
+
+---
+
+## 파일
+
+### `src/`
+
+| 파일 | 하는 일 |
+|---|---|
+| `config.py` | 직접 정한 숫자 전부. 현장값 / 판정 임계 / 측정·규격 |
+| `models/detection/image.py` | 카메라·bag·영상 → 프레임 + 내부파라미터 |
+| `models/detection/detection_tag.py` | 흑백 이미지 → 태그 검출 |
+| `models/detection/detection_pose.py` | 검출 → 4x4 자세 → 도킹값. `measure()` 가 여기 |
+| `models/control/control_from_pose.py` | 도킹값 → 동작 하나. 순서·기하·회전 폐루프 |
+| `models/control/control_forklift_v2.py` | CAN 프레임 전송 (다른 팀). 안 고침 |
+| `models/control/fwd_time_model.py` | 거리 → 명령 시간 (다른 팀) |
+| `utils/imu_yaw.py` | 자이로 적분 상대 yaw. 회전 폐루프의 눈 |
+| `utils/camera.py` | 노출·AE ROI·프레임 드랍 등 카메라 설정 |
+| `utils/tag_layout.py` | 태그 여러 개를 한 좌표계로. 아직 안 씀 |
+| `utils/drawing.py` | 화면에 큐브·축 그리기. 표시 전용 |
+| `utils/util.py` | 출처 joonhyung-lee.github.io/repositories/ (5개만 씀) |
+
+### `tools/`
+
+주력 `run.py` 는 tools/ 바로 아래, 점검용은 `check/`(v2 기준. v1 은 평면). 나머지 도구는 `analyze_run.py`·`etc/` 참고:
+
+| 파일 | 하는 일 |
+|---|---|
+| `run.py` | **도킹 자동 실행.** 시작만 키보드, 그 뒤는 카메라가 정한다 |
+| `check/device_check.py` | 카메라 + IMU 장치 점검 (realsense + imu 합침). `--tag` 로 태그 교차검증 |
+| `check/check_setup.py` | 설치 됐나 — 장치 없이 import·canlib |
+
+---
+
+## 남은 일
+
+해결됨 (2026-09-07 실차):
+- **IMU 부호** `IMU_YAW_SIGN=+1.0` 확정 (반시계 +). 회전도 can_pulse rotate_ccw 에서 지게차가 왼쪽으로 돌고 yaw +.
+- **회전 CAN** 제자리 회전은 byte1(147/107). byte4 는 포크라 안 쓴다 (실차에서 byte4=97 이 포크를 올림). 회전 팔 A=1.46m.
+
+남은 것:
+- **③ 탑재부 허용 오차** `LAT_TOL_M`(0.030) / `HEAD_TOL_DEG`(2.0) 을 현장 사양으로 확정.
+- **④ v2 마지막 정렬 직진(~1m)** 이 아직 시간모델 개루프 — depth 로 앞면 거리를 재서 멈추기(안 그러면 관성 ~12cm 더 감).
+- **⑤ 태그2 전환** 지금은 태그 하나로만 간다. 두 태그를 쓸 때 `tag_layout` 으로 좌표 환산해야 전환 순간 값이 안 튄다.
+
+`ROT_DEG_PER_SEC` 은 급하지 않다 — 회전이 IMU 폐루프라 결과를 안 바꾼다.

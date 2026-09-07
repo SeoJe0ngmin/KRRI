@@ -1,0 +1,25 @@
+# 데이터 — 용량이 크고 원본은 각 출처에서 받으면 된다
+#   data/apriltag/tagslam    : github.com/berndpfrommer/tagslam  (example/)
+#   data/apriltag/team293    : github.com/Team293/AprilTagDetection
+#   data/ashpile_*           : IEEE DataPort  PathFinder (10.21227/vz7z-jc84)
+data/
+work_dirs/
+librealsense/
+
+# 안 쓰는 옛 코드 — 참고용으로 로컬에만 둔다
+apriltag/legacy/
+
+# 파이썬
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ipynb_checkpoints/
+
+# WSL 부산물
+*:Zone.Identifier
+
+# 환경
+.venv/
+.env
+apriltag/offline_wheels/
