@@ -9,8 +9,8 @@ from typing import Optional
 
 from config import control as C
 
-ROT_T0 = 0.5             # 명령→실회전 지연 [s]. 전진 모델 실측 FWD_T0=0.507 준용 (같은 CAN·유압 경로)
-ROT_DEG_PER_SEC = 15.0
+ROT_T0 = 0.85            # 명령→실회전 지연 [s]. 2026-09-07 can_pulse 실측 (IMU 가 0.8~0.9s 뒤 움직임)
+ROT_DEG_PER_SEC = 8.0    # 강도 20 에서 1.5s 펄스 끝에 7.3도/s, 아직 가속 중 — 보수적으로 8. 표시·워치독 전용
 
 
 ROT_MIN_SEC = 1.0
