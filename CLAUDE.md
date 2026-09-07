@@ -6,8 +6,9 @@
 - **활성 개발 = `apriltag_v2/`**. `apriltag_v1/` 은 **동결 — 절대 수정 금지**(사이드스텝 기반, 참고용).
   v2 는 lateral 을 직접 안 잡는 조준-전진(lateral_no) 규칙을 개발하는 곳이다.
 - **브랜치**
-  - `jm` : 로컬(연구실) 컴퓨터에서만 수정. 맥북·VM 은 절대 안 건드린다.
-  - `jm_mac` : 맥북에서 `jm` 을 받아(`git merge origin/jm`) **환경 관련 변경만** 얹는다. 이 맥북은 항상 여기 체크아웃.
+  - **평소 작업 = `jm_mac`.** 맥북·우분투용 개발·환경 변경은 전부 여기서 하고, 이 맥북은 항상 jm_mac 에 체크아웃.
+  - `jm` : 사용자의 로컬(연구실) 컴퓨터 전용. **평소 흐름에서 배제** — 자동으로 당기지 않는다. 사용자가
+    "jm 에서 이 부분 고쳤다, jm_mac 에 합칠지 보자" 고 가져올 때만 확인·논의 후 `git merge origin/jm`.
   - VM(`ubuntu-vm`) : `jm_mac` 을 받아 **쓰기만** 한다. VM 안에서 커밋하지 않는다.
   - `main` : `jm_mac` 의 v2 를 주석·docstring 뺀 **부모 없는 단일 스냅샷**(GitHub 기본 브랜치). config/*.py 와
     다른 팀 파일 3종(control_forklift_v2, control_광운대, fwd_time_model)은 주석 유지. 배포용이라 VM 엔 안 올린다.
@@ -17,14 +18,14 @@
   WSL·그램(x86)은 PyPI 휠, macOS 는 macosx. (풀어 쓴 macos/ubuntu 파일은 없앴다.)
 - **tools 구조(v2)**: 현장 주력 `tools/run.py`·`tools/analyze_run.py` 는 최상위, `tools/check/`(점검), `tools/etc/`(측정·테스트·설치).
 
-## 코드 갱신 (jm → jm_mac → VM)
+## 코드 갱신 (평소: jm_mac → VM)
+맥에서 jm_mac 을 고쳐 커밋한 뒤 VM 에 반영한다:
 ```bash
-# 맥에서
-git fetch origin && git checkout jm_mac && git merge origin/jm && git push origin jm_mac
-git push ubuntu-vm:krri.git jm_mac:refs/heads/jm_mac
+git push ubuntu-vm:krri.git jm_mac:refs/heads/jm_mac      # GitHub 에도: git push origin jm_mac
 ssh ubuntu-vm 'cd ~/krri && git fetch -q mac && git checkout -q -B jm_mac mac/jm_mac && git log --oneline -1'
 ```
-VM 은 리모트 `mac`(맥이 밀어 넣는 bare `~/krri.git`) + `origin`(GitHub). VM 파이썬은 `~/miniforge3/envs/krri/bin/python`(3.11).
+VM 은 리모트 `mac`(맥이 밀어 넣는 bare `~/krri.git`) + `origin`(GitHub). VM 파이썬 `~/miniforge3/envs/krri/bin/python`(3.11).
+**jm 병합은 자동으로 하지 않는다** — 사용자가 jm 변경을 가져와 "합칠지 보자" 할 때만 `git checkout jm_mac && git merge origin/jm` 후 논의·검증.
 
 ## CAN 제어 (control_forklift_v2, 실차 확인 2026-09-07)
 - 주행 프레임 0x1E3(중립 127): **byte2=전/후진**(전진 67, 후진 187), **byte1=조향/제자리회전**(좌 187, 우 67;
