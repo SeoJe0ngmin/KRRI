@@ -27,6 +27,14 @@ ssh ubuntu-vm 'cd ~/krri && git fetch -q mac && git checkout -q -B jm_mac mac/jm
 VM 은 리모트 `mac`(맥이 밀어 넣는 bare `~/krri.git`) + `origin`(GitHub). VM 파이썬 `~/miniforge3/envs/krri/bin/python`(3.11).
 **jm 병합은 자동으로 하지 않는다** — 사용자가 jm 변경을 가져와 "합칠지 보자" 할 때만 `git checkout jm_mac && git merge origin/jm` 후 논의·검증.
 
+## 주의 — main 리빌드 시 work_dirs 소실 (2026-09-07 겪음)
+`work_dirs/`(실주행·live_pose 로그)는 .gitignore 라 git 이 추적하지 않는다. main 을 부모 없는 orphan 단일
+커밋으로 다시 만들 때 작업 트리에서 `rm -rf apriltag_v1` 하면 이 무시 폴더까지 지워지고, jm_mac 으로
+`git checkout` 해도 **추적 파일만 복원되어 work_dirs 는 안 돌아온다**(맥 v1 work_dirs 가 이렇게 사라졌다, VM 에서 복구).
+- 안전한 main 리빌드: 지우려는 폴더는 `git rm -r --cached apriltag_v1`(인덱스만) 로 빼고 작업 트리의 `rm -rf` 는
+  피하거나, orphan 작업을 **별도 worktree/클론**에서 한다. 최소한 리빌드 전 `work_dirs` 를 백업하거나 VM 에 남겨 둔다.
+- 로그가 없어졌으면 VM 에서 복구: `scp -r ubuntu-vm:~/krri/apriltag_v1/work_dirs apriltag_v1/`.
+
 ## CAN 제어 (control_forklift_v2, 실차 확인 2026-09-07)
 - 주행 프레임 0x1E3(중립 127): **byte2=전/후진**(전진 67, 후진 187), **byte1=조향/제자리회전**(좌 187, 우 67;
   제자리 회전은 byte1 을 ±20 = 147/107). **byte4 는 포크 리프트** — 회전에 쓰면 포크가 올라간다(사고 주의).
