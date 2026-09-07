@@ -4,6 +4,8 @@
     python tools/can_pulse.py rotate_cw 0.3
     python tools/can_pulse.py forward 0.5 --no-imu
     python tools/can_pulse.py rotate_ccw --dry-run    # CAN 없이, 보낼 바이트만 찍는다
+    python tools/can_pulse.py rotate_ccw 1.0 --camera # 펄스 전후를 카메라(30프레임)로도 잰다
+                                                     #   -> 회전 팔 길이 A = Δlateral / sin(Δheading), 직진 속도
 
 도킹 루프(run.py)는 목표각에 닿을 때까지 계속 보내지만, 이건 정해진 시간만
 보내고 반드시 정지한다. 새 매핑을 실차에 처음 붙일 때 "무엇이 움직이나 /
@@ -13,6 +15,7 @@ IMU 부호 / 각속도" 를 확인하는 용도다(2026-09-07 byte4 리프트 �
 """
 import argparse
 import asyncio
+import math
 import os
 import sys
 import time
@@ -24,6 +27,26 @@ from src.models.control.control_forklift_v2 import (      # noqa: E402
     MOVEMENT_TEMPLATES, CONTROL_TEMPLATES, CAN_MOVEMENT_ID, CAN_CONTROL_ID)
 
 MAX_SEC = 2.0          # 펄스 상한. 그 이상은 run.py 의 몫이다
+
+
+def _measure_now(pipe, tag_id, n=30, max_frames=150):
+    """지금 카메라로 30프레임 중앙값 하나. 태그가 없으면 None."""
+    from src.models.detection.detection_pose import measure
+    buf = []
+    for i, (idx, ts, frame) in enumerate(pipe.frames):
+        res = pipe.process(frame, index=idx, timestamp=ts)
+        if tag_id in res.docking:
+            res.image = None
+            buf.append(res)
+        if len(buf) >= n or i >= max_frames:
+            break
+    return measure(buf, tag_id=tag_id, n=n) if buf else None
+
+
+def _fmt_m(m):
+    if m is None:
+        return "(태그 안 보임)"
+    return "lateral %+.3fm  forward %.3fm  heading %+.2f도" % (m["lateral"], m["forward"], m["heading_deg"])
 
 
 def _bytes(seq):
@@ -52,8 +75,19 @@ async def main_async(args):
             print("!! 자이로를 못 열었다 (%s) — 각도 없이 진행" % exc)
             yaw = None
 
+    pipe = None
+    m0 = None
+    if args.camera:
+        from src.models import TagPipeline
+        from config.detection import TAG_ID, TAG_SIZE_M
+        pipe = TagPipeline.from_realsense(TAG_SIZE_M, label="pulse")
+        m0 = _measure_now(pipe, TAG_ID)
+        print("카메라 전 : %s" % _fmt_m(m0))
+
     if args.dry_run:
         print("DRY-RUN — CAN 으로 아무것도 안 보낸다")
+        if pipe is not None:
+            pipe.close()
         if yaw is not None:
             yaw.close()
         return
@@ -98,8 +132,15 @@ async def main_async(args):
         for t in tasks:
             t.cancel()
         ctrl.disconnect_can()
-        if yaw is not None:
-            yaw.close()
+
+    m1 = None
+    if pipe is not None:
+        await asyncio.sleep(1.0)                   # 완전히 멎은 뒤에 잰다
+        m1 = _measure_now(pipe, __import__("config.detection", fromlist=["TAG_ID"]).TAG_ID)
+        print("카메라 후 : %s" % _fmt_m(m1))
+        pipe.close()
+    if yaw is not None:
+        yaw.close()
 
     if not samples:
         return
@@ -111,6 +152,14 @@ async def main_async(args):
     final_yaw = samples[-1][2]
     peak = max((abs(x[3]) for x in samples), default=float("nan"))
     print("\n결과: 보내는 동안 yaw %+.2f도, 정지 후 최종 %+.2f도, 최대 각속도 %.1f도/s" % (end_yaw, final_yaw, peak))
+    if m0 is not None and m1 is not None:
+        dl, df, dh = m1["lateral"] - m0["lateral"], m1["forward"] - m0["forward"], m1["heading_deg"] - m0["heading_deg"]
+        print("카메라 변화: lateral %+.3fm  forward %+.3fm  heading %+.2f도" % (dl, df, dh))
+        if args.movement.startswith("rotate") and abs(dh) >= 1.0:
+            print("      회전 팔 길이 A = Δlateral/sin(Δheading) = %.2fm  (config CAM_TO_PIVOT_M 후보)" % abs(dl / math.sin(math.radians(dh))))
+        elif args.movement in ("forward", "backward"):
+            moved = math.hypot(dl, df)
+            print("      이동 %.3fm / %.2fs 명령 -> 평균 %.3fm/s (지연 포함)" % (moved, sec, moved / sec))
     if yaw is not None and abs(final_yaw) >= 0.5:
         print("      부호: %s  (rotate_ccw 는 + 가 정상, 반대면 템플릿 좌/우를 바꿔라)" % ("+" if final_yaw > 0 else "-"))
     elif yaw is not None:
@@ -124,6 +173,7 @@ def main():
     ap.add_argument("--no-imu", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="CAN 없이 바이트만 찍는다")
     ap.add_argument("--yes", action="store_true", help="엔터 확인 없이 바로 보낸다")
+    ap.add_argument("--camera", action="store_true", help="펄스 전후를 카메라 30프레임 중앙값으로 잰다 (태그가 보여야 한다)")
     asyncio.run(main_async(ap.parse_args()))
 
 

@@ -81,41 +81,50 @@ def plan_aim(lateral_m, forward_m, heading_deg, margin_px, st):
     """v2 조준-전진. 측정 하나 -> 동작 하나. 순수 함수.
 
     부호: lateral + 는 태그가 오른쪽(트럭이 축의 왼쪽), heading/회전 + 는 반시계.
-    T 는 축 위, 태그에서 AIM_STANDOFF_M 앞. 트럭에서 본 T 의 방위각(반시계 +)은
-    atan2(-lateral, forward - S) 다. 회전량 = 방위각 - heading.
+    계산은 전부 **회전 중심(뒷바퀴)** 기준으로 한다 — 카메라는 회전 중심에서
+    CAM_TO_PIVOT_M 앞에 있어 제자리 회전만 해도 lateral 이 A*sin(각) 만큼 변한다
+    (18:14 로그에서 T 근처 회전 6번 되풀이의 원인). 회전 중심의 lateral/forward 는
+    회전해도 안 변하므로 조준이 흔들리지 않는다.
+        lat_p = lateral - A*sin(h),  fwd_p = forward + A*cos(h)
+    T 는 축 위, 회전 중심 기준으로 태그에서 S + A 앞 (heading 0 이면 카메라가 S 에 온다).
     """
-    S = C.AIM_STANDOFF_M
-    dx = forward_m - S                                   # T 까지 축 방향 거리
-    bearing = math.degrees(math.atan2(-lateral_m, dx))   # T 방위각, 반시계 +
-    dist_t = math.hypot(lateral_m, dx)
-    st["aim_bearing"], st["aim_dist_t"] = bearing, dist_t
+    S, A = C.AIM_STANDOFF_M, C.CAM_TO_PIVOT_M
+    h = math.radians(heading_deg)
+    lat_p = lateral_m - A * math.sin(h)
+    fwd_p = forward_m + A * math.cos(h)
+    dx = fwd_p - (S + A)                                  # 회전 중심에서 T 까지 축 방향 거리
+    bearing = math.degrees(math.atan2(-lat_p, dx))       # T 방위각, 반시계 +
+    dist_t = math.hypot(lat_p, dx)
+    st["aim_bearing"], st["aim_dist_t"], st["aim_lat_p"] = bearing, dist_t, lat_p
     tag_cut = margin_px is not None and margin_px < C.TAG_CUT_MARGIN_PX
+    near_t = dist_t <= C.AIM_NEAR_T_M
 
-    if dist_t <= C.AIM_AT_T_M or dx <= C.AIM_AT_T_M or tag_cut:
-        # T 도착(또는 태그가 화면 위로 나가기 직전 = 더 가까이선 카메라가 못 본다).
-        # 순서가 중요하다: lateral -> heading -> 마지막 직진. 정렬 전에 직진하면
-        # 틀어진 각도 그대로 도크로 들어간다(시뮬레이션에서 24도 채 1m 달려 lateral 0.45m).
-        if C.LAT_TOL_M < abs(lateral_m) <= C.AIM_FINAL_MAX_LAT_M:
-            # 조금 벗어남: 축과 나란히 서는 대신 태그를 직접 겨냥해 들어간다. 도착 heading 은
-            # atan(lateral/forward) 로 작다. 후진-재조준으로는 회전 잔차 때문에 되풀이만 한다.
-            h_star = math.degrees(math.atan2(-lateral_m, forward_m))
+    if dist_t <= C.AIM_AT_T_M or dx <= C.AIM_AT_T_M or tag_cut or (near_t and abs(lat_p) <= C.AIM_FINAL_MAX_LAT_M):
+        # T 도착(또는 태그가 화면 위로 나가기 직전, 또는 T 1m 안에서 lateral 이 대충 맞음).
+        # 순서: lateral -> heading -> 마지막 직진. 정렬 전에 직진하면 틀어진 채 들어간다.
+        if C.LAT_TOL_M < abs(lat_p) <= C.AIM_FINAL_MAX_LAT_M:
+            # 조금 벗어남: 축과 나란히 서는 대신 태그를 직접 겨냥해 들어간다. 회전 중심이 태그를
+            # 향하면 카메라·포크도 그 선 위에 있다. 도착 heading 은 atan(lat/fwd) 로 작다.
+            h_star = math.degrees(math.atan2(-lat_p, fwd_p))
             turn = normalize_deg(h_star - heading_deg)
             if abs(turn) > C.AIM_FINAL_TOL_DEG:
                 return ("rotate_ccw" if turn > 0 else "rotate_cw", abs(turn), rot_sec_from_deg(turn),
-                        "정렬(태그 겨냥): lateral %.0fmm -> 목표 heading %+.1f도, 지금 %+.1f도 -> %+.1f도 회전"
-                        % (lateral_m * 1000, h_star, heading_deg, turn))
-            final_m = math.hypot(lateral_m, forward_m) + C.DOCK_EXTRA_M
+                        "정렬(태그 겨냥): 회전중심 lateral %.0fmm -> 목표 heading %+.1f도, 지금 %+.1f도 -> %+.1f도 회전"
+                        % (lat_p * 1000, h_star, heading_deg, turn))
+            final_m = math.hypot(lat_p, fwd_p) - A + C.DOCK_EXTRA_M
+            if final_m <= 0.0:
+                return ("done", 0.0, 0.0, "도착. forward %.2fm" % forward_m)
             return ("final", final_m, fwd_sec_from_offset_piecewise(final_m),
                     "태그 겨냥 끝(heading %+.1f도). 마지막 %.2fm. 그 뒤 정지" % (heading_deg, final_m))
-        if abs(lateral_m) > C.AIM_FINAL_MAX_LAT_M:
+        if abs(lat_p) > C.AIM_FINAL_MAX_LAT_M:
             # 많이 벗어남: 여기서 lateral 은 조준으로 못 고친다(방위각이 90도에 가깝다). 물러나서 다시.
             if int(st.get("aim_backups", 0)) >= C.AIM_MAX_BACKUPS:
                 return ("lost", 0.0, 0.0,
                         "T 에서 lateral %.0fmm 이 %d번 후진해도 안 맞는다. 수동전환"
-                        % (lateral_m * 1000, C.AIM_MAX_BACKUPS))
+                        % (lat_p * 1000, C.AIM_MAX_BACKUPS))
             return ("aim_backup", C.AIM_BACKUP_M, fwd_sec_from_offset_piecewise(C.AIM_BACKUP_M),
-                    "T 근처인데 lateral %.0fmm — %.1fm 후진해 다시 조준"
-                    % (lateral_m * 1000, C.AIM_BACKUP_M))
+                    "T 근처인데 회전중심 lateral %.0fmm — %.1fm 후진해 다시 조준"
+                    % (lat_p * 1000, C.AIM_BACKUP_M))
         if abs(heading_deg) > C.HEAD_TOL_DEG:
             return ("rotate_ccw" if heading_deg < 0 else "rotate_cw", abs(heading_deg),
                     rot_sec_from_deg(heading_deg),
@@ -127,28 +136,31 @@ def plan_aim(lateral_m, forward_m, heading_deg, margin_px, st):
                 "정렬 끝. 마지막 %.2fm (forward %.2fm + 여유 %.2fm). 그 뒤 정지"
                 % (final_m, forward_m, C.DOCK_EXTRA_M))
 
-    if abs(bearing) > C.AIM_MAX_BEARING_DEG:
-        # 태그 옆/뒤에서 시작 — 조준으로는 태그를 크게 비스듬히 보게 된다. v1 사이드스텝 폴백
+    tag_dir = math.degrees(math.atan2(-lateral_m, forward_m))      # 카메라에서 본 태그 방향 (축 기준)
+    tag_off = abs(normalize_deg(tag_dir - bearing))                  # 조준한 뒤 태그가 코에서 몇 도 옆에
+    if abs(bearing) > C.AIM_MAX_BEARING_DEG or tag_off > C.AIM_MAX_TAG_OFF_DEG:
+        # 태그 옆/뒤에서 시작 — 조준으로 가면 태그가 화면 가장자리에 걸린다. v1 사이드스텝 폴백
         turn, distance_m, direction = plan_lateral_clear(lateral_m, heading_deg)
         estimated_sec = (rot_sec_from_deg(turn) + fwd_sec_from_offset_piecewise(distance_m)
                          + rot_sec_from_deg(90.0))
         return ("sidestep", (turn, distance_m, direction), estimated_sec,
-                "폴백 Set2 (T 방위각 %.0f도 > %.0f): lateral %.0fmm -> %+.1f도 회전 -> %.0fmm %s -> 90도 복귀"
-                % (abs(bearing), C.AIM_MAX_BEARING_DEG, lateral_m * 1000, turn,
+                "폴백 Set2 (T 방위각 %.0f도, 조준 뒤 태그 %.0f도 옆): lateral %.0fmm -> %+.1f도 회전 -> %.0fmm %s -> 90도 복귀"
+                % (abs(bearing), tag_off, lateral_m * 1000, turn,
                    distance_m * 1000, "전진" if direction == "forward" else "후진"))
 
     turn = normalize_deg(bearing - heading_deg)
     if abs(turn) > C.AIM_TOL_DEG:
         return ("rotate_ccw" if turn > 0 else "rotate_cw", abs(turn), rot_sec_from_deg(turn),
-                "조준: T 방위각 %+.1f도, heading %+.1f도 -> %+.1f도 회전 (T 까지 %.2fm)"
-                % (bearing, heading_deg, turn, dist_t))
+                "조준: T 방위각 %+.1f도, heading %+.1f도 -> %+.1f도 회전 (회전중심 T 까지 %.2fm, lateral %.0fmm)"
+                % (bearing, heading_deg, turn, dist_t, lat_p * 1000))
 
     d = min(C.AIM_CHUNK_MAX_M, dist_t)
-    stop_forward = forward_m - d * math.cos(math.radians(bearing))
+    b = math.radians(bearing)
+    # 회전 중심이 d 만큼 가면 카메라(방위각 방향으로 A 앞)의 forward 는 이만큼 남는다
+    stop_forward = fwd_p - d * math.cos(b) - A * math.cos(b)
     return ("aim_drive", (d, bearing, stop_forward), fwd_sec_from_offset_piecewise(d),
-            "조준 직진 %.2fm (T 까지 %.2fm, 방위각 %+.1f도). 카메라 forward %.2fm 에서 조기 정지"
+            "조준 직진 %.2fm (회전중심 T 까지 %.2fm, 방위각 %+.1f도). 카메라 forward %.2fm 에서 조기 정지"
             % (d, dist_t, bearing, stop_forward))
-
 
 def plan_step(m, state=None):
     """측정값 하나 -> 다음 동작 하나. 순수 함수 (하드웨어 없이 계산만)."""
@@ -424,7 +436,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                                  why=why, misses=misses, margin_px=st.get("margin_px"),
                                  stable=(m or {}).get("stable"),
                                  reasons=(m or {}).get("reasons"),
-                                 bearing_deg=st.get("aim_bearing"), dist_t=st.get("aim_dist_t"))
+                                 bearing_deg=st.get("aim_bearing"), dist_t=st.get("aim_dist_t"), lat_pivot=st.get("aim_lat_p"))
                     info = {"action": action, "why": why, "sec": sec}
                     if action == "lost":
                         await driver.stop()
