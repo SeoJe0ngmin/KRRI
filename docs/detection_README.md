@@ -23,11 +23,10 @@ src/utils/     camera.py      카메라 읽기·쓰기
                drawing.py     화면에 그리기 (표시 전용)
                util.py        블로그 원본 그대로 둔다. 5개만 씀
                make_tag_pdf.py                        실행 스크립트
-tools/         live_pose.py   실시간 화면          <- 실사용
-               verify.py      실측 검증 (줄자)
-               sim.py         가상 검증 — SCENARIO 하나로 굴린다 (--live 로 3D)
-               sim_measure.py / sim_engine.py   그 엔진
-               run.py         (빈 파일) 통합 실행
+tools/         run.py                도킹 자동 실행          <- 실사용
+               check/live_pose.py    실시간 화면
+               check/verify.py       실측 검증 (줄자)
+               check/device_check.py 카메라 + IMU 점검
                viewer.sh      realsense-viewer 실행기 (rsview 로 링크됨)
 legacy/        viewer_filter/ realsense-viewer 용 C++ 확장. 실사용 경로 아님
                옛 노트북, 블로그 원본 유틸, 캘리브레이션 스크립트
@@ -49,8 +48,6 @@ image.py  ->  detection_tag.py  ->  detection_pose.py
 rsview                                                # realsense-viewer (카메라 자동 연결)
 python tools/check/live_pose.py --source realsense          # 실시간 화면
 python tools/check/verify.py --frames 200 --truth-z 2.00    # 줄자 대조
-python tools/sim.py --live                            # 3D + 슬라이더로 실시간
-python tools/sim.py distance 1 2 3 5 --plot           # 한 값만 바꿔가며
 python src/utils/make_tag_pdf.py --id 1 --size 200 --paper A3
 ```
 

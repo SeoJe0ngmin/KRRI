@@ -2,9 +2,9 @@
 
 카메라로 AprilTag 을 보고 **탑재부 기준 지게차 위치**를 낸 뒤, 그 값으로 주행한다.
 
-처음 받았다면 — 현장 노트북(Windows)은 [SETUP_WINDOWS.md](SETUP_WINDOWS.md) 부터.
-문서는 넷뿐이다:
-[SETUP_WINDOWS.md](SETUP_WINDOWS.md) 현장 노트북 설치 ·
+처음 받았다면 — 맥북 Ubuntu VM / Jetson 은 [CLAUDE.md](../CLAUDE.md) 부터.
+주요 문서:
+[CLAUDE.md](../CLAUDE.md) VM·Jetson 설치 (Windows 는 git clone + `pip install -r requirements.txt`) ·
 [FIELD_MEASURE.md](FIELD_MEASURE.md) 값 사전(잴 것/정해진 것/카메라가 주는 것) ·
 [CODE_NOTES.md](CODE_NOTES.md) 제어 코드 설계 노트(주석은 코드가 아니라 여기 있다)
 
@@ -81,7 +81,7 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `models/detection/image.py` | 카메라·bag·영상 → 프레임 + 내부파라미터 |
 | `models/detection/detection_tag.py` | 흑백 이미지 → 태그 검출 |
 | `models/detection/detection_pose.py` | 검출 → 4x4 자세 → 도킹값. `measure()` 가 여기 |
-| `models/detection/detection_README.md` | 실측·근거 모음 (블러, 좌표계, SDK 소스 등) |
+| `docs/detection_README.md` | 실측·근거 모음 (블러, 좌표계, SDK 소스 등) |
 | `models/control/control_from_pose.py` | 도킹값 → 동작 하나. 순서·기하·회전 폐루프 |
 | `models/control/control_forklift_v2.py` | CAN 프레임 전송 (다른 팀). 안 고침 |
 | `models/control/fwd_time_model.py` | 거리 → 명령 시간 (다른 팀) |

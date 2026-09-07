@@ -158,7 +158,6 @@ ROT_WRONG_WAY_DEG 5.0 (안전장치)
 config/detection.py   태그를 보고 위치를 내는 값   태그 크기·번호, 해상도, 품질 문턱, 장비 규격
 config/control.py     어떻게 움직일지 정하는 값     도킹 허용치, 전진 방식, 종료, 회전, 탐색
 config/imu.py         자이로 자체에 관한 값        주파수, 부호, 보정 시간, 끊김 판정
-config/sim.py         시뮬레이터 장면              **실사용엔 안 쓴다**
 config/main.py      위 셋을 모아 부르는 자리      값은 여기 안 쓴다
 ```
 
