@@ -18,7 +18,7 @@ RS_VER=v2.58.3            # requirements.txt 의 pyrealsense2==2.58.3.* 와 맞�
 PY=3.11
 ENV=krri
 CODE_DIR=$(cd "$(dirname "$0")/../.." && pwd)        # 이 스크립트가 든 코드 폴더 (apriltag_v1 또는 apriltag_v2)
-REPO_DIR=$(cd "$CODE_DIR/.." && pwd)             # 리포 루트 (docs/ 가 있는 곳)
+REPO_DIR=$(cd "$CODE_DIR/.." && pwd)             # 리포 루트 (requirements.txt 가 있는 곳)
 LINUXCAN_URL="https://pim.kvaser.com/var/assets/Product_Resources/7330130980754/5.52.563/linuxcan_5_52_563.tar.gz"
 PYBIN="$HOME/miniforge3/envs/$ENV/bin/python"
 PIP="$HOME/miniforge3/envs/$ENV/bin/pip"
@@ -81,7 +81,7 @@ realsense_step() {
 pip_step() {
   # pyrealsense2 는 위에서 소스 빌드(requirements 의 aarch64 마커로도 빠진다).
   # keyboard 는 리눅스에서 import 에 root 가 필요하지만 설치는 되므로 그대로 둔다(run.py 는 엔터로 폴백).
-  grep -v -E "^pyrealsense2" "$REPO_DIR/docs/requirements.txt" > /tmp/req.txt
+  grep -v -E "^pyrealsense2" "$REPO_DIR/requirements.txt" > /tmp/req.txt
   "$PIP" install -r /tmp/req.txt
 }
 

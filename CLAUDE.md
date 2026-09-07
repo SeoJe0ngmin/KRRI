@@ -14,7 +14,7 @@
     다른 팀 파일 3종(control_forklift_v2, control_광운대, fwd_time_model)은 주석 유지. 배포용이라 VM 엔 안 올린다.
 - **config import 스타일**: control·detection 모두 `from config import control as C` / `... detection as D` + `C.X`/`D.X`.
   config 상수의 원산은 `config/detection.py`. 공개 API 는 `src/models/__init__` 가 config.detection 에서 직접 재수출한다.
-- **requirements**: `docs/requirements.txt` **마커본 하나**. 우분투/Jetson(arm64)는 pyrealsense2 를 마커로 빼고 소스 빌드,
+- **requirements**: `requirements.txt`(리포 루트) **마커본 하나**. 우분투/Jetson(arm64)는 pyrealsense2 를 마커로 빼고 소스 빌드,
   WSL·그램(x86)은 PyPI 휠, macOS 는 macosx. (풀어 쓴 macos/ubuntu 파일은 없앴다.)
 - **tools 구조(v2)**: 현장 주력 `tools/run.py`·`tools/analyze_run.py` 는 최상위, `tools/check/`(점검), `tools/etc/`(측정·테스트·설치).
 
