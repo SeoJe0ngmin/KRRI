@@ -431,16 +431,8 @@ def main():
     tag_size = args.tag_size if args.tag_size else DEFAULT_TAG_SIZE
     size_assumed = args.tag_size is None
 
-    try:
-        pipe = open_pipeline(args, tag_size)
-    except SystemExit:
-        raise
-    except Exception as exc:
-        raise SystemExit("소스를 열지 못했다 (%s): %s: %s"
-                         % (args.source, type(exc).__name__, exc))
-
-    fps = FpsMeter()
-
+    # 자이로를 카메라보다 먼저 연다 — RSUSB 백엔드는 먼저 연 device 객체가 IMU 를
+    # 갖는다. 컬러가 먼저면 자이로가 "failed to set power state" 로 못 열린다.
     # 자이로 계기판 — 실카메라일 때만. 부호·드리프트를 눈으로 확인하는 용도라
     # run.py 와 같은 공용 표시(imu_panel_lines)를 쓴다.
     yaw_dev = None
@@ -456,6 +448,18 @@ def main():
         except Exception as exc:
             print("gyro       : 못 엶 (%s) — IMU 줄 없이 진행" % exc)
             yaw_dev = None
+
+    try:
+        pipe = open_pipeline(args, tag_size)
+    except BaseException as exc:                      # SystemExit 포함
+        if yaw_dev is not None:
+            yaw_dev.close()
+        if isinstance(exc, SystemExit):
+            raise
+        raise SystemExit("소스를 열지 못했다 (%s): %s: %s"
+                         % (args.source, type(exc).__name__, exc))
+
+    fps = FpsMeter()
 
     print("source     : %s" % pipe.label)
     print("tag size   : %.3f m%s" % (tag_size, "  (ASSUMED default)" if size_assumed else ""))

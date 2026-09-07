@@ -141,9 +141,9 @@ async def _wait_start(show):
 
 
 async def main_async(args):
-    pipe = TagPipeline.from_realsense(args.tag_size, label="run")
-    print("  카메라 열림. 태그 %d, 크기 %.3fm" % (args.tag_id, args.tag_size))
-
+    # 카메라보다 IMU 를 먼저 연다 — RSUSB 백엔드(맥북 VM, Jetson 소스 빌드)는
+    # 먼저 연 device 객체가 IMU(HID) 인터페이스를 갖는다. 컬러 파이프라인이 먼저면
+    # 뒤에 여는 자이로가 "failed to set power state" 로 죽는다(2026-09-07 실측).
     # IMU — 회전 폐루프의 눈. 없으면 회전이 미측정 시간모델 개루프로 떨어진다.
     yaw = None
     if not args.no_imu:
@@ -159,6 +159,14 @@ async def main_async(args):
         except Exception as exc:
             print("  !! 자이로를 못 열었다 (%s) — 회전이 시간모델 개루프가 된다" % exc)
             yaw = None
+
+    try:
+        pipe = TagPipeline.from_realsense(args.tag_size, label="run")
+    except Exception:
+        if yaw is not None:
+            yaw.close()
+        raise
+    print("  카메라 열림. 태그 %d, 크기 %.3fm" % (args.tag_id, args.tag_size))
 
     # 기록 폴더는 여기서 만들지 않는다 — SPACE 를 눌러 실제로 주행이 시작되는
     # 순간의 시각으로 이름을 지어야, 폴더 이름과 "몇 시에 주행했다"가 맞는다.
