@@ -61,9 +61,40 @@ async def main_async(args):
     print("0x%03X 주행 : %s   (byte0..7, 중립 127)" % (CAN_MOVEMENT_ID, _bytes(MOVEMENT_TEMPLATES[args.movement])))
     print("0x%03X 모드 : %s   (byte4 는 카운터)" % (CAN_CONTROL_ID, " ".join("%02X" % b for b in CONTROL_TEMPLATES["driving_mode"])))
 
-    # IMU 를 카메라/CAN 보다 먼저 — RSUSB 백엔드는 먼저 연 쪽이 IMU 를 갖는다
+    pipe = None
+    m0 = None
     yaw = None
-    if not args.no_imu:
+    from config.detection import TAG_ID, TAG_SIZE_M
+    tag_id = TAG_ID
+
+    # --camera 면 카메라만 연다 — 자이로와 같은 장치라 둘을 같이 열면 RSUSB 에서
+    # 서로 죽는다(2026-09-07: 자이로가 0샘플, 또는 카메라 첫 프레임 실패 반복).
+    # 회전도 카메라 heading 으로 다 잰다(지연·속도·관성·팔길이). --camera 없이 돌리면
+    # 자이로로 잰다(태그가 안 보이는 데서 회전 부호만 볼 때).
+    if args.camera:
+        import pyrealsense2 as rs
+        from src.models import TagPipeline
+        for attempt in (1, 2, 3):
+            try:
+                pipe = TagPipeline.from_realsense(TAG_SIZE_M, label="pulse")
+                m0 = _measure_now(pipe, tag_id)
+                break
+            except RuntimeError as exc:
+                print("!! 카메라 첫 프레임 실패 (%s) — %s" % (str(exc)[:45],
+                      "장치 리셋 후 다시 연다" if attempt < 3 else "포기"))
+                if pipe is not None:
+                    pipe.close(); pipe = None
+                if attempt == 3:
+                    raise SystemExit("카메라가 응답하지 않는다. UTM USB 메뉴에서 RealSense 를 뺐다 다시 넣고 재시도")
+                try:
+                    devs = rs.context().query_devices()
+                    if len(devs):
+                        devs[0].hardware_reset()
+                except Exception:
+                    pass
+                await asyncio.sleep(5.0)                # 리셋 후 재열거 시간
+        print("카메라 전 : %s" % _fmt_m(m0))
+    elif not args.no_imu:
         try:
             from src.utils.imu_yaw import GyroYaw
             yaw = GyroYaw().start()
@@ -74,26 +105,6 @@ async def main_async(args):
         except Exception as exc:
             print("!! 자이로를 못 열었다 (%s) — 각도 없이 진행" % exc)
             yaw = None
-
-    pipe = None
-    m0 = None
-    from config.detection import TAG_ID, TAG_SIZE_M
-    tag_id = TAG_ID
-    if args.camera:
-        from src.models import TagPipeline
-        for attempt in (1, 2):
-            pipe = TagPipeline.from_realsense(TAG_SIZE_M, label="pulse")
-            try:
-                m0 = _measure_now(pipe, tag_id)
-                break
-            except RuntimeError as exc:
-                # 직전 실행을 Ctrl+C 로 끊은 직후엔 첫 프레임이 5초 안에 안 오기도 한다. 닫고 한 번 더.
-                print("!! 카메라 첫 프레임 실패 (%s) — %s" % (str(exc)[:40], "2초 뒤 다시 연다" if attempt == 1 else "포기"))
-                pipe.close(); pipe = None
-                if attempt == 2:
-                    raise SystemExit("카메라가 응답하지 않는다. UTM USB 메뉴에서 RealSense 를 뺐다 다시 넣고 재시도")
-                await asyncio.sleep(2.0)
-        print("카메라 전 : %s" % _fmt_m(m0))
 
     if args.dry_run:
         print("DRY-RUN — CAN 으로 아무것도 안 보낸다")
@@ -165,6 +176,10 @@ async def main_async(args):
 
     if not samples:
         return
+    summary = {"movement": args.movement, "sec": sec, "ts": time.time(),
+               "template": MOVEMENT_TEMPLATES[args.movement], "camera_before": m0, "camera_after": m1,
+               "samples": [{"t": round(t, 3), "phase": ph, "yaw_deg": a, "rate_dps": r, "cam_forward": cf, "cam_lateral": cl, "cam_heading_deg": ch}
+                           for t, ph, a, r, cf, cl, ch in samples]}
     have_cam = any(not math.isnan(x[4]) for x in samples)
     if have_cam:
         print("\n  t[s]   구간    yaw[도]  rate[도/s]   cam fwd[m]  cam lat[m]  cam head[도]")
@@ -175,10 +190,33 @@ async def main_async(args):
         for t, ph, a, r, *_ in samples[::2]:
             print("  %5.2f  %-6s %8.2f  %8.2f" % (t, ph, a, r))
     send = [x for x in samples if x[1] == "send"]
-    end_yaw = send[-1][2] if send else float("nan")
-    final_yaw = samples[-1][2]
-    peak = max((abs(x[3]) for x in samples), default=float("nan"))
-    print("\n결과: 보내는 동안 yaw %+.2f도, 정지 후 최종 %+.2f도, 최대 각속도 %.1f도/s" % (end_yaw, final_yaw, peak))
+    if yaw is not None:
+        end_yaw = send[-1][2] if send else float("nan")
+        final_yaw = samples[-1][2]
+        peak = max((abs(x[3]) for x in samples if not math.isnan(x[3])), default=float("nan"))
+        print("\n결과(자이로): 보내는 동안 yaw %+.2f도, 정지 후 최종 %+.2f도, 최대 각속도 %.1f도/s" % (end_yaw, final_yaw, peak))
+        summary.update({"yaw_at_stop_deg": end_yaw, "yaw_final_deg": final_yaw, "yaw_coast_deg": final_yaw - end_yaw, "peak_rate_dps": peak})
+    if have_cam and args.movement.startswith("rotate"):
+        # 카메라 heading 시간축으로 회전 지연·속도·관성. 태그가 보이는 구간만 쓴다.
+        ch = [(t, ph, h) for t, ph, a, r, cf, cl, h in samples if not math.isnan(h)]
+        if len(ch) >= 6:
+            h0 = ch[0][2]
+            onset = next((t for t, ph, h in ch if abs(h - h0) > 1.0), None)   # 1도 돈 시각 = 지연
+            send_h = [(t, h) for t, ph, h in ch if ph == "send" and onset is not None and t >= onset]
+            rate = None
+            if len(send_h) >= 4:
+                ts_ = [t for t, _ in send_h]; hs_ = [h for _, h in send_h]
+                tm, hm = sum(ts_)/len(ts_), sum(hs_)/len(hs_)
+                den = sum((t-tm)**2 for t in ts_)
+                rate = sum((t-tm)*(h-hm) for t, h in zip(ts_, hs_))/den if den else None
+            send_end_h = ch[max(i for i, (t, ph, h) in enumerate(ch) if ph == "send")][2] if any(x[1]=="send" for x in ch) else None
+            settle_h = [h for t, ph, h in ch if ph == "settle"]
+            coast = (settle_h[-1] - send_end_h) if (settle_h and send_end_h is not None) else None
+            summary.update({"onset_sec": onset, "rate_dps": rate, "coast_deg": coast})
+            print("카메라 시간축(회전): 돌기 시작 %s  각속도 %s  정지 명령 뒤 더 돈 각(관성) %s"
+                  % ("%.2fs 뒤" % onset if onset is not None else "(1도도 안 돎)",
+                     "%.1f도/s" % rate if rate is not None else "(구간 부족)",
+                     "%+.1f도" % coast if coast is not None else "?"))
     if have_cam and args.movement in ("forward", "backward"):
         cam = [(t, ph, cf) for t, ph, a, r, cf, cl, ch in samples if not math.isnan(cf)]
         if len(cam) >= 6:
@@ -193,6 +231,7 @@ async def main_async(args):
                 v = -sum((t - tm) * (f - fm) for t, f in zip(ts_, fs_)) / den if den else None   # forward 는 줄어드니 부호 반전
             at_stop = next((cf for t, ph, cf in cam if ph == "settle"), None)
             final_f = cam[-1][2]
+            summary.update({"onset_sec": onset, "steady_mps": v, "coast_m": (at_stop - final_f) if at_stop is not None else None})
             print("카메라 시간축: 움직이기 시작 %s  정속 %s  정지 명령 뒤 더 간 거리(관성) %s"
                   % ("%.2fs 뒤" % onset if onset is not None else "(3cm 도 안 움직임)",
                      "%.3fm/s" % v if v is not None else "(정속 구간 부족 — 더 길게)",
@@ -200,15 +239,27 @@ async def main_async(args):
     if m0 is not None and m1 is not None:
         dl, df, dh = m1["lateral"] - m0["lateral"], m1["forward"] - m0["forward"], m1["heading_deg"] - m0["heading_deg"]
         print("카메라 변화: lateral %+.3fm  forward %+.3fm  heading %+.2f도" % (dl, df, dh))
+        summary.update({"cam_dlateral_m": dl, "cam_dforward_m": df, "cam_dheading_deg": dh})
         if args.movement.startswith("rotate") and abs(dh) >= 1.0:
-            print("      회전 팔 길이 A = Δlateral/sin(Δheading) = %.2fm  (config CAM_TO_PIVOT_M 후보)" % abs(dl / math.sin(math.radians(dh))))
+            summary["pivot_arm_m"] = abs(dl / math.sin(math.radians(dh)))
+            print("      회전 팔 길이 A = Δlateral/sin(Δheading) = %.2fm  (config CAM_TO_PIVOT_M 후보)" % summary["pivot_arm_m"])
         elif args.movement in ("forward", "backward"):
             moved = math.hypot(dl, df)
+            summary.update({"moved_m": moved, "mean_mps": moved / sec})
             print("      이동 %.3fm / %.2fs 명령 -> 평균 %.3fm/s (지연 포함)" % (moved, sec, moved / sec))
     if yaw is not None and abs(final_yaw) >= 0.5:
         print("      부호: %s  (rotate_ccw 는 + 가 정상, 반대면 템플릿 좌/우를 바꿔라)" % ("+" if final_yaw > 0 else "-"))
     elif yaw is not None:
         print("      각도 변화 없음 — 차체가 안 돌았다. 눈으로 무엇이 움직였는지 확인할 것")
+
+    import json
+    from datetime import datetime
+    out_dir = os.path.join(ROOT, "work_dirs", "pulse_log")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, "%s_%s_%.1fs.json" % (datetime.now().strftime("%Y%m%d_%H%M%S"), args.movement, sec))
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=1, default=lambda o: None if o != o else str(o))
+    print("저장: %s" % out)
 
 
 def main():
