@@ -1,0 +1,46 @@
+# AprilTag 도킹 — 파이썬 의존성  (Python 3.11 기준)
+#
+#   Windows 노트북   setup_windows.bat 더블클릭  (이 파일을 알아서 쓴다)
+#   macOS / Linux    pip install -r requirements.txt
+#                    (맥북만 놓고 풀어 쓴 requirements-macos.txt 도 있다)
+#   설치 확인        python tools/check_setup.py
+#
+# OS 별 차이는 아래 마커(; sys_platform ...)가 알아서 가른다 — 파일은 하나다.
+# 버전을 고정한 이유: 현장에서 최신판이 깨지면 손쓸 방법이 없다. 전 항목이
+# win_amd64 와 macOS arm64 양쪽에 바이너리 휠이 있는 것을 확인했다(2026-09-06).
+
+# ── 검출·자세 (없으면 아무것도 안 된다) ──────────────────────────────
+numpy==2.4.6
+opencv-python==5.0.0.93
+pupil-apriltags==1.0.4.post11      # 태그 검출기. apriltag(AT2) 는 안 쓴다
+
+# RealSense: 공식 pyrealsense2 는 macOS 휠이 없어서 macOS 만 갈아탄다.
+# 갈아타도 import 이름은 그대로 pyrealsense2 라 코드는 손댈 게 없다.
+# 단 macOS 에선 실카메라를 못 연다(UVCAssistant 선점 + 2.56.5 IMU 크래시,
+# requirements-macos.txt 참고). 컬러만 live_pose.py --source webcam 으로 본다.
+# 리눅스 arm64(Jetson, 맥북의 Ubuntu VM)는 PyPI 에 휠이 없어 소스 빌드로 넣는다
+# (librealsense v2.58.3, -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS=ON).
+# 그래서 그 조합은 여기서 뺀다 — 안 빼면 pip install -r 이 이 줄에서 통째로 실패한다.
+pyrealsense2==2.58.3.10794         ; sys_platform != "darwin" and platform_machine != "aarch64"
+pyrealsense2-macosx==2.56.5        ; sys_platform == "darwin"   # macOS 15+, Apple Silicon
+
+# ── src/utils/util.py 가 물고 들어오는 것 ────────────────────────────
+# 얼핏 분석용으로 보이지만 **지우면 검출이 죽는다**:
+#   detection_pose.py -> utils/util.py -> 아래 넷을 최상단에서 import 한다.
+matplotlib==3.11.1
+scipy==1.17.1
+shapely==2.1.2
+ipython==9.16.1
+
+# ── 실주행 전용 (CAN 으로 지게차를 움직일 때. Windows/Linux 만) ──────
+# canlib 는 pip 만으로 끝나지 않는다. **Kvaser 드라이버를 OS 에 먼저 깔아야**
+# import 시점에 네이티브 DLL 을 찾는다:
+#     Windows       kvaser.com -> "Kvaser Drivers for Windows" 설치파일
+#     Linux/Jetson  kvaser.com -> linuxcan 소스 받아 make && sudo make install
+# macOS 는 제외한다 — Kvaser 가 CANlib API 를 macOS 에 안 낸다(MacCAN 은
+# CAN API V3 라는 다른 규격이라 control_forklift_v2 가 그대로는 못 쓴다).
+# 따라서 macOS 에서는 실주행이 안 되고, dry-run/시뮬/분석만 된다.
+# keyboard 는 리눅스에서 root 가 필요하지만 control_forklift_v2 가 최상단에서
+# import 하므로 젯슨 실주행을 위해 남긴다. macOS 만 뺀다(엔터로 폴백된다).
+canlib==1.33.358                   ; sys_platform != "darwin"
+keyboard==0.13.5                   ; sys_platform != "darwin"

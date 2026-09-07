@@ -31,7 +31,7 @@ SETTLE_SEC = 0.8               # 명령 끊은 뒤 실정지까지 대기. 명�
 # ── 회전 (IMU 폐루프. rot_control.rotate_to) ────────────────────────────────
 ROT_WATCHDOG_GAIN = 5.0        # 워치독 = max(30s, 예상시간 x 이 값). 90도 이하 회전은
                                # 예상 6s x 5 < 30s 라 늘 30s — △은 90도 초과에만 듣는다
-ROT_LEAD_DEG = 1.3             # 관성만큼 미리 끊는 각 [도]. 2026-09-07 can_pulse 실측:
+ROT_LEAD_DEG = 2.5             # 관성만큼 미리 끊는 각 [도]. 2026-09-07 can_pulse 실측:
                                # rotate_ccw 강도20, 정지 명령 뒤 +1.3도 더 돌고 0.4s 에 멎음
 ROT_WRONG_WAY_DEG = 5.0        # 반대로 이만큼 돌면 부호가 뒤집힌 것 → 즉시 정지
 ROT_POLL_SEC = 0.01            # 회전 중 IMU 확인 주기 [s]
