@@ -1,11 +1,11 @@
 """2. 태그 찾기 — 흑백 이미지에서 AprilTag 을 검출함."""
+from config import detection as D
 import numpy as np
 import pupil_apriltags
-from config.detection import DEFAULT_QUAD_BLUR, MIN_TAG_PX, STABLE_TAG_PX
 
 _keep_alive = []
 
-def make_detector(families="tag36h11", quad_blur=DEFAULT_QUAD_BLUR, **options):
+def make_detector(families="tag36h11", quad_blur=D.DEFAULT_QUAD_BLUR, **options):
     """검출기를 만듦."""
     # AT3 는 blur 인자 이름이 quad_sigma
     if quad_blur:

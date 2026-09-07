@@ -2,6 +2,7 @@
 
 어느 소스든 `for i, ts, img in frames:` 3-튜플로 통일함.
 """
+from config import detection as D
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -12,7 +13,6 @@ import time
 import cv2
 import numpy as np
 
-from config.detection import COLOR_SIZE, D435I_COLOR_REF, IR_SIZE
 from ...utils.camera import COLOR_EXPOSURE_UNIT_US
 
 @dataclass
@@ -64,7 +64,7 @@ class CameraIntrinsics:
         d = np.array(self.distortion, dtype=np.float64)
         return cv2.undistort(img, self.K, d)
 
-def intrinsics_from_ref(shape, ref=D435I_COLOR_REF):
+def intrinsics_from_ref(shape, ref=D.D435I_COLOR_REF):
     """해상도만 알 때 기준 보정값에서 역산함. 화각 가정보다 정확함.
 
     D435i 는 세로 비율로만 스케일됨(4:3 은 가로를 잘라냄). 실측 대조 결과
@@ -264,7 +264,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
     want_depth = bool(depth or with_depth)
 
     if width is None or height is None:
-        width, height = COLOR_SIZE if stream == "color" else IR_SIZE
+        width, height = D.COLOR_SIZE if stream == "color" else D.IR_SIZE
 
     pipeline = rs.pipeline()
     config = rs.config()

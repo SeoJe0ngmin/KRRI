@@ -2,22 +2,18 @@
 
 lateral / forward / heading 이 제어에 쓰는 값.
 """
+from config import detection as D
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-from config.detection import (CAM_YAW_OFFSET_DEG, DEPTH_CHECK_MAX_Z,
-                       DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M,
-                      MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, MIN_TAG_PX,
-                      RELIABLE_TILT_DEG)
 from ...utils.util import r2rpy, invert_T, t2pr
 from .image import (depth_at, from_video, intrinsics_from_hfov,
                     intrinsics_from_ref,
                     open_bag, open_realsense, open_webcam, to_gray)
-from .detection_tag import (DEFAULT_QUAD_BLUR, STABLE_TAG_PX, detect, make_detector,
-                     tag_pixel_size)
+from .detection_tag import detect, make_detector, tag_pixel_size
 
 
 # 태그 네 모서리의 3D 좌표. detection.corners 와 같은 순서.
@@ -136,9 +132,9 @@ def pose_to_forklift(T_camera_tag, unit='deg'):
     roll = np.arctan2(-right[1], np.hypot(right[0], right[2]))   # 갸우뚱
     if unit == 'deg':
         roll, pitch, yaw = (np.degrees(v) for v in (roll, pitch, yaw))
-        yaw -= CAM_YAW_OFFSET_DEG          # heading 과 같은 보정
+        yaw -= D.CAM_YAW_OFFSET_DEG          # heading 과 같은 보정
     else:
-        yaw -= np.radians(CAM_YAW_OFFSET_DEG)
+        yaw -= np.radians(D.CAM_YAW_OFFSET_DEG)
 
     return {"lateral": float(p[0]), "vertical": float(p[1]), "forward": float(-p[2]),
             "roll": float(roll), "pitch": float(pitch), "yaw": float(yaw),
@@ -188,18 +184,17 @@ def docking_state(T_camera_tag, intrinsics=None, tag_size=None):
     fwd = R @ np.array([0.0, 0.0, 1.0])
     # 카메라가 지게차 정면과 어긋나게 달렸으면 그만큼 통째로 밀려 읽힌다.
     # 어느 자리에서든 같은 양이라 상수 하나로 뺀다(실측 확인).
-    heading = float(np.degrees(np.arctan2(fwd[0], fwd[2])) - CAM_YAW_OFFSET_DEG)
+    heading = float(np.degrees(np.arctan2(fwd[0], fwd[2])) - D.CAM_YAW_OFFSET_DEG)
 
     # 각도를 믿어도 되는지는 **태그가 화면에서 얼마나 찌그러져 보이나(tilt)** 로 정함.
     tilt = tag_tilt_deg(T_camera_tag)
     # intrinsics 를 주면 프록시(tilt) 대신 heading 흔들림을 직접 예측해서 판정한다.
     # tilt 은 태그가 화면 중심을 벗어나 생기는 원근 정보를 못 보기 때문이다.
     sigma = float("nan")
-    reliable = tilt >= RELIABLE_TILT_DEG
+    reliable = tilt >= D.RELIABLE_TILT_DEG
     if intrinsics is not None and tag_size:
-        from config.detection import MAX_HEADING_SIGMA_DEG
         sigma = heading_sigma_deg(T_camera_tag, intrinsics, tag_size)
-        reliable = sigma <= MAX_HEADING_SIGMA_DEG
+        reliable = sigma <= D.MAX_HEADING_SIGMA_DEG
     return {"lateral": lateral, "vertical": vertical, "forward": forward,
             "distance": distance,
             "approach_deg": approach, "heading_deg": heading,
@@ -220,9 +215,8 @@ def heading_sigma_deg(T_camera_tag, intrinsics, tag_size,
     거리·태그크기·기울기·화면상 위치가 전부 자동으로 반영된다.
     corner_px 는 실측으로 보정할 값이다(기본 0.2px).
     """
-    from config.detection import CORNER_NOISE_PX, SIGMA_SAMPLES
-    corner_px = CORNER_NOISE_PX if corner_px is None else float(corner_px)
-    n = int(SIGMA_SAMPLES if n is None else n)
+    corner_px = D.CORNER_NOISE_PX if corner_px is None else float(corner_px)
+    n = int(D.SIGMA_SAMPLES if n is None else n)
 
     T = np.asarray(T_camera_tag, dtype=np.float64)
     if T.shape != (4, 4) or not np.isfinite(T).all():
@@ -306,9 +300,9 @@ def depth_cross_check(detection, depth, T_camera_tag, patch=5, depth_scale=None)
     z 가 DEPTH_CHECK_MAX_Z(1.5m) 를 넘으면 허용치가 너무 헐거워져 판정을 건너뜀.
     """
     z_pose = float(np.asarray(T_camera_tag)[2, 3])
-    tol = max(DEPTH_TOL_FLOOR_M, DEPTH_TOL_COEF * z_pose * z_pose)
+    tol = max(D.DEPTH_TOL_FLOOR_M, D.DEPTH_TOL_COEF * z_pose * z_pose)
     out = {"z_pose": z_pose, "z_depth": None, "diff_m": None, "diff_pct": None,
-           "tol_m": float(tol), "in_range": bool(0.0 < z_pose <= DEPTH_CHECK_MAX_Z),
+           "tol_m": float(tol), "in_range": bool(0.0 < z_pose <= D.DEPTH_CHECK_MAX_Z),
            "agree": False}
 
     z_depth = _sample_depth_m(detection, depth, patch, depth_scale)
@@ -364,12 +358,12 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
     reasons = []
     if not np.isfinite(T).all():
         reasons.append("pose_nan")
-    if tag_px < STABLE_TAG_PX:
-        reasons.append(f"tag_px<{STABLE_TAG_PX:g}")
-    if not np.isfinite(rms) or rms > MAX_REPROJ_RMS_PX:
-        reasons.append(f"reproj>{MAX_REPROJ_RMS_PX:g}px")
-    if margin < MIN_DECISION_MARGIN:
-        reasons.append(f"margin<{MIN_DECISION_MARGIN:g}")
+    if tag_px < D.STABLE_TAG_PX:
+        reasons.append(f"tag_px<{D.STABLE_TAG_PX:g}")
+    if not np.isfinite(rms) or rms > D.MAX_REPROJ_RMS_PX:
+        reasons.append(f"reproj>{D.MAX_REPROJ_RMS_PX:g}px")
+    if margin < D.MIN_DECISION_MARGIN:
+        reasons.append(f"margin<{D.MIN_DECISION_MARGIN:g}")
     if hamming != 0:
         reasons.append("hamming!=0")
 
@@ -378,7 +372,7 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
             "reproj_rms_px": rms,
             "tag_px": tag_px,
             "tilt_deg": tilt,
-            "reliable_angle": bool(tilt >= RELIABLE_TILT_DEG),
+            "reliable_angle": bool(tilt >= D.RELIABLE_TILT_DEG),
             "decision_margin": margin,
             "hamming": hamming,
             "ok": not reasons,
@@ -428,7 +422,7 @@ class TagPipeline:
     """소스 한 개 + 검출기 한 개를 들고, 프레임마다 Result 를 뱉음."""
 
     def __init__(self, frames=None, intrinsics=None, tag_size=None, detector=None,
-                 families="tag36h11", quad_blur=DEFAULT_QUAD_BLUR, method="auto",
+                 families="tag36h11", quad_blur=D.DEFAULT_QUAD_BLUR, method="auto",
                  min_margin=0.0, max_hamming=0, gray_channel=None,
                  hfov=None, quality=True, depth_check=True,
                  label="", origin="", close=None):
@@ -644,10 +638,8 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     stable 이 False 면 **명령을 내지 말고 다시 재라.** 누가 지나갔거나
     조명이 깜빡였거나 아직 안 멈춘 것.
     """
-    from config.detection import (MEASURE_FRAMES, MEASURE_MAX_FRAMES,
-                           STABLE_HEADING_DEG, STABLE_LATERAL_M)
-    n = int(n or MEASURE_FRAMES)
-    max_frames = int(max_frames or MEASURE_MAX_FRAMES)
+    n = int(n or D.MEASURE_FRAMES)
+    max_frames = int(max_frames or D.MEASURE_MAX_FRAMES)
 
     keys = ("lateral", "vertical", "forward", "distance",
             "approach_deg", "heading_deg", "tilt_deg",
@@ -694,10 +686,9 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     out = {k: med(v) for k, v in got.items()}
     out["n"] = m
     out["spread"] = {k: stderr(v) for k, v in got.items()}
-    from config.detection import MAX_HEADING_SIGMA_DEG
     sig = out.get("heading_sigma_deg", float("nan"))
-    out["reliable_angle"] = bool(sig <= MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
-        else bool(out["tilt_deg"] >= RELIABLE_TILT_DEG)
+    out["reliable_angle"] = bool(sig <= D.MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
+        else bool(out["tilt_deg"] >= D.RELIABLE_TILT_DEG)
 
     # 흔들림 판정은 **두 조건을 같이** 본다.
     #
@@ -710,18 +701,17 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     #
     # 예전에는 ②만 봤는데, 그 문턱이 reliable_angle 보다 늘 느슨해서
     # (같은 눈금으로 환산하면 3.65도 vs 0.50도) **한 번도 걸릴 수 없었다.**
-    from config.detection import STABLE_SPREAD_K
     reasons = []
     if m < n:
         reasons.append("프레임 부족 %d/%d" % (m, n))
     pred_h = out.get("heading_sigma_deg")
     pred_h = (pred_h / np.sqrt(m)) if (pred_h and np.isfinite(pred_h)) else None
     obs_l, obs_h = out["spread"]["lateral"], out["spread"]["heading_deg"]
-    if obs_l > STABLE_LATERAL_M:
+    if obs_l > D.STABLE_LATERAL_M:
         reasons.append("lateral 흔들림 %.1fmm" % (obs_l * 1000))
-    if obs_h > STABLE_HEADING_DEG:
+    if obs_h > D.STABLE_HEADING_DEG:
         reasons.append("heading 흔들림 %.2f도" % obs_h)
-    if pred_h and obs_h > max(STABLE_SPREAD_K * pred_h, STABLE_HEADING_DEG / 3.0):
+    if pred_h and obs_h > max(D.STABLE_SPREAD_K * pred_h, D.STABLE_HEADING_DEG / 3.0):
         reasons.append("예측보다 %.1f배 흔들림 (%.3f -> %.3f도)"
                        % (obs_h / pred_h, pred_h, obs_h))
     out["stable"] = not reasons
