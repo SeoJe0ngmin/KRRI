@@ -29,7 +29,6 @@ tools/         live_pose.py   실시간 화면          <- 실사용
                sim_measure.py / sim_engine.py   그 엔진
                run.py         (빈 파일) 통합 실행
                viewer.sh      realsense-viewer 실행기 (rsview 로 링크됨)
-               wsl_attach_camera.sh
 legacy/        viewer_filter/ realsense-viewer 용 C++ 확장. 실사용 경로 아님
                옛 노트북, 블로그 원본 유틸, 캘리브레이션 스크립트
 librealsense/  SDK 소스 (555MB, .gitignore)
@@ -47,7 +46,6 @@ image.py  ->  detection_tag.py  ->  detection_pose.py
 ## 자주 쓰는 명령
 
 ```bash
-./tools/wsl_attach_camera.sh                          # 재부팅·재연결 후 카메라 붙이기
 rsview                                                # realsense-viewer (카메라 자동 연결)
 python tools/live_pose.py --source realsense          # 실시간 화면
 python tools/verify.py --frames 200 --truth-z 2.00    # 줄자 대조
@@ -426,7 +424,6 @@ A4 에는 20 cm 태그가 여백 5 mm 로 겨우 들어간다 → **A3 권장.**
 ### 카메라 붙이기
 
 ```bash
-./tools/wsl_attach_camera.sh
 ```
 
 재부팅·재연결 때마다 필요하다. 하는 일:

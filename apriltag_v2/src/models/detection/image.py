@@ -235,7 +235,7 @@ def _who_has_camera():
     import subprocess
     devs = glob.glob("/dev/video*")
     if not devs:
-        return " (/dev/video* 가 없다 — tools/wsl_attach_camera.sh 를 먼저 실행할 것)"
+        return " (/dev/video* 가 없다 — UTM 이면 USB 로 RealSense 를 VM 에 넘겼나 확인, WSL 이면 usbipd 로 붙일 것)"
     try:
         out = subprocess.run(["fuser"] + devs, capture_output=True, text=True, timeout=3)
         pids = sorted(set(out.stdout.split()))

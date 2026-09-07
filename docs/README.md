@@ -10,7 +10,6 @@
 
 ```bash
 pip install -r requirements.txt
-./tools/wsl_attach_camera.sh          # WSL2 에서 카메라 붙이기 (재부팅마다)
 realsense-viewer                      # 가끔 카메라 점검할 때 (SDK 기본 제공)
 python tools/live_pose.py             # 화면으로 확인
 python tools/imu_check.py             # IMU 부호·드리프트 확인
@@ -107,7 +106,6 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `sim.py` | 정답을 지어내서 오차 측정 (카메라 없이). `--live` 로 3D + 슬라이더 |
 | `sim_measure.py` | 배치 → 렌더 → 검출 → 오차 |
 | `sim_engine.py` | 그림과 정답을 만드는 엔진 |
-| `wsl_attach_camera.sh` | WSL2 에 카메라 붙이기 |
 
 ---
 

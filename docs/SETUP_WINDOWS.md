@@ -23,7 +23,7 @@
 | **Kvaser Drivers for Windows** 설치파일 | kvaser.com → Downloads. **pip 로 안 된다** — 이거 없으면 canlib 가 장비를 못 찾는다 |
 | **Kvaser CANlib SDK** 설치파일 | 같은 곳. **둘 다 필요하다** — Drivers 만 깔면 pip canlib 가 레지스트리 키(CANLIB32)를 못 찾아 `WinError 2` 로 죽는다 (2026-09-06 그램에서 실증) |
 | 이 저장소 | `git clone https://github.com/SeoJe0ngmin/KRRI.git` (private — 로그인 필요). 또는 zip 으로 |
-| (인터넷 없는 현장 대비) 오프라인 휠 | 개발 PC 의 코드 폴더에서 `./tools/make_offline_bundle.sh` → `offline_wheels/` 가 생김. 저장소 폴더째 USB 에 복사 |
+| (인터넷 없는 현장 대비) | 인터넷 되는 곳에서 미리 `pip download -r docs/requirements.txt -d offline_wheels` 로 휠을 받아 USB 에 담아 간다 |
 
 ## 2. 노트북 셋업 (이것도 가능하면 미리)
 
