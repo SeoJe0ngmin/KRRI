@@ -11,7 +11,7 @@
 #     .git/           이력. 현장에서 clone 할 게 아니면 불필요
 #     __pycache__/    파이썬 캐시
 #
-# 넣는 것: 코드 전부 + requirements.txt + setup_windows.bat + offline_wheels/
+# 넣는 것: 코드 전부 + docs/requirements.txt + offline_wheels/
 set -e
 cd "$(dirname "$0")/.."
 
@@ -44,7 +44,7 @@ cat > "$DEST/읽어보기.txt" <<'TXT'
 그 다음:
 
   3. 이 폴더를 노트북 하드디스크로 복사   (USB 에서 바로 돌리지 말 것)
-  4. apriltag\setup_windows.bat  더블클릭
+  4. pip install --no-index --find-links=offline_wheels -r docs\requirements.txt
   5. 끝에 "판정: 준비 완료" 가 뜨는지 확인
 
 리허설 (지게차 없이, 카메라만 꽂고):

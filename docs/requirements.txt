@@ -1,6 +1,6 @@
 # AprilTag 도킹 — 파이썬 의존성  (Python 3.11 기준)
 #
-#   Windows 노트북   setup_windows.bat 더블클릭  (이 파일을 알아서 쓴다)
+#   Windows 노트북   pip install -r docs/requirements.txt (Kvaser Drivers+CANlib SDK 먼저)
 #   macOS / Linux    pip install -r requirements.txt
 #                    (맥북만 놓고 풀어 쓴 requirements-macos.txt 도 있다)
 #   설치 확인        python tools/check_setup.py

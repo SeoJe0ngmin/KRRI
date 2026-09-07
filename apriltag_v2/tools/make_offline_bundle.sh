@@ -6,7 +6,7 @@
 #
 #     ./tools/make_offline_bundle.sh
 #     -> apriltag/offline_wheels/ 에 .whl 들이 쌓임 (gitignore 됨)
-#     -> 저장소 폴더째 USB 에 복사하면, 노트북에서 setup_windows.bat 가
+#     -> 저장소 폴더째 USB 에 복사하면, 노트북에서 pip install -r docs/requirements.txt --find-links=offline_wheels 가
 #        offline_wheels/ 를 발견하고 인터넷 없이 설치한다
 #
 # Kvaser 드라이버 설치파일(kvaser_drivers_setup.exe)은 pip 가 아니라서
@@ -25,4 +25,4 @@ mkdir -p "$OUT"
 
 echo
 echo "완료: $OUT/ ($(ls "$OUT" | wc -l)개 파일, $(du -sh "$OUT" | cut -f1))"
-echo "저장소 폴더째 USB 로 복사하면 노트북에서 setup_windows.bat 가 알아서 쓴다."
+echo "저장소 폴더째 USB 로 복사하면 노트북에서 git clone 후 pip install -r docs/requirements.txt (오프라인이면 --find-links=offline_wheels) 로 설치한다."

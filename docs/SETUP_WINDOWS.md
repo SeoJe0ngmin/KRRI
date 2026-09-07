@@ -23,17 +23,18 @@
 | **Kvaser Drivers for Windows** 설치파일 | kvaser.com → Downloads. **pip 로 안 된다** — 이거 없으면 canlib 가 장비를 못 찾는다 |
 | **Kvaser CANlib SDK** 설치파일 | 같은 곳. **둘 다 필요하다** — Drivers 만 깔면 pip canlib 가 레지스트리 키(CANLIB32)를 못 찾아 `WinError 2` 로 죽는다 (2026-09-06 그램에서 실증) |
 | 이 저장소 | `git clone https://github.com/SeoJe0ngmin/KRRI.git` (private — 로그인 필요). 또는 zip 으로 |
-| (인터넷 없는 현장 대비) 오프라인 휠 | 개발 PC 에서 `./tools/make_offline_bundle.sh` → `offline_wheels/` 가 생김. 저장소 폴더째 USB 에 복사 |
+| (인터넷 없는 현장 대비) 오프라인 휠 | 개발 PC 의 코드 폴더에서 `./tools/make_offline_bundle.sh` → `offline_wheels/` 가 생김. 저장소 폴더째 USB 에 복사 |
 
 ## 2. 노트북 셋업 (이것도 가능하면 미리)
 
 ```
 ① Python 3.11 설치
 ② Kvaser Drivers for Windows 설치
-③ KRRI\apriltag 폴더에서  setup_windows.bat  더블클릭
-      - offline_wheels\ 가 있으면 인터넷 없이 설치된다
-      - 끝에 점검(check_setup.py)이 자동으로 돈다
-④ 점검 결과가 "판정: 준비 완료" 인지 확인
+③ 저장소를 git clone (또는 zip 해제) 하고, conda 든 venv 든 python 3.11 환경에서:
+      pip install -r docs\requirements.txt
+      (인터넷 없는 현장이면  pip install --no-index --find-links=offline_wheels -r docs\requirements.txt)
+④ 코드 폴더(apriltag_v1 또는 apriltag_v2)에서  python tools\check_setup.py
+      결과가 "판정: 준비 완료" 인지 확인
 ```
 
 점검만 다시 돌리려면: `python tools\check_setup.py`
