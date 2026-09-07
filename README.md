@@ -13,8 +13,7 @@ pip install -r requirements.txt        # 리포 루트
 cd apriltag_v2                         # (또는 apriltag_v1). 아래는 v2 경로
 python tools/check/device_check.py     # 카메라·IMU 점검 (v1: tools/realsense_check.py, imu_check.py)
 python tools/check/live_pose.py        # 실시간 화면으로 확인
-python tools/run.py --dry-run          # 도킹 순서만 (CAN 안 씀)
-python tools/run.py                    # 실제 주행 (SPACE 시작, Ctrl+C 비상정지)
+python tools/run.py --show --record-events   # 실제 주행 (SPACE 시작, Ctrl+C 비상정지). 화면 띄우고 기록 남김
 ```
 
 ---
