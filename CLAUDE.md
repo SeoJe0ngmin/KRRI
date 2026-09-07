@@ -12,6 +12,8 @@
   - VM(`ubuntu-vm`) : `jm_mac` 을 받아 **쓰기만** 한다. VM 안에서 커밋하지 않는다.
   - `main` : `jm_mac` 의 v2 를 주석·docstring 뺀 **부모 없는 단일 스냅샷**(GitHub 기본 브랜치). config/*.py 와
     다른 팀 파일 3종(control_forklift_v2, control_광운대, fwd_time_model)은 주석 유지. 배포용이라 VM 엔 안 올린다.
+    루트에 `.gitignore`·`README.md`·`requirements.txt`(정리본, apriltag_v2 밖) + `apriltag_v2/`.
+    **main 에 올리는 건 자동으로 하지 않는다** — 사용자가 "main 에 반영해줘" 라고 할 때만 rebuild·force-push.
 - **config import 스타일**: control·detection 모두 `from config import control as C` / `... detection as D` + `C.X`/`D.X`.
   config 상수의 원산은 `config/detection.py`. 공개 API 는 `src/models/__init__` 가 config.detection 에서 직접 재수출한다.
 - **requirements**: `requirements.txt`(리포 루트) **마커본 하나** — 패키지·OS 마커만, 설명 없음. 우분투/Jetson(arm64)는
