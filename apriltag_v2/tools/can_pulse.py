@@ -81,8 +81,18 @@ async def main_async(args):
     tag_id = TAG_ID
     if args.camera:
         from src.models import TagPipeline
-        pipe = TagPipeline.from_realsense(TAG_SIZE_M, label="pulse")
-        m0 = _measure_now(pipe, tag_id)
+        for attempt in (1, 2):
+            pipe = TagPipeline.from_realsense(TAG_SIZE_M, label="pulse")
+            try:
+                m0 = _measure_now(pipe, tag_id)
+                break
+            except RuntimeError as exc:
+                # 직전 실행을 Ctrl+C 로 끊은 직후엔 첫 프레임이 5초 안에 안 오기도 한다. 닫고 한 번 더.
+                print("!! 카메라 첫 프레임 실패 (%s) — %s" % (str(exc)[:40], "2초 뒤 다시 연다" if attempt == 1 else "포기"))
+                pipe.close(); pipe = None
+                if attempt == 2:
+                    raise SystemExit("카메라가 응답하지 않는다. UTM USB 메뉴에서 RealSense 를 뺐다 다시 넣고 재시도")
+                await asyncio.sleep(2.0)
         print("카메라 전 : %s" % _fmt_m(m0))
 
     if args.dry_run:
