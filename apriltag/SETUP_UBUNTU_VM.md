@@ -7,7 +7,16 @@ VM 은 Jetson 과 같은 arm64 리눅스라 여기서 검증한 절차와 코드
 
 ## 되는 것 / 안 되는 것
 - 된다: 검출·자세, depth, IR, IMU, 프레임 메타데이터, bag 녹화, canlib(CAN 송수신), dry-run
-- 조건부: USB 전달 속도가 USB 2 수준으로 떨어질 수 있어 카메라는 640x480@30 이 안전선
+- 실측(2026-09-07): VM 이 카메라를 **USB 3.2** 로 받는다. 컬러 640x480/1280x720/1920x1080 모두 30 fps,
+  depth 30 fps, 컬러+depth 동시 30 fps, IMU(gyro 200Hz + accel 100Hz) OK, 타임스탬프 global_time.
+- RSUSB 백엔드의 버릇 둘 (Jetson 을 RSUSB 로 빌드해도 같다):
+  1) **IMU 는 먼저 연 쪽이 갖는다.** 컬러 파이프라인을 먼저 열면 같은 프로세스의 두 번째
+     파이프라인도, 별도 프로세스도 IMU 를 못 연다('failed to set power state'). 자이로를 먼저 열고
+     컬러를 나중에 열면 둘 다 잘 돈다 — run.py / live_pose.py 는 지금 컬러가 먼저라 IMU 줄 없이 돈다.
+  2) 컬러 프레임의 actual_exposure / gain_level 메타데이터는 **자동노출을 끈 때만** 온다
+     (수동 노출이면 정상). realsense_check.py 의 그 WARN 과 '커널 패치' 안내는 V4L2 백엔드용이라 무시.
+- 이 D435i 의 IMU 는 BMI085 라 accel 유효값이 100/200/400 Hz 다(63/250 은 BMI055). imu_yaw.py 가
+  accel 63 을 요구하면 'Couldn't resolve requests' 로 자이로만 열린다.
 - 하지 말 것: VM 에서 실차 주행. 제어 경로에 macOS → USB 전달 → VM 이 끼어서 맥 절전·USB 재연결
   순간 명령이 끊긴다. 실주행은 Jetson/Windows 에서. (굳이 하면 맥 절전 끄고, 허브 없이 직결, 사람이 제동 위치)
 
@@ -66,8 +75,12 @@ ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh check'
    cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/run.py             # 실주행
    ```
    SPACE 로 시작(터미널에서 직접 읽는다), Ctrl+C 로 비상정지 후 종료.
-4. 화면이 필요한 것(`--show`, live_pose)은 VM 창 안 터미널에서 돌리거나 `ssh -X ubuntu-vm` 으로 맥의 XQuartz 에 띄운다.
-   SSH 터미널에는 DISPLAY 가 없어서 `--show` 가 창을 못 연다.
+4. 화면(`--show`, live_pose): VM 의 `~/.bashrc` 끝에 SSH 셸이 VM 화면(`DISPLAY=:0`)을 쓰도록 넣어 두었다
+   (setup_ubuntu_arm64.sh conda 단계가 넣는다). 그래서 VS Code SSH 터미널에서 돌려도 창은 **UTM 의 VM 창**에 뜬다.
+   그 설정이 없으면 SSH 터미널에는 DISPLAY 가 없어 `qt.qpa.xcb: could not connect to display` 로 죽는다.
+   맥 화면에 띄우려면 `ssh -X ubuntu-vm`(XQuartz).
+5. realsense_check.py 의 '프레임 드롭' 항목이 `No module named src` 로 WARN 이면 리포 루트 경로 문제다
+   (tools/realsense_check.py 가 parents[2] 를 넣는데 src 는 parents[1]=apriltag 에 있다). `PYTHONPATH=. python tools/realsense_check.py` 로 우회.
 
 ## 4. 코드 갱신 (jm → jm_mac → VM)
 ```bash

@@ -39,6 +39,17 @@ conda_step() {
   fi
   "$HOME/miniforge3/bin/conda" init bash >/dev/null
   [ -d "$HOME/miniforge3/envs/$ENV" ] || "$HOME/miniforge3/bin/conda" create -y -n "$ENV" python=$PY
+  # SSH 로 들어온 터미널에서도 로컬 화면(:0)에 창을 띄울 수 있게 (VM 창 / Jetson 에 모니터가 있을 때)
+  if ! grep -q "mutter-Xwaylandauth" "$HOME/.bashrc"; then cat >> "$HOME/.bashrc" <<'RC'
+
+# SSH 로 들어온 터미널에서도 로컬 화면에 창을 띄울 수 있게 (live_pose, run.py --show)
+if [ -z "$DISPLAY" ] && [ -S /tmp/.X11-unix/X0 ]; then
+    _xa=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth.* 2>/dev/null | head -1)
+    [ -n "$_xa" ] && export DISPLAY=:0 XAUTHORITY="$_xa"
+    unset _xa
+fi
+RC
+  fi
 }
 
 realsense_step() {
