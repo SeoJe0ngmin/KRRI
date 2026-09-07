@@ -82,20 +82,21 @@ def snapshot_config(record_dir, argv=None):
             "time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "git": _git_commit(),
             "argv": list(sys.argv if argv is None else argv)}
-    # 세 모듈(control/detection/imu)의 상수를 모듈별로 나누지 않고 한 묶음으로 편다.
-    # detection 이 control 에서 재수출하는 HEAD_TOL_DEG/LAT_TOL_M 은 값이 같아 겹쳐도 무방.
+    # config.json 안에서 control / detection / imu 를 각각 한 묶음(층)으로 나눈다.
     values = {}
     for modname in _CONFIG_MODULES:
         try:
             m = importlib.import_module(modname)
         except Exception:
             continue
+        vals = {}
         for k in dir(m):
             if not k.isupper():
                 continue
             v = getattr(m, k)
             if _jsonable(v):
-                values[k] = list(v) if isinstance(v, tuple) else v
+                vals[k] = list(v) if isinstance(v, tuple) else v
+        values[modname.split(".")[-1]] = vals   # {"control": {...}, "detection": {...}, "imu": {...}}
     snap["config"] = values
     try:
         os.makedirs(record_dir, exist_ok=True)
