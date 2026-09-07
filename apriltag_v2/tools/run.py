@@ -42,6 +42,7 @@ from src.models.control.control_from_pose import (CanDriver,             # noqa:
 from config.main import MAX_STEPS                                  # noqa: E402
 from src.models.detection.image import intrinsics_from_ref        # noqa: E402                        # noqa: E402
 from src.utils.imu_yaw import GyroYaw                                    # noqa: E402
+from src.utils.event_log import snapshot_config              # noqa: E402
 
 PHASE_KO = {"measure": "측정 중", "command": "명령 실행 중", "search": "Set3: 태그 찾는 중",
            "final": "마지막 접근 중", "done": "끝", "manual": "!! 수동전환 필요 !!"}
@@ -218,6 +219,9 @@ async def main_async(args):
         await _wait_start(args.show)
         if args.record_events:
             record_dir = _new_event_log_dir()          # <- 주행 시작 시각으로 이름 짓는다
+            _cfg = snapshot_config(record_dir)          # 이 주행에 쓴 config 값을 같이 남긴다
+            if _cfg:
+                print("  config 스냅샷 -> %s" % _cfg)
             if not args.dry_run:
                 driver.record_dir = record_dir         # CanDriver 는 기록 때마다 이 속성을 읽는다
             else:
