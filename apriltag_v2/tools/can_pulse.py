@@ -26,7 +26,7 @@ sys.path.insert(0, ROOT)
 from src.models.control.control_forklift_v2 import (      # noqa: E402
     MOVEMENT_TEMPLATES, CONTROL_TEMPLATES, CAN_MOVEMENT_ID, CAN_CONTROL_ID)
 
-MAX_SEC = 2.0          # 펄스 상한. 그 이상은 run.py 의 몫이다
+MAX_SEC = 5.0          # 펄스 상한. 회전은 지연 0.85s 뒤에야 돌기 시작해 2~3s 는 줘야 5~15도, 직진은 3~5s 는 되어야 정속 구간이 들어온다
 
 
 def _measure_now(pipe, tag_id, n=30, max_frames=150):
