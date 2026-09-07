@@ -1,13 +1,13 @@
 #!/bin/bash
 # 리눅스 arm64(맥북의 Ubuntu VM, Jetson)에 krri 실행환경을 만든다. 단계별로 돌린다.
 #
-#     bash tools/setup_ubuntu_arm64.sh apt        # 빌드 도구·라이브러리 (sudo)
-#     bash tools/setup_ubuntu_arm64.sh conda      # Miniforge + python 3.11 env "krri"
-#     bash tools/setup_ubuntu_arm64.sh realsense  # librealsense 소스 빌드 + pyrealsense2 (30~40분, Jetson Nano 는 1~2시간)
-#     bash tools/setup_ubuntu_arm64.sh pip        # requirements.txt (pyrealsense2 는 위에서 빌드했으니 제외)
-#     bash tools/setup_ubuntu_arm64.sh can        # Kvaser linuxcan 드라이버 + canlib
-#     bash tools/setup_ubuntu_arm64.sh check      # check_setup.py + lsusb
-#     bash tools/setup_ubuntu_arm64.sh all
+#     bash tools/etc/setup_ubuntu_arm64.sh apt        # 빌드 도구·라이브러리 (sudo)
+#     bash tools/etc/setup_ubuntu_arm64.sh conda      # Miniforge + python 3.11 env "krri"
+#     bash tools/etc/setup_ubuntu_arm64.sh realsense  # librealsense 소스 빌드 + pyrealsense2 (30~40분, Jetson Nano 는 1~2시간)
+#     bash tools/etc/setup_ubuntu_arm64.sh pip        # requirements.txt (pyrealsense2 는 위에서 빌드했으니 제외)
+#     bash tools/etc/setup_ubuntu_arm64.sh can        # Kvaser linuxcan 드라이버 + canlib
+#     bash tools/etc/setup_ubuntu_arm64.sh check      # check_setup.py + lsusb
+#     bash tools/etc/setup_ubuntu_arm64.sh all
 #
 # 왜 소스 빌드인가: PyPI 에 리눅스 aarch64 용 pyrealsense2 휠이 없다(requirements.txt 참고).
 # RSUSB 백엔드(-DFORCE_RSUSB_BACKEND=ON)라 커널 패치 없이 프레임 메타데이터가 온다.
@@ -17,7 +17,7 @@ STEP="${1:-all}"
 RS_VER=v2.58.3            # requirements.txt 의 pyrealsense2==2.58.3.* 와 맞춤
 PY=3.11
 ENV=krri
-CODE_DIR=$(cd "$(dirname "$0")/.." && pwd)        # 이 스크립트가 든 코드 폴더 (apriltag_v1 또는 apriltag_v2)
+CODE_DIR=$(cd "$(dirname "$0")/../.." && pwd)        # 이 스크립트가 든 코드 폴더 (apriltag_v1 또는 apriltag_v2)
 REPO_DIR=$(cd "$CODE_DIR/.." && pwd)             # 리포 루트 (docs/ 가 있는 곳)
 LINUXCAN_URL="https://pim.kvaser.com/var/assets/Product_Resources/7330130980754/5.52.563/linuxcan_5_52_563.tar.gz"
 PYBIN="$HOME/miniforge3/envs/$ENV/bin/python"

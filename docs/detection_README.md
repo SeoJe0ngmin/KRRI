@@ -47,8 +47,8 @@ image.py  ->  detection_tag.py  ->  detection_pose.py
 
 ```bash
 rsview                                                # realsense-viewer (카메라 자동 연결)
-python tools/live_pose.py --source realsense          # 실시간 화면
-python tools/verify.py --frames 200 --truth-z 2.00    # 줄자 대조
+python tools/check/live_pose.py --source realsense          # 실시간 화면
+python tools/check/verify.py --frames 200 --truth-z 2.00    # 줄자 대조
 python tools/sim.py --live                            # 3D + 슬라이더로 실시간
 python tools/sim.py distance 1 2 3 5 --plot           # 한 값만 바꿔가며
 python src/utils/make_tag_pdf.py --id 1 --size 200 --paper A3

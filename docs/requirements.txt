@@ -3,7 +3,7 @@
 #   Windows 노트북   pip install -r docs/requirements.txt (Kvaser Drivers+CANlib SDK 먼저)
 #   macOS / Linux    pip install -r requirements.txt
 #                    (맥북만 놓고 풀어 쓴 requirements-macos.txt 도 있다)
-#   설치 확인        python tools/check_setup.py
+#   설치 확인        python tools/check/check_setup.py
 #
 # OS 별 차이는 아래 마커(; sys_platform ...)가 알아서 가른다 — 파일은 하나다.
 # 버전을 고정한 이유: 현장에서 최신판이 깨지면 손쓸 방법이 없다. 전 항목이

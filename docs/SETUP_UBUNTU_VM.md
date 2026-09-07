@@ -56,12 +56,12 @@ ssh ubuntu-vm 'git clone -q -b jm_mac ~/krri.git ~/krri && git -C ~/krri remote 
 ```
 그 다음 단계별로 (전부 합쳐 40~60분, 대부분 librealsense 빌드):
 ```bash
-ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh apt'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh conda'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh realsense'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh pip'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh can'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh check'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v2/tools/etc/setup_ubuntu_arm64.sh apt'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v2/tools/etc/setup_ubuntu_arm64.sh conda'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v2/tools/etc/setup_ubuntu_arm64.sh realsense'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v2/tools/etc/setup_ubuntu_arm64.sh pip'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v2/tools/etc/setup_ubuntu_arm64.sh can'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v2/tools/etc/setup_ubuntu_arm64.sh check'
 ```
 파이썬은 `~/miniforge3/envs/krri/bin/python`(3.11). 스크립트 안에 각 단계가 무엇을 왜 하는지 적혀 있다.
 
@@ -70,13 +70,13 @@ ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh check'
 2. 확인:
    ```bash
    ssh ubuntu-vm 'lsusb | grep -i -E "intel|kvaser"'
-   ssh ubuntu-vm 'cd ~/krri/apriltag_v1 && ~/miniforge3/envs/krri/bin/python tools/realsense_check.py --no-gui'   # depth·메타데이터·IMU
+   ssh ubuntu-vm 'cd ~/krri/apriltag_v2 && ~/miniforge3/envs/krri/bin/python tools/check/device_check.py --no-gui'   # depth·메타데이터·IMU
    ssh ubuntu-vm '~/miniforge3/envs/krri/bin/python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"'
    ```
 3. 실행 (VS Code Remote-SSH 터미널에서, sudo 불필요):
    ```bash
-   cd ~/krri/apriltag_v1 && ~/miniforge3/envs/krri/bin/python tools/run.py --dry-run   # CAN 안 보냄
-   cd ~/krri/apriltag_v1 && ~/miniforge3/envs/krri/bin/python tools/run.py             # 실주행
+   cd ~/krri/apriltag_v2 && ~/miniforge3/envs/krri/bin/python tools/run.py --dry-run   # CAN 안 보냄
+   cd ~/krri/apriltag_v2 && ~/miniforge3/envs/krri/bin/python tools/run.py             # 실주행
    ```
    SPACE 로 시작(터미널에서 직접 읽는다), Ctrl+C 로 비상정지 후 종료.
 4. 화면(`--show`, live_pose): VM 의 `~/.bashrc` 끝에 SSH 셸이 VM 화면(`DISPLAY=:0`)을 쓰도록 넣어 두었다

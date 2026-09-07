@@ -199,7 +199,7 @@ def step_frame_metadata(rs):
 
         # --- 프레임 드롭 : SDK 는 이걸 알려주지 않는다 ---
         try:
-            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # apriltag/ (src 가 있는 곳)
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # 코드 폴더 (src 가 있는 곳)
             from src.utils.camera import FrameStats
             st = FrameStats()
             t0 = None

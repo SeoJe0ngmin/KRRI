@@ -23,9 +23,9 @@ import shutil
 import sys
 import tempfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "tools"))
+sys.path.insert(0, os.path.join(ROOT, "tools", "check"))   # verify.synth_source
 
 from config.main import COLOR_SIZE                                 # noqa: E402
 from src.models import TagPipeline, intrinsics_from_ref              # noqa: E402

@@ -2,11 +2,11 @@
 #
 #     python3.11 -m venv .venv && source .venv/bin/activate
 #     pip install -r requirements-macos.txt
-#     python tools/check_setup.py
+#     python tools/check/check_setup.py
 #
 # 맥북으로 되는 것 / 안 되는 것 (2026-09-06 macOS 26.3 실측)
 #     된다   검출, 시뮬레이션, dry-run 주행, 기록 분석,
-#            카메라는 **컬러만** — tools/live_pose.py --source webcam
+#            카메라는 **컬러만** — tools/check/live_pose.py --source webcam
 #            (macOS 가 RealSense 컬러를 일반 UVC 웹캠으로 띄워 주는 걸 OpenCV 로 연다)
 #     안 된다 RealSense SDK 로 실카메라 열기 = depth, IR, IMU, 노출 메타데이터, bag 녹화.
 #            macOS 12+ 는 시스템 UVCAssistant 가 카메라를 선점해 librealsense 가
