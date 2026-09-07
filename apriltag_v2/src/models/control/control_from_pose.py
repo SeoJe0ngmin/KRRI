@@ -4,8 +4,10 @@
 설계 이유·부호 약속·용어·실측 기록은 전부 ../../../CODE_NOTES.md 에 있다.
 """
 import asyncio
+import collections
 import copy
 import math
+import statistics
 
 from config import control as C
 from config import detection as D
@@ -297,7 +299,8 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
     margins = []
     abort = [None]
     abort_hits = 0      # 전진 중 heading 이 문턱을 연속 몇 프레임 넘었나
-    aim_heading, aim_stop, stop_hits = 0.0, None, 0   # 조준 직진의 목표 heading / 조기정지 forward
+    aim_heading, aim_stop, stop_hits = 0.0, None, 0   # 직진의 기준 heading / 조기정지 forward
+    head_win = collections.deque(maxlen=int(C.AIM_ABORT_WINDOW))   # 직진 중 heading 중앙값용 창
 
     def now():
         return asyncio.get_event_loop().time()
@@ -384,16 +387,19 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     if action in ("forward", "final", "aim_drive"):
                         st["drove_forward"] = True
                     aim_heading, aim_stop, stop_hits = 0.0, None, 0
+                    head_win.clear()
                     if action == "forward":
                         # 문턱은 "이번에 실제로 달릴 거리" 기준이어야 한다 — 남은
                         # 전체 거리로 재면 planner 가 방금 용인한 heading(<=허용치)이
                         # 곧바로 중단을 부르는 사각지대가 생긴다.
                         abort[0] = max(fwd_abort_deg(amount), C.HEAD_TOL_DEG)
                     elif action == "aim_drive":
-                        # 비스듬히 달리는 동안 heading 은 방위각이 정상. 편차로 본다.
+                        # 비스듬히 달리는 동안 heading 은 방위각 근처가 정상. 출발 때 잰
+                        # heading 에서 얼마나 흘렀나로 본다(조준 잔차는 다음 조각이 고친다).
                         # 카메라 forward 가 목표에 닿으면 시간 모델보다 먼저 정지한다.
-                        _d, aim_heading, aim_stop = amount
-                        abort[0] = max(fwd_abort_deg(_d), C.HEAD_TOL_DEG)
+                        _d, _bearing, aim_stop = amount
+                        aim_heading = float((m or {}).get("heading_deg", _bearing))
+                        abort[0] = max(fwd_abort_deg(_d), C.HEAD_TOL_DEG, C.AIM_DRIFT_ABORT_DEG)
                     else:
                         abort[0] = None
                     abort_hits = 0
@@ -463,13 +469,19 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     d = res.docking.get(tag_id)
                     # heading 은 원시 1프레임 값(잡음 +-0.45도 실측)이라 연속
                     # 3프레임을 요구한다. 화면 여유는 기하라 즉시 끊는다.
-                    dev = None if d is None else normalize_deg(d["heading_deg"] - aim_heading)
+                    # heading 은 원시 1프레임 값이 10m 에서 ±2도 흔들린다. 최근 창의
+                    # 중앙값이 문턱을 3번 연속 넘어야 끊는다 (창이 차기 전엔 판정 안 함).
+                    dev = None
+                    if d is not None:
+                        head_win.append(float(d["heading_deg"]))
+                        if len(head_win) >= head_win.maxlen:
+                            dev = normalize_deg(statistics.median(head_win) - aim_heading)
                     if dev is not None and abs(dev) > abort[0]:
                         abort_hits += 1
                         if abort_hits >= 3:
-                            why_cut = ("heading %+.2f도 (목표 %+.1f, 허용 %.2f도, 3프레임 연속)"
-                                       % (d["heading_deg"], aim_heading, abort[0]))
-                    elif d is not None:
+                            why_cut = ("heading 중앙값 %+.2f도 (기준 %+.1f, 허용 %.2f도, %d프레임 창)"
+                                       % (statistics.median(head_win), aim_heading, abort[0], head_win.maxlen))
+                    elif dev is not None:
                         abort_hits = 0
                     reached = False
                     if d is not None and aim_stop is not None and why_cut is None:

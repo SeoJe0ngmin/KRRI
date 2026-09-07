@@ -69,5 +69,8 @@ AIM_FINAL_MAX_LAT_M = 0.10     # T 에서 lateral 이 이 이하면 후진 대�
 AIM_FINAL_TOL_DEG = 1.0        # 태그 겨냥 각 오차 허용 [도]. 이 이하면 회전 없이 마지막 직진
 AIM_BACKUP_M = 1.5             # T 근처인데 lateral 이 AIM_FINAL_MAX_LAT_M 을 넘으면 이만큼 후진해 다시 조준 [m]
 AIM_MAX_BACKUPS = 2            # 후진-재조준 최대 횟수. 넘으면 수동전환
+AIM_ABORT_WINDOW = 30          # 직진 중 heading 중단 판정: 최근 이만큼 프레임(1초)의 중앙값으로 본다.
+                               # 프레임 1장 잡음이 10m 에서 ±2도라 원시값 3프레임 규칙은 늘 끊겼다(2026-09-07)
+AIM_DRIFT_ABORT_DEG = 4.0      # 조준 직진 중 출발 heading 에서 이만큼 흘렀으면 중단 [도]
 AIM_STOP_LEAD_M = 0.15         # 카메라 조기 정지: 목표 forward 보다 이만큼 앞에서 정지 명령 (정지지연 0.51s x 0.28m/s)
 AIM_STOP_CONFIRM = 3           # 조기 정지 판정 연속 프레임 수
