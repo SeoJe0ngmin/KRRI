@@ -1,7 +1,7 @@
 """회전 명령 — rotate_to() 하나. IMU 를 보며 목표각에서 멈추는 폐루프.
 
 시간 모델(rot_sec_from_deg)은 실행에 안 쓴다 — 표시·워치독·IMU 없을 때 폴백 전용.
-설계 이유는 ../../../../README.md 의 rot_control 절.
+설계 이유는 ../../../../code_explanation.md 의 rot_control 절.
 """
 import asyncio
 from dataclasses import dataclass

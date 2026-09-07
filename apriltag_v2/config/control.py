@@ -3,7 +3,7 @@
 LAT_TOL_M / HEAD_TOL_DEG 가 이 파일의 뿌리다. 검출 쪽 흔들림 문턱도
 여기서 파생되므로(detection.py) 이 둘만 고치면 나머지가 따라온다.
 
-값의 근거·현장에서 재야 할 것은 ../../README.md 참고.
+값의 근거·현장에서 재야 할 것은 ../../code_explanation.md 참고.
 회전 시간 모델(ROT_T0 등)은 src/models/control/rot_control.py 에 있다.
 """
 

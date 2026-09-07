@@ -1,7 +1,7 @@
 """도킹값 + IMU 회전각 -> 주행 명령.  (v2: 조준-전진, lateral 을 직접 안 잡는다)
 
 한 사이클: [측정] 30프레임 -> [판단] plan_step() -> [실행] 동작 하나 -> 반복.
-설계 이유·부호 약속·용어·실측 기록은 전부 ../../../../README.md 에 있다.
+설계 이유·부호 약속·용어·실측 기록은 전부 ../../../../code_explanation.md 에 있다.
 """
 import asyncio
 import collections
