@@ -2,18 +2,24 @@
 
 카메라로 AprilTag 을 보고 **탑재부 기준 지게차 위치**를 낸 뒤, 그 값으로 주행한다.
 
+## 두 버전 (검출은 같고 제어 판단만 다르다)
+- `apriltag_v1/` — **사이드스텝**(lateral_yes). lateral 을 90도 회전+직진+복귀로 직접 잡는다. 처음 방식, 동결.
+- `apriltag_v2/` — **조준-전진**(lateral_no). 태그 정면축 앞 목표점을 겨냥해 비스듬히 직진하며 수렴한다. **활성 개발**.
+  검출 파이프라인(image→detection_tag→detection_pose)은 둘이 같고, `control_from_pose.py` 의 판단 규칙만 다르다.
+  아래 명령·구조는 **v2 기준**(tools 가 check/·etc/ 로 나뉨). v1 은 tools/ 평면이라 `tools/live_pose.py` 처럼 쓴다.
+
 처음 받았다면 — 맥북 Ubuntu VM / Jetson 은 [CLAUDE.md](CLAUDE.md) 부터.
 자세한 설명:
 [CLAUDE.md](CLAUDE.md) VM·Jetson 설치·작업 규칙 (Windows 는 git clone + `pip install -r requirements.txt`) ·
 [code_explanation.md](code_explanation.md) 값 사전(잴 것/정해진 것/카메라가 주는 것) · 제어 설계 노트 · 검출 상세(좌표계·블러·SDK 소스)
 
 ```bash
-pip install -r requirements.txt
-realsense-viewer                      # 가끔 카메라 점검할 때 (SDK 기본 제공)
-python tools/check/live_pose.py             # 화면으로 확인
-python tools/check/device_check.py             # IMU 부호·드리프트 확인
-python tools/run.py --dry-run         # 도킹 순서만 (CAN 안 씀)
-python tools/run.py                   # 실제 주행
+pip install -r requirements.txt        # 리포 루트
+cd apriltag_v2                         # (또는 apriltag_v1). 아래는 v2 경로
+python tools/check/device_check.py     # 카메라·IMU 점검 (v1: tools/realsense_check.py, imu_check.py)
+python tools/check/live_pose.py        # 실시간 화면으로 확인
+python tools/run.py --dry-run          # 도킹 순서만 (CAN 안 씀)
+python tools/run.py                    # 실제 주행 (SPACE 시작, Ctrl+C 비상정지)
 ```
 
 ---
