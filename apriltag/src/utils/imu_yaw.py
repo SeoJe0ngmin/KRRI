@@ -43,6 +43,10 @@ from config.imu import (IMU_BIAS_SEC, IMU_CALIB_MIN_RATIO, IMU_DT_GAP_SAMPLES,
                       IMU_YAW_SIGN)
 
 
+# accel 스트림 속도 후보. 낮은 것부터 — 중력축만 잡으면 되니 느려도 된다.
+ACCEL_HZ_CANDIDATES = (63, 100, 200, 250)
+
+
 class GyroYaw:
     """자이로 적분 상대 yaw. +가 반시계(왼쪽) — heading_deg 와 같은 부호 규약."""
 
@@ -83,9 +87,16 @@ class GyroYaw:
         cfg.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, self.hz)
         if self.use_accel:
             # 중력축을 잡으려고 같이 연다. 없어도 자이로만으로 돌아간다.
-            try:
-                cfg.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 63)
-            except Exception:
+            # accel 유효값은 IMU 칩마다 다르다 — BMI055 는 63/250, BMI085 는
+            # 100/200/400 (2026-09-07 D435i 실측). 풀리는 첫 값을 쓴다.
+            for accel_hz in ACCEL_HZ_CANDIDATES:
+                cfg_try = rs.config()
+                cfg_try.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, self.hz)
+                cfg_try.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, accel_hz)
+                if cfg_try.can_resolve(pipe):
+                    cfg = cfg_try
+                    break
+            else:
                 self.use_accel = False
         try:
             pipe.start(cfg, self._on_frame)
