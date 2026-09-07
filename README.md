@@ -8,11 +8,6 @@
   검출 파이프라인(image→detection_tag→detection_pose)은 둘이 같고, `control_from_pose.py` 의 판단 규칙만 다르다.
   아래 명령·구조는 **v2 기준**(tools 가 check/·etc/ 로 나뉨). v1 은 tools/ 평면이라 `tools/live_pose.py` 처럼 쓴다.
 
-처음 받았다면 — 맥북 Ubuntu VM / Jetson 은 [CLAUDE.md](CLAUDE.md) 부터.
-자세한 설명:
-[CLAUDE.md](CLAUDE.md) VM·Jetson 설치·작업 규칙 (Windows 는 git clone + `pip install -r requirements.txt`) ·
-[code_explanation.md](code_explanation.md) 값 사전(잴 것/정해진 것/카메라가 주는 것) · 제어 설계 노트 · 검출 상세(좌표계·블러·SDK 소스)
-
 ```bash
 pip install -r requirements.txt        # 리포 루트
 cd apriltag_v2                         # (또는 apriltag_v1). 아래는 v2 경로
@@ -86,7 +81,6 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `models/detection/image.py` | 카메라·bag·영상 → 프레임 + 내부파라미터 |
 | `models/detection/detection_tag.py` | 흑백 이미지 → 태그 검출 |
 | `models/detection/detection_pose.py` | 검출 → 4x4 자세 → 도킹값. `measure()` 가 여기 |
-| [code_explanation.md](code_explanation.md) | 실측·근거 모음 (블러, 좌표계, SDK 소스 등) |
 | `models/control/control_from_pose.py` | 도킹값 → 동작 하나. 순서·기하·회전 폐루프 |
 | `models/control/control_forklift_v2.py` | CAN 프레임 전송 (다른 팀). 안 고침 |
 | `models/control/fwd_time_model.py` | 거리 → 명령 시간 (다른 팀) |
@@ -94,26 +88,17 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `utils/camera.py` | 노출·AE ROI·프레임 드랍 등 카메라 설정 |
 | `utils/tag_layout.py` | 태그 여러 개를 한 좌표계로. 아직 안 씀 |
 | `utils/drawing.py` | 화면에 큐브·축 그리기. 표시 전용 |
-| `utils/util.py` | 블로그 원본. 5개만 씀 |
-
-| `utils/make_tag_pdf.py` | 인쇄용 태그 PDF (눈금자 포함) |
+| `utils/util.py` | 출처 joonhyung-lee.github.io/repositories/ (5개만 씀) |
 
 ### `tools/`
 
-현장에서 주로 쓰는 둘은 tools/ 바로 아래, 나머지는 성격별 폴더(v2 기준. v1 은 평면):
+주력 `run.py` 는 tools/ 바로 아래, 점검용은 `check/`(v2 기준. v1 은 평면). 나머지 도구는 `analyze_run.py`·`etc/` 참고:
 
 | 파일 | 하는 일 |
 |---|---|
 | `run.py` | **도킹 자동 실행.** 시작만 키보드, 그 뒤는 카메라가 정한다 |
-| `analyze_run.py` | 운행 기록 분석 — 결과 판정, 회전·직진 파라미터 권장값 |
 | `check/device_check.py` | 카메라 + IMU 장치 점검 (realsense + imu 합침). `--tag` 로 태그 교차검증 |
-| `check/realsense_check.py` | 카메라만 깊게 (device_check 의 엔진) |
 | `check/check_setup.py` | 설치 됐나 — 장치 없이 import·canlib |
-| `check/live_pose.py` | 실시간 화면 + 숫자. `--log` JSON, `--record` .db3 |
-| `check/verify.py` | 줄자로 잰 값과 대조 |
-| `etc/can_pulse.py` | 회전 팔·직진 속도·정지 관성을 펄스로 실측 (`--camera`) |
-| `etc/smoke_dock.py` | 무하드웨어 파이프라인 계약 검사 (코드 고친 뒤 회귀) |
-| `etc/setup_ubuntu_arm64.sh` | 리눅스 arm64(VM·Jetson) 설치 — apt/conda/realsense/pip/can/check |
 
 ---
 
