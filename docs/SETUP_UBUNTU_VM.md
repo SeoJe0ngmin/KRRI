@@ -1,10 +1,10 @@
 # 폴더 구조 (2026-09-07 재편)
 - `apriltag_v1/` 오늘까지의 코드 (사이드스텝 기반, lateral_yes). `apriltag_v2/` 는 v1 복사본에서 sim 을 뺀 것 — lateral 을 직접 안 잡는 조준-전진 규칙(lateral_no)을 여기서 개발.
-- `docs/` 모든 md 와 requirements*.txt. 설치: `pip install -r docs/requirements.txt` (맥은 requirements-macos.txt).
+- `docs/` 모든 md 와 requirements*.txt. 설치: `pip install -r docs/requirements.txt` (마커 하나로 우분투·WSL·그램·macOS 다 가른다).
 
 # 맥북(Apple Silicon) 위의 Ubuntu VM — 카메라 SDK·IMU·CAN 까지 되는 개발환경
 
-macOS 에서는 librealsense 가 카메라를 못 연다(requirements-macos.txt 참고). 그래서 맥북 안에
+macOS 에서는 librealsense 가 카메라를 못 연다(UVCAssistant 선점 + 2.56.5 IMU 크래시). 그래서 맥북 안에
 **UTM + Ubuntu 24.04 arm64 VM** 을 두고, USB 장치(RealSense, Kvaser)를 VM 에 통째로 넘겨서 쓴다.
 VM 은 Jetson 과 같은 arm64 리눅스라 여기서 검증한 절차와 코드가 Jetson 으로 그대로 간다.
 2026-09-07 맥북 M2 / macOS 26.3 / UTM / Ubuntu 24.04.4 에서 실측.
