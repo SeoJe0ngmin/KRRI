@@ -1,3 +1,7 @@
+# 폴더 구조 (2026-09-07 재편)
+- `apriltag_v1/` 오늘까지의 코드 (사이드스텝 기반, lateral_yes). `apriltag_v2/` 는 v1 복사본에서 sim 을 뺀 것 — lateral 을 직접 안 잡는 조준-전진 규칙(lateral_no)을 여기서 개발.
+- `docs/` 모든 md 와 requirements*.txt. 설치: `pip install -r docs/requirements.txt` (맥은 requirements-macos.txt).
+
 # 맥북(Apple Silicon) 위의 Ubuntu VM — 카메라 SDK·IMU·CAN 까지 되는 개발환경
 
 macOS 에서는 librealsense 가 카메라를 못 연다(requirements-macos.txt 참고). 그래서 맥북 안에
@@ -52,12 +56,12 @@ ssh ubuntu-vm 'git clone -q -b jm_mac ~/krri.git ~/krri && git -C ~/krri remote 
 ```
 그 다음 단계별로 (전부 합쳐 40~60분, 대부분 librealsense 빌드):
 ```bash
-ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh apt'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh conda'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh realsense'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh pip'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh can'
-ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh check'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh apt'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh conda'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh realsense'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh pip'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh can'
+ssh ubuntu-vm 'cd ~/krri && bash apriltag_v1/tools/setup_ubuntu_arm64.sh check'
 ```
 파이썬은 `~/miniforge3/envs/krri/bin/python`(3.11). 스크립트 안에 각 단계가 무엇을 왜 하는지 적혀 있다.
 
@@ -66,13 +70,13 @@ ssh ubuntu-vm 'cd ~/krri && bash apriltag/tools/setup_ubuntu_arm64.sh check'
 2. 확인:
    ```bash
    ssh ubuntu-vm 'lsusb | grep -i -E "intel|kvaser"'
-   ssh ubuntu-vm 'cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/realsense_check.py --no-gui'   # depth·메타데이터·IMU
+   ssh ubuntu-vm 'cd ~/krri/apriltag_v1 && ~/miniforge3/envs/krri/bin/python tools/realsense_check.py --no-gui'   # depth·메타데이터·IMU
    ssh ubuntu-vm '~/miniforge3/envs/krri/bin/python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"'
    ```
 3. 실행 (VS Code Remote-SSH 터미널에서, sudo 불필요):
    ```bash
-   cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/run.py --dry-run   # CAN 안 보냄
-   cd ~/krri/apriltag && ~/miniforge3/envs/krri/bin/python tools/run.py             # 실주행
+   cd ~/krri/apriltag_v1 && ~/miniforge3/envs/krri/bin/python tools/run.py --dry-run   # CAN 안 보냄
+   cd ~/krri/apriltag_v1 && ~/miniforge3/envs/krri/bin/python tools/run.py             # 실주행
    ```
    SPACE 로 시작(터미널에서 직접 읽는다), Ctrl+C 로 비상정지 후 종료.
 4. 화면(`--show`, live_pose): VM 의 `~/.bashrc` 끝에 SSH 셸이 VM 화면(`DISPLAY=:0`)을 쓰도록 넣어 두었다

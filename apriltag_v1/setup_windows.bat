@@ -20,9 +20,9 @@ if errorlevel 1 (
 echo [1/2] 파이썬 패키지 설치
 if exist offline_wheels (
     echo       offline_wheels\ 발견 - 인터넷 없이 설치한다
-    python -m pip install --no-index --find-links=offline_wheels -r requirements.txt
+    python -m pip install --no-index --find-links=offline_wheels -r ..\docs\requirements.txt
 ) else (
-    python -m pip install -r requirements.txt
+    python -m pip install -r ..\docs\requirements.txt
 )
 if errorlevel 1 (
     echo [!] 설치 실패. 위 오류를 볼 것.
