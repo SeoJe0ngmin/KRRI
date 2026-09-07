@@ -70,16 +70,16 @@ JOYSTICK_FORWARD = 60             # 전진 강도 (127-60=67)
 JOYSTICK_BACKWARD = 60            # 후진 강도 (127+60=187)
 JOYSTICK_LEFT = 60                # 좌회전 강도 (127+60=187)
 JOYSTICK_RIGHT = 60               # 우회전 강도 (127-60=67)
-JOYSTICK_ROTATE_CCW = 30          # 반시계회전 강도 (127-30=97)
-JOYSTICK_ROTATE_CW = 30           # 시계회전 강도 (127-30=97)
+JOYSTICK_ROTATE_CCW = 20          # 제자리 반시계 강도: 조향축(byte1)을 1/3 강도로 (127+20=147)
+JOYSTICK_ROTATE_CW = 20           # 제자리 시계 강도 (127-20=107)  — 광운대 최신 control 검증값
 
 # 계산된 실제 조이스틱 값들
 AN_FORWARD = min(255, AN_NEUTRAL - JOYSTICK_FORWARD)   # 67
 AN_BACKWARD = max(0,   AN_NEUTRAL + JOYSTICK_BACKWARD) # 187
 AN_LEFT =     min(255, AN_NEUTRAL + JOYSTICK_LEFT)     # 187
 AN_RIGHT =    max(0,   AN_NEUTRAL - JOYSTICK_RIGHT)    # 67
-AN_ROTATE_CCW = max(0, min(255, AN_NEUTRAL - JOYSTICK_ROTATE_CCW))  # 118
-AN_ROTATE_CW  = max(0, min(255, AN_NEUTRAL - JOYSTICK_ROTATE_CW))   # 118
+AN_ROTATE_CCW = min(255, AN_NEUTRAL + JOYSTICK_ROTATE_CCW)   # 147  좌 = 조향축 +, turn_left 와 같은 방향
+AN_ROTATE_CW  = max(0,   AN_NEUTRAL - JOYSTICK_ROTATE_CW)    # 107
 
 # =============================================================================
 # 🎮 움직임/제어 프레임 템플릿
@@ -92,8 +92,12 @@ MOVEMENT_TEMPLATES: Dict[str, list[int]] = {
     "backward":        [AN_N, AN_N, AN_BACKWARD, AN_N, AN_N, AN_N, AN_N, AN_N],
     "turn_left":       [AN_N, AN_LEFT, AN_N,     AN_N, AN_N, AN_N, AN_N, AN_N],
     "turn_right":      [AN_N, AN_RIGHT,AN_N,     AN_N, AN_N, AN_N, AN_N, AN_N],
-    "rotate_ccw":      [AN_N, AN_N,   AN_N,      AN_N, AN_ROTATE_CCW, AN_N,        AN_N, AN_N],
-    "rotate_cw":       [AN_N, AN_N,   AN_N,      AN_N, AN_N,          AN_ROTATE_CW,AN_N, AN_N],
+    # 제자리 회전은 조향축(byte1)을 약하게 민다. byte4/5 는 쓰지 않는다 —
+    # 이 지게차에서 byte4 는 리프트 축이다(2026-09-07 실차: byte4=97 을 보내자 포크가
+    # 올라갔다). 워드 명령체계의 "제자리 회전 = byte4/5 = 118" 은 작년 방식.
+    # 광운대 최신 control(control_광운대.py)의 rotate_left/right_slow 와 같은 매핑.
+    "rotate_ccw":      [AN_N, AN_ROTATE_CCW, AN_N, AN_N, AN_N, AN_N, AN_N, AN_N],
+    "rotate_cw":       [AN_N, AN_ROTATE_CW,  AN_N, AN_N, AN_N, AN_N, AN_N, AN_N],
     "forward_left":    [AN_N, AN_LEFT, AN_FORWARD,  AN_N, AN_N, AN_N, AN_N, AN_N],
     "forward_right":   [AN_N, AN_RIGHT,AN_FORWARD,  AN_N, AN_N, AN_N, AN_N, AN_N],
     "backward_left":   [AN_N, AN_LEFT, AN_BACKWARD, AN_N, AN_N, AN_N, AN_N, AN_N],
