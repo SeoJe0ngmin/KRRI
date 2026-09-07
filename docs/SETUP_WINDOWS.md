@@ -43,7 +43,7 @@
 
 ```
 python tools\realsense_check.py          카메라가 붙었나 — 전부 PASS 여야 함
-python tools\imu_check.py                IMU 부호 — 카메라를 반시계로 90도 돌려
+python tools\device_check.py --tag                IMU 부호 — 카메라를 반시계로 90도 돌려
                                          yaw 가 +90 이면 OK, -90 이면
                                          config/imu.py 의 IMU_YAW_SIGN 을 뒤집는다
 python tools\run.py --dry-run --show     태그 앞에 세워 두고 판단이 맞는지

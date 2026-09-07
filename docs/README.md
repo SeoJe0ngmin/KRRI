@@ -12,7 +12,7 @@
 pip install -r requirements.txt
 realsense-viewer                      # 가끔 카메라 점검할 때 (SDK 기본 제공)
 python tools/live_pose.py             # 화면으로 확인
-python tools/imu_check.py             # IMU 부호·드리프트 확인
+python tools/device_check.py             # IMU 부호·드리프트 확인
 python tools/run.py --dry-run         # 도킹 순서만 (CAN 안 씀)
 python tools/run.py                   # 실제 주행
 ```
@@ -100,7 +100,7 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 | `run.py` | **도킹 자동 실행.** 시작만 키보드, 그 뒤는 카메라가 정한다 |
 | `live_pose.py` | 실시간 화면 + 숫자. `--log` JSON, `--record` .db3 |
 | `verify.py` | 줄자로 잰 값과 대조 |
-| `imu_check.py` | IMU 드리프트·부호 확인. `--tag` 로 태그와 교차검증 |
+| `device_check.py --tag` | IMU 드리프트·부호 확인. `--tag` 로 태그와 교차검증 |
 | `realsense_check.py` | 환경 진단 — 어느 층에서 깨졌나 |
 | `analyze_run.py` | 운행 기록 분석 — 결과 판정, 회전·직진 파라미터 권장값 |
 | `sim.py` | 정답을 지어내서 오차 측정 (카메라 없이). `--live` 로 3D + 슬라이더 |
@@ -112,7 +112,7 @@ plan_step(m) -> (동작, 양, 명령시간[s], 이유)
 ## 지금 막혀 있는 것
 
 ```
-① IMU_YAW_SIGN 확인          python tools/imu_check.py  — 반시계로 돌려 +가 나오나
+① IMU_YAW_SIGN 확인          python tools/device_check.py  — 반시계로 돌려 +가 나오나
 ② 회전 부호 확인              rotate_ccw 에 지게차가 왼쪽으로 도나 (눈으로)
 ③ 탑재부 허용 오차            LAT_TOL_M / HEAD_TOL_DEG 의 근거. 현장에서 받아야 함
 ④ 태그2 위치 실측             tag_layout 으로 좌표 환산해야 전환 때 값이 안 튄다
