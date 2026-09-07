@@ -77,11 +77,12 @@ async def main_async(args):
 
     pipe = None
     m0 = None
+    from config.detection import TAG_ID, TAG_SIZE_M
+    tag_id = TAG_ID
     if args.camera:
         from src.models import TagPipeline
-        from config.detection import TAG_ID, TAG_SIZE_M
         pipe = TagPipeline.from_realsense(TAG_SIZE_M, label="pulse")
-        m0 = _measure_now(pipe, TAG_ID)
+        m0 = _measure_now(pipe, tag_id)
         print("카메라 전 : %s" % _fmt_m(m0))
 
     if args.dry_run:
@@ -121,7 +122,17 @@ async def main_async(args):
                 break
             a = yaw.angle_deg if yaw is not None else float("nan")
             r = yaw.rate_dps if yaw is not None else float("nan")
-            samples.append((t, phase, a, r))
+            cf = cl = ch = float("nan")
+            if pipe is not None:
+                # 카메라 한 프레임 (약 30ms). 정지 명령이 그만큼 늦을 수 있지만 시험 도구라 감수한다
+                try:
+                    idx, ts, frame = next(pipe.frames)
+                    d = pipe.process(frame, index=idx, timestamp=ts).docking.get(tag_id)
+                    if d is not None:
+                        cf, cl, ch = d["forward"], d["lateral"], d["heading_deg"]
+                except StopIteration:
+                    pass
+            samples.append((t, phase, a, r, cf, cl, ch))
             await asyncio.sleep(0.05)
     except KeyboardInterrupt:
         print("\n중단 — 정지 프레임으로 넘어간다")
@@ -136,7 +147,7 @@ async def main_async(args):
     m1 = None
     if pipe is not None:
         await asyncio.sleep(1.0)                   # 완전히 멎은 뒤에 잰다
-        m1 = _measure_now(pipe, __import__("config.detection", fromlist=["TAG_ID"]).TAG_ID)
+        m1 = _measure_now(pipe, tag_id)
         print("카메라 후 : %s" % _fmt_m(m1))
         pipe.close()
     if yaw is not None:
@@ -144,14 +155,38 @@ async def main_async(args):
 
     if not samples:
         return
-    print("\n  t[s]   구간    yaw[도]  rate[도/s]")
-    for t, ph, a, r in samples[::2]:
-        print("  %5.2f  %-6s %8.2f  %8.2f" % (t, ph, a, r))
+    have_cam = any(not math.isnan(x[4]) for x in samples)
+    if have_cam:
+        print("\n  t[s]   구간    yaw[도]  rate[도/s]   cam fwd[m]  cam lat[m]  cam head[도]")
+        for t, ph, a, r, cf, cl, ch in samples[::2]:
+            print("  %5.2f  %-6s %8.2f  %8.2f   %9.3f  %9.3f  %10.2f" % (t, ph, a, r, cf, cl, ch))
+    else:
+        print("\n  t[s]   구간    yaw[도]  rate[도/s]")
+        for t, ph, a, r, *_ in samples[::2]:
+            print("  %5.2f  %-6s %8.2f  %8.2f" % (t, ph, a, r))
     send = [x for x in samples if x[1] == "send"]
     end_yaw = send[-1][2] if send else float("nan")
     final_yaw = samples[-1][2]
     peak = max((abs(x[3]) for x in samples), default=float("nan"))
     print("\n결과: 보내는 동안 yaw %+.2f도, 정지 후 최종 %+.2f도, 최대 각속도 %.1f도/s" % (end_yaw, final_yaw, peak))
+    if have_cam and args.movement in ("forward", "backward"):
+        cam = [(t, ph, cf) for t, ph, a, r, cf, cl, ch in samples if not math.isnan(cf)]
+        if len(cam) >= 6:
+            f0 = cam[0][2]
+            onset = next((t for t, ph, cf in cam if abs(cf - f0) > 0.03), None)      # 3cm 움직인 시각 = 지연
+            send_c = [(t, cf) for t, ph, cf in cam if ph == "send" and onset is not None and t >= onset + 0.5]
+            v = None
+            if len(send_c) >= 4:
+                ts_ = [t for t, _ in send_c]; fs_ = [f for _, f in send_c]
+                tm, fm = sum(ts_) / len(ts_), sum(fs_) / len(fs_)
+                den = sum((t - tm) ** 2 for t in ts_)
+                v = -sum((t - tm) * (f - fm) for t, f in zip(ts_, fs_)) / den if den else None   # forward 는 줄어드니 부호 반전
+            at_stop = next((cf for t, ph, cf in cam if ph == "settle"), None)
+            final_f = cam[-1][2]
+            print("카메라 시간축: 움직이기 시작 %s  정속 %s  정지 명령 뒤 더 간 거리(관성) %s"
+                  % ("%.2fs 뒤" % onset if onset is not None else "(3cm 도 안 움직임)",
+                     "%.3fm/s" % v if v is not None else "(정속 구간 부족 — 더 길게)",
+                     "%.3fm" % (at_stop - final_f) if at_stop is not None else "?"))
     if m0 is not None and m1 is not None:
         dl, df, dh = m1["lateral"] - m0["lateral"], m1["forward"] - m0["forward"], m1["heading_deg"] - m0["heading_deg"]
         print("카메라 변화: lateral %+.3fm  forward %+.3fm  heading %+.2f도" % (dl, df, dh))
