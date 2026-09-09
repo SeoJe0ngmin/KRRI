@@ -5,9 +5,9 @@
 data/
 work_dirs/
 librealsense/
+# 로컬 전용 잔재 (librealsense 소스 + tags). 코드 아님
+_local/
 
-# 안 쓰는 옛 코드 — 참고용으로 로컬에만 둔다
-apriltag/legacy/
 
 # 파이썬
 __pycache__/
@@ -22,4 +22,3 @@ __pycache__/
 # 환경
 .venv/
 .env
-apriltag/offline_wheels/
