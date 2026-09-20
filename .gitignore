@@ -9,6 +9,9 @@ librealsense/
 # 안 쓰는 옛 코드 — 참고용으로 로컬에만 둔다
 apriltag/legacy/
 
+# v3 설계 토론 작업폴더 (proposer/critic 로그·plan 초안) — 로컬 전용, git 추적 안 함
+apriltag_v3/Agent/
+
 # 파이썬
 __pycache__/
 *.pyc
