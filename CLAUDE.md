@@ -10,6 +10,7 @@
   - `jm` : 사용자의 로컬(연구실) 컴퓨터 전용. **평소 흐름에서 배제** — 자동으로 당기지 않는다. 사용자가
     "jm 에서 이 부분 고쳤다, jm_mac 에 합칠지 보자" 고 가져올 때만 확인·논의 후 `git merge origin/jm`.
   - VM(`ubuntu-vm`) : `jm_mac` 을 받아 **쓰기만** 한다. VM 안에서 커밋하지 않는다.
+    **`git commit` · `git push origin jm_mac` · VM 반영 — 셋 다 자동으로 하지 않는다.** 사용자가 각각 시킬 때만.
   - `main` : `jm_mac` 의 v2 를 주석·docstring 뺀 **부모 없는 단일 스냅샷**(GitHub 기본 브랜치). config/*.py 와
     다른 팀 파일 3종(control_forklift_v2, control_광운대, fwd_time_model)은 주석 유지. 배포용이라 VM 엔 안 올린다.
     루트에 `.gitignore`·`README.md`·`requirements.txt`(정리본, apriltag_v2 밖) + `apriltag_v2/`.
@@ -25,8 +26,49 @@
   - **설치 확인** — `python tools/check/check_setup.py`
 - **tools 구조(v2)**: 현장 주력 `tools/run.py`·`tools/analyze_run.py` 는 최상위, `tools/check/`(점검), `tools/etc/`(측정·테스트·설치).
 
-## 코드 갱신 (평소: jm_mac → VM)
-맥에서 jm_mac 을 고쳐 커밋한 뒤 VM 에 반영한다:
+## v3 설계 토론 팀 (`apriltag_v3/Agent/`, 로컬 전용·git 무시)
+- 역할·권한·흐름·로그 형식은 **`apriltag_v3/Agent/README.md`** — 토론 관련 작업 전에 먼저 읽는다.
+  이전 세션의 분석 결론·합의·리스크는 아래 **"설계 현황·합의"** 절.
+- **"토론 시작해"** = `Workflow({scriptPath: "apriltag_v3/Agent/debate_workflow.js", args: {n: N}})` 실행.
+  N = 1 Perception / 2 Vehicle Dynamics / 3 Controller / 4 System. 다음 N 은 `Agent/plan.md` 에서 `pending` 인 첫 대문제.
+  이 문구는 사용자의 명시적 워크플로(다중 에이전트) 실행 요청이다.
+- 끝나면 결과를 `Agent/log/debate_N_<key>.md`(쟁점당 6~8줄, 핵심만) 와 `Agent/plan.md` 해당 절(결론·검증 실험·파라미터 자리만)에
+  쓰고, **PushNotification 보낸 뒤 멈춰서 사용자 검토**를 받는다. 대문제 하나씩. 근거 없는 결론은 plan 에 넣지 않는다.
+- 토론 단계에선 `apriltag_v3` 코드를 **읽기만** 한다. 쓰기는 `Agent/` 안에서만. v1·v2 는 절대 수정 금지(기존 규칙).
+- 알림: 대문제 완료 / 한도 대기 진입·재개 / 에이전트 실패 / 결정·권한 대기 때 PushNotification.
+  한도 소진 시 리셋까지 자동 대기·재개(`.claude/settings.json` autoContinueAtUsageLimit) — 크레딧 구매 아님.
+- 모델: 세션 Fable 5.1[1m]·effort xhigh → 불가 시 Opus 5[1m] 자동 폴백(settings.json). 토론 서브에이전트는 effort max
+  (`debate_workflow.js` 의 `call()` 이 Fable→Opus 재시도까지 담당).
+- 코드 작성은 plan.md 확정 후 사용자가 시킬 때 `coder` 에이전트로 v3 만 수정. main 반영은 사용자가 말할 때만(기존 규칙).
+
+## 설계 현황·합의 (2026-09-20 기준 — 토론·코드 작업의 전제)
+**9/7 로그 결론** (v1 11회 전부 실패, v2 2회 중 1회 성공·21스텝; 로그는 맥 `work_dirs/` 로컬에만):
+- 뿌리: **7~10m lateral 잡음 60~145mm(최대 415) > 허용치 30mm** → 유령 오차 추종 → 좌우 왕복.
+- 잡음 정체: lateral 을 전체 자세 R(yaw)에서 뽑아 **yaw×거리**로 증폭(8m·1°=140mm). 정면 heading 튐은 **PnP 2중해 flip**(중앙값으로 안 잡힘).
+- 구조: **stop-and-go**(정지→30프레임 눈감고→동작 1개 개루프→정지), 프레임 간 기억 없음. 회전이 lateral 을 움직임(1.46m·10°=25cm).
+- 직진 명령시간→거리는 **죽은시간+선형**(시그모이드 아님). <2s 명령 CV 100%+, ≥3s ~10%. 정지는 관성 coast. 회전은 ±2° 폐루프 + 드문 대형실패.
+**합의된 설계 전제** (agent 프롬프트·`debate_workflow.js` PROBLEMS 에도 박힘):
+- 사이드스텝(90°) 폐기 → **태그를 화면 중앙(β≈0)에 유지하며 소각 대각 접근**. 곡선(조향+전진 동시)은 안 함.
+- **멈추지 말고 연속 추정·보정**(검출↔판단 사이 추정기 레이어). 30프레임 중앙값은 정지 후 확인용.
+- 자이로는 **짧은 다리만**(회전 정지 판정·최종 정면 몇 초). 카메라가 절대 기준. 초기 탐색엔 자이로 기억 불필요.
+- 컨트롤러는 `control_forklift_v2.py` 사용; `control_광운대.py` 는 참고용(실행 안 함) — 저속 97·entry-burst 는 **이식** 대상.
+**리뷰에서 짚은 리스크** (토론에서 반드시 다룸):
+- v̂(속도추정)가 정지 예측의 린치핀인데 **저속(0.15~0.2m/s)에서 프레임당 5~7mm ≈ 잡음 ±9mm** → 명령버퍼 prior 또는 마지막 몇 cm depth 정지.
+- 1-step candidate 컨트롤러는 **대각 lateral 보정을 못 찾음**(이득이 미래) → 2~N step 지평 또는 T-조준 가이드.
+- "태그 화면 안 유지" 제약이 controller 문서에 없음 → cost/하드 제약 추가. dynamics 모델 의존은 작은 step+재관측으로 구제.
+- 과설계 보류: 온라인 τ/a 적응, 펄스표·학습펄스, R(d,φ) 5+5 모델, 4중 yaw 게이트 — **필요 증명 후**. docs 2·3(dynamics) 통합 권장.
+**코드 구조(v3=v2 복사, 코드 변경 0)**: image→detection_tag→detection_pose(`docking_state`·`measure`)→control_from_pose(`dock_live`·`plan_aim`)→
+CanDriver → 회전 `rotate_by()`(래퍼)→`rot_control.rotate_to()`(IMU 폐루프 엔진) / 직진 `fwd_time_model`(개루프) / CAN `control_forklift_v2`.
+`--record-events` 는 run 폴더에 `config.json`(control/detection/imu) 스냅샷도 남김.
+**미확정**: 탑재부 허용오차(LAT_TOL_M 0.030/HEAD_TOL_DEG 2.0 임시), byte2 비례 여부·97 의 m/s, 최소 제어량·데드존, σ_τ. 다음 실차 1순위 =
+byte2 스윕·σ_τ·정적 R(d,φ)·프레임별 bag. 토론은 아직 0개 완료. (PLAN_legacy 의 9/14 2차 실험 실시 여부 미확인.)
+
+## 코드 갱신 (**커밋·푸시·VM 반영 전부 사용자가 시킬 때만**)
+파일 수정은 작업 트리(jm_mac 체크아웃)에서만 한다. **`git commit`, `git push origin jm_mac`, VM 반영 — 셋 다 자동으로 하지 않는다.**
+- "커밋해" → 커밋만 (푸시 안 함)
+- "푸시해" → `git push origin jm_mac` (VM 안 함)
+- "우분투로 보내줘 / 받아와" → 아래 두 명령
+각각 그렇게 말할 때만 실행한다:
 ```bash
 git push ubuntu-vm:krri.git jm_mac:refs/heads/jm_mac      # GitHub 에도: git push origin jm_mac
 ssh ubuntu-vm 'cd ~/krri && git fetch -q mac && git checkout -q -B jm_mac mac/jm_mac && git log --oneline -1'
@@ -46,7 +88,9 @@ VM 은 리모트 `mac`(맥이 밀어 넣는 bare `~/krri.git`) + `origin`(GitHub
 - 주행 프레임 0x1E3(중립 127): **byte2=전/후진**(전진 67, 후진 187), **byte1=조향/제자리회전**(좌 187, 우 67;
   제자리 회전은 byte1 을 ±20 = 147/107). **byte4 는 포크 리프트** — 회전에 쓰면 포크가 올라간다(사고 주의).
 - `tools/run.py` 는 출발 전 CAN 템플릿을 검사한다(다섯 동작이 byte1/2 만 쓰고 나머지 중립이 아니면 출발 거부).
-- 실측: 회전 팔 A=1.46m(카메라→회전중심), 직진 정속 ~0.30m/s, 명령 지연 ~1s, 정지 관성 ~0.12m. 회전 관성 ~1.5도.
+- 실측(2026-09-07): 회전 팔 A=1.46m(카메라→회전중심), 직진 정속 ~0.28~0.30m/s, 출발 지연 ~1s(주행)/~0.85s(회전, ROT_T0),
+  정지 지연 ~0.5s → 정지 관성 ~12~14cm, 회전 관성 ~1.3~1.5°. 저속 전진은 byte2=97(광운대 `forward_slow`, 데드밴드 위) — m/s 미측정.
+- Dropbox `철기원…/코드/control_forklift_v2.py` 는 **옛 버그 버전**(rotate=byte4/5 → 포크 올라감). 실차엔 레포 v3 것만.
 
 ---
 
