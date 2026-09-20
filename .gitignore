@@ -26,3 +26,5 @@ __pycache__/
 .venv/
 .env
 apriltag/offline_wheels/
+
+.claude/
