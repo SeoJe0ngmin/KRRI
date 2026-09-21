@@ -355,33 +355,55 @@ def _cjk_font(px):
     return f
 
 
+_cjk_pending = []
+
+
 def _put(img, text, org, font, scale, color, thickness=1, lineType=cv2.LINE_AA):
-    """cv2.putText 와 같은 인자. 한글이 섞이면 Pillow 로 그린다."""
+    """cv2.putText 와 같은 인자. 한글이 섞이면 **모아 뒀다가** 한 번에 그린다.
+
+    글자마다 PIL 로 왕복하면(BGR→PIL→BGR) 패널 전체를 그 횟수만큼 변환해서
+    프레임률이 반으로 떨어진다(2026-09-21 현장: 25.6 → 16.9 fps).
+    그래서 여기서는 목록에만 넣고, _flush_cjk 가 **프레임당 한 번** 그린다.
+    """
     text = str(text)
     if all(ord(c) < 128 for c in text):
         cv2.putText(img, text, org, font, scale, color, thickness, lineType)
         return
-    f = _cjk_font(scale * 26)
-    if f is None:
+    _cjk_pending.append((org, text, scale, color))
+
+
+def _flush_cjk(img):
+    """모아 둔 한글을 **한 번의 변환으로** 전부 그린다."""
+    if not _cjk_pending:
+        return
+    items, _cjk_pending[:] = list(_cjk_pending), []
+    f0 = _cjk_font(items[0][2] * 26)
+    if f0 is None:
         if not _font_warned[0]:
             print("  !! CJK 폰트가 없다 — 한글이 '?' 로 나온다. "
                   "우분투: sudo apt install fonts-noto-cjk")
             _font_warned[0] = True
-        cv2.putText(img, text.encode("ascii", "replace").decode(), org,
-                    font, scale, color, thickness, lineType)
+        for org, text, scale, color in items:
+            cv2.putText(img, text.encode("ascii", "replace").decode(), org,
+                        PFONT, scale, color, 1, cv2.LINE_AA)
         return
     try:
         from PIL import Image, ImageDraw
         import numpy as _np
         pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         d = ImageDraw.Draw(pil)
-        # cv2 의 org 는 **글자 아래쪽 기준선**, PIL 은 왼쪽 위 → 대략 폰트 높이만큼 올린다
-        d.text((org[0], org[1] - int(scale * 26)), text,
-               font=f, fill=(int(color[2]), int(color[1]), int(color[0])))
+        for org, text, scale, color in items:
+            f = _cjk_font(scale * 26)
+            if f is None:
+                continue
+            # cv2 의 org 는 글자 **아래 기준선**, PIL 은 왼쪽 위 → 높이만큼 올린다
+            d.text((org[0], org[1] - int(scale * 26)), text,
+                   font=f, fill=(int(color[2]), int(color[1]), int(color[0])))
         img[:, :, :] = cv2.cvtColor(_np.asarray(pil), cv2.COLOR_RGB2BGR)
     except Exception:
-        cv2.putText(img, text.encode("ascii", "replace").decode(), org,
-                    font, scale, color, thickness, lineType)
+        for org, text, scale, color in items:
+            cv2.putText(img, text.encode("ascii", "replace").decode(), org,
+                        PFONT, scale, color, 1, cv2.LINE_AA)
 
 
 def render_panel(items, width, height, scale=1.0, margin=18):
@@ -424,6 +446,7 @@ def render_panel(items, width, height, scale=1.0, margin=18):
             _put(p, it[1], (margin, y), PFONT, 0.50 * scale,
                         PC.get(it[2], PC["lab"]), 1, cv2.LINE_AA)
         y += ROW_H.get(k, 22)
+    _flush_cjk(p)
     return p
 
 
