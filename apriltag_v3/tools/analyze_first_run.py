@@ -202,13 +202,98 @@ def gyro_debiased(stage):
     return t, w - bias, bias
 
 
+def cmd_pairs(stage):
+    """can.jsonl → [{movement, t_set, t_tx}] 시간순. **두 시각을 짝지어** 돌려준다.
+
+    t_set = 우리가 명령을 바꾼 시각(결정 시각, dir="set").
+    t_tx  = 그 movement 가 **CAN 버스에 처음 나간** 시각(dir="tx"/"fake_tx").
+    둘의 차가 **명령 지연**(소프트웨어+드라이버)이고, **출발 지연은 t_tx 를 원점으로**
+    재야 한다. 옛 코드는 t_set 만 썼고 전진은 "라벨이 바뀐 첫 프레임" 을 원점으로 삼아,
+    프레임 양자화(최대 33 ms)와 송신 지연이 통째로 출발 지연에 섞여 들어갔다.
+
+    tx 줄은 매 주기 나오고 set 줄과 순서가 엇갈릴 수 있으므로, **set 마다 그 시각
+    이후 같은 movement 의 첫 tx** 를 찾는 방식으로 짝짓는다(순차 매칭 금지).
+    """
+    sets, txs = [], []
+    for r in stage.can:
+        mv = r.get("movement")
+        if not mv:
+            continue
+        if r.get("dir") == "set":
+            t = r.get("t_cmd_set") or r.get("ts")
+            if t is not None:
+                sets.append((float(t), mv))
+        elif r.get("dir") in ("tx", "fake_tx"):
+            t = r.get("t_cmd_tx") or r.get("ts")
+            if t is not None:
+                txs.append((float(t), mv))
+    sets.sort()
+    txs.sort()
+    out = []
+    for t_set, mv in sets:
+        t_tx = None
+        for t, m in txs:                       # 그 시각 이후 같은 movement 의 첫 tx
+            if m == mv and t >= t_set - 0.020:  # 20 ms 앞까지는 같은 명령으로 본다
+                t_tx = t
+                break
+        out.append({"movement": mv, "t_set": t_set, "t_tx": t_tx})
+    return out
+
+
 def command_timeline(stage):
-    """can.jsonl 의 dir=set → [(t, movement)] 시간순."""
-    rows = [(r.get("t_cmd_set") or r.get("ts"), r.get("movement"))
-            for r in stage.can if r.get("dir") == "set" and r.get("movement")]
-    rows = [(float(t), m) for t, m in rows if t is not None]
-    rows.sort()
-    return rows
+    """옛 형태 [(t, movement)] — **t 는 버스에 나간 시각**(없으면 결정 시각)."""
+    return sorted(((c["t_tx"] if c["t_tx"] is not None else c["t_set"]), c["movement"])
+                  for c in cmd_pairs(stage))
+
+
+def cmd_latency_ms(stages):
+    """명령 지연 = t_tx − t_set [ms]. 사람이 물어본 '명령 지연시간' 이 이것이다."""
+    v = [(c["t_tx"] - c["t_set"]) * 1000.0 for st in stages for c in cmd_pairs(st)
+         if c["t_tx"] is not None and c["t_set"] is not None
+         and -50.0 < (c["t_tx"] - c["t_set"]) * 1000.0 < 2000.0]
+    if not v:
+        return {"value": None, "p99": None, "n": 0}
+    return {"value": median(v), "p99": q95(v), "n": len(v)}
+
+
+def _tx_near(cmds_tx, t_ref, movement, back_s=2.0, fwd_s=0.5):
+    """t_ref 근처에서 같은 movement 가 버스에 나간 시각. 없으면 None.
+
+    앞뒤 양쪽을 본다 — ε 보정이 조금 틀려 t_ref 가 tx 보다 앞으로 밀려도 놓치지 않게.
+    (한쪽만 보면 ε 가 나쁠 때 측정이 **조용히 사라진다**. 실제로 그랬다.)
+    """
+    best = None
+    for t, mv in cmds_tx:
+        if mv != movement:
+            continue
+        d = t_ref - t
+        if -fwd_s <= d <= back_s:
+            if best is None or abs(d) < abs(t_ref - best):
+                best = t
+    return best
+
+
+def eps_usable(T):
+    """ε 를 출발 지연의 시계 보정에 써도 되나. 못 믿으면 0 으로 두고 그 사실을 남긴다."""
+    e = (T or {}).get("epsilon_ms") or {}
+    v, sg, n = e.get("value"), e.get("sigma"), e.get("n") or 0
+    if v is None or n < 3:
+        return 0.0, "ε 표본 부족 — 시계 보정 없이 쟀다"
+    if sg is not None and sg > 50.0:
+        return 0.0, "ε 산포 %.0f ms 로 커서 안 썼다" % sg
+    if abs(v) > 250.0:
+        return 0.0, "ε %.0f ms 가 비정상이라 안 썼다" % v
+    return v / 1000.0, None
+
+
+def cmd_latency_ms(stages):
+    """명령 지연 = t_tx − t_set [ms]. 사람이 물어본 '명령 지연시간' 이 이것이다."""
+    v = [(c["t_tx"] - c["t_set"]) * 1000.0 for st in stages for c in cmd_pairs(st)
+         if c["t_tx"] is not None and c["t_set"] is not None
+         and -50.0 < (c["t_tx"] - c["t_set"]) * 1000.0 < 2000.0]
+    if not v:
+        return {"value": None, "p99": None, "n": 0}
+    return {"value": median(v), "p99": q95(v), "n": len(v)}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -256,7 +341,7 @@ def s_of_t(stages):
     return out
 
 
-def analyze_forward(stages):
+def analyze_forward(stages, eps_s=0.0):
     """정속정지 구간마다 τ_eff = D_obs/v̂. 셀별로 모아 표로.
 
     같은 구간에서 **전진 출발 죽은시간**(명령 → 3 cm 움직임)도 같이 뽑는다.
@@ -266,6 +351,8 @@ def analyze_forward(stages):
     rows = []
     onset_fwd = []
     for st in stages:
+        cmds_tx = [(c["t_tx"], c["movement"]) for c in cmd_pairs(st)
+                   if c["t_tx"] is not None]
         frames = [r for r in st.frames if r.get("t_capture") is not None]
         for k, seg in enumerate(frame_segments(frames)):
             mv = seg["movement"]
@@ -292,10 +379,16 @@ def analyze_forward(stages):
             if abs(v) < V_MIN:
                 rows.append({"cell": None, "why": "안 움직임", "v": v, "dir": st.dir})
                 continue
-            # 출발 죽은시간: 명령 시작 → |Δx| > 3 cm (creep 과 같은 문턱)
+            # 출발 죽은시간 = **CAN 에 나간 시각 → 3 cm 움직인 시각**.
+            # t 는 카메라 시계(t_capture)라 ε 를 더해 시스템 시계로 옮긴 뒤 t_tx 를 뺀다.
+            # (옛 코드는 t[0] = "라벨 바뀐 첫 프레임" 을 원점으로 써서 프레임 양자화
+            #  최대 33 ms + 송신 지연이 통째로 섞였다.)
             moved = np.abs(x - x[0]) > 0.03
             if DIR_OF.get(mv) == "fwd" and moved.any():
-                onset_fwd.append(float(t[np.argmax(moved)] - float(t[0])))
+                t_move = float(t[np.argmax(moved)]) + eps_s
+                t_org = _tx_near(cmds_tx, float(t[0]) + eps_s, mv)
+                if t_org is not None and 0.0 < t_move - t_org < 5.0:
+                    onset_fwd.append(t_move - t_org)
             x_at_stop = sl * t_stop + b0
             # 정지 후: 같은 정지 구간 안에서, 명령 뒤 1 s 지나고부터 30 프레임 중앙값.
             # **다음 명령이 시작되면 거기서 끊는다** (복귀 주행이 섞이면 τ 가 망가진다)
@@ -379,12 +472,28 @@ def analyze_rotate(stages):
             stop_i = max(1, int(stop_i))
             coast = float(_trapz(wp[:stop_i + 1], tp[:stop_i + 1]))
             tau_r = coast / w0
-            # 출발 지연: 명령 → |ω| > 0.5 도/s
+            # 출발 지연: 명령이 **버스에 나간 시각** → |ω| > 0.5 도/s.
+            # 차가 명령 시점에 이미 돌고 있으면(직전 회전의 코스팅) 첫 샘플이 바로
+            # 문턱을 넘어 0 에 가까운 값이 나온다 — 실제로 그래서 0.85 s 대신 0.01 s 가
+            # 나왔다. **명령 직전에 멎어 있던 시행만** 센다.
             seg = (t >= t0) & (t <= t1)
             ts, ws = t[seg], np.abs(w[seg])
             t_start = None
-            if ts.size and (ws > 0.5).any():
-                t_start = float(ts[np.argmax(ws > 0.5)] - t0)
+            pre_still = (t >= t0 - 0.30) & (t < t0)
+            was_still = bool(pre_still.any() and np.all(np.abs(w[pre_still]) < W_STILL))
+            if was_still and ts.size:
+                # 문턱은 **그 시행의 정지 잡음에서** 만든다(고정 0.5 도/s 는 잡음이 크면
+                # 한 샘플만 튀어도 걸린다 — 실제로 0.85 s 를 0.67 s 로 이르게 봤다).
+                noise = float(np.std(np.abs(w[pre_still]))) if pre_still.sum() > 5 else 0.0
+                thr = max(0.5, 5.0 * noise)
+                hit = ws > thr
+                # 3 샘플 연속이라야 진짜 움직임으로 본다(200 Hz 에서 15 ms)
+                run = hit & np.roll(hit, -1) & np.roll(hit, -2)
+                run[-2:] = False
+                if run.any():
+                    t_start = float(ts[np.argmax(run)] - t0)
+                    if not 0.05 < t_start < 3.0:   # 말이 안 되는 값은 버린다
+                        t_start = None
             # α_r — 코스팅 구간의 평균 감속 [°/s²]
             a_r = None
             if stop_i >= 1 and (tp[stop_i] - tp[0]) > 1e-3:
@@ -557,16 +666,33 @@ def analyze_grid(stages):
             if e.get("phase") == "start":
                 pend = e
             elif e.get("phase") == "end":
-                truth = pend.get("heading_cmd")
+                # 진값은 **실측**(줄자 기준 ψ_0 + 자이로 누적)이다. 명령값(heading_cmd,
+                # 0/±5/±15)은 사람이 눈으로 맞춘 값이라 오차가 재려는 바이어스(1~2°)보다
+                # 크다 → 폴백으로만 쓰고 그 사실을 셀에 박아 둔다.
+                truth = e.get("truth_deg")
+                if truth is None:
+                    truth = pend.get("truth_deg")
+                src = "measured"
+                if truth is None:
+                    truth = pend.get("heading_cmd")
+                    src = "commanded"        # 믿을 수 없는 진값
                 if truth is None or e.get("heading_deg") is None:
                     continue
                 cells.append({"truth_deg": float(truth),
+                              "truth_source": pend.get("truth_source") or src,
+                              "tape_check_deg": pend.get("tape_check_deg"),
                               "measured_deg": float(e["heading_deg"]),
                               "bias_deg": float(e["heading_deg"]) - float(truth),
                               "tilt_deg": e.get("tilt_deg"),
                               "d": e.get("forward"), "n": e.get("n")})
     theta_min = None
-    if cells:
+    shaky = [c for c in cells if c.get("truth_source") == "commanded"]
+    warn = None
+    if shaky:
+        warn = ("grid 진값이 **명령값(눈대중)** 인 셀 %d 개 — 재려는 바이어스가 1~2°인데 "
+                "사람의 각도 오차가 그보다 크다. heading_bias·θ_min 을 믿으면 안 된다. "
+                "grid 를 다시 돌려라(줄자 d_L·d_R 기준 1회 + 차가 스스로 회전)." % len(shaky))
+    if cells and not shaky:
         # θ_min = "그 위에서는 바이어스가 허용치 아래" 인 경계.
         # bad 셀의 최대 tilt **위의 첫 good 셀** 을 쓴다. bad 가 하나도 없으면
         # 경계를 못 잰 것이므로 **None**(소비자가 기본 15°를 쓴다) — 0.0 을 유효값으로
@@ -582,7 +708,8 @@ def analyze_grid(stages):
         if bad:
             above = sorted(t for t in good if t > max(bad))
             theta_min = above[0] if above else max(bad)
-    return {"cells": cells, "theta_min_deg": theta_min, "n": len(cells)}
+    return {"cells": cells, "theta_min_deg": theta_min, "n": len(cells),
+            "truth_warning": warn}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -879,8 +1006,9 @@ def build_calibs(root, stages, gate_failed=False):
     dyn = CAL.blank("dynamics", source=src)
 
     T = analyze_timing(stages_named(stages, "timing"), stages)
+    _eps, _eps_why = eps_usable(T)
     F = analyze_forward(stages_named(stages, "forward") + stages_named(stages, "creep")
-                        + stages_named(stages, "oblique"))
+                        + stages_named(stages, "oblique"), eps_s=_eps)
     R = analyze_rotate(stages_named(stages, "rotate") + stages_named(stages, "timing"))
     A = analyze_arm(stages_named(stages, "rotate"))
     G = analyze_grid(stages_named(stages, "grid") + stages_named(stages, "mount"))
@@ -897,6 +1025,10 @@ def build_calibs(root, stages, gate_failed=False):
     # -- timing --
     timing["L_ms"] = dict(T["L_ms"])
     timing["epsilon_ms"] = T["epsilon_ms"]
+    # 명령 지연 = 우리가 명령을 바꾼 시각 → CAN 버스에 실제로 나간 시각.
+    # 출발 지연(tau_start_s)과 **다른 것**이다: 이건 소프트웨어+드라이버, 저건 차량 기계.
+    timing["cmd_latency_ms"] = cmd_latency_ms(stages)
+    T["cmd_latency"] = timing["cmd_latency_ms"]
     timing["delta_fs_ms"] = T["delta_fs_ms"]
     timing["t_line_us"] = T["t_line_us"]
     timing["txack_offset_ms"] = T["txack_offset_ms"]
@@ -980,6 +1112,10 @@ def build_calibs(root, stages, gate_failed=False):
         notes.append("가짜 소스(dry-run)로 만든 기록이다 — 실주행 캘리브로 쓰면 안 된다")
     if gate_failed:
         notes.append("타이밍 게이트 미통과 — 값은 참고용")
+    if G.get("truth_warning"):
+        notes.append(G["truth_warning"])
+    if _eps_why:
+        notes.append("출발 지연: %s" % _eps_why)
     timing["provisional"] = bool(fake or gate_failed
                                  or not timing["gate"]["passed"]
                                  or T["epsilon_ms"]["n"] < 3)
@@ -1058,6 +1194,22 @@ def write_report(path, root, stages, calibs, an):
         L.append("| %s | %s | %s | %d |" % (side, _fmt(v["value"]),
                                             _fmt(v["sigma"]), v["n"]))
     L.append("")
+    _tc = (calibs or {}).get("timing") or {}
+    _dc = (calibs or {}).get("dynamics") or {}
+    CL = _tc.get("cmd_latency_ms") or {}
+    L += ["", "### 명령 → 움직임까지 (두 단계로 나눠 잰다)", "",
+          "| 무엇 | 값 | n | 어디서 나온 것 |", "|---|---|---|---|",
+          "| ① 명령 지연 (결정 → CAN 버스) | %s ms (p99 %s) | %d | 소프트웨어·드라이버 |"
+          % (_fmt(CL.get("value"), "%.1f"), _fmt(CL.get("p99"), "%.1f"), CL.get("n", 0)),
+          "| ② 출발 지연 전진 (버스 → 3 cm 움직임) | %s s | %d | 차량 기계 |"
+          % (_fmt((_dc.get("tau_start_s") or {}).get("fwd", {}).get("value")),
+             (_dc.get("tau_start_s") or {}).get("fwd", {}).get("n", 0)),
+          "| ② 출발 지연 회전 (버스 → 자이로 반응) | %s s | %d | 차량 기계 |"
+          % (_fmt((_dc.get("tau_start_s") or {}).get("rot", {}).get("value")),
+             (_dc.get("tau_start_s") or {}).get("rot", {}).get("n", 0)),
+          "",
+          "①이 크면 호스트·드라이버 문제(고칠 수 있다), ②가 크면 차량 자체다(모델로 보정한다).",
+          "9/7 실측은 ② 전진 ~1.0 s · 회전 ~0.85 s 였고 ①은 안 쟀다.", ""]
     L.append("출발 지연 τ_start 중앙값: %s s" % _fmt(R.get("tau_start_s")))
 
     L += ["", "## 회전 팔 A·자이로 스케일 s (plan 1-1)", "",
@@ -1138,7 +1290,8 @@ def write_report(path, root, stages, calibs, an):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
-                   n_runs=12, v97=0.12, seed=0):
+                   n_runs=12, v97=0.12, seed=0,
+                   t_dead_fwd=1.00, t_dead_rot=0.85, cmd_lat_s=0.008):
     """알고 있는 값으로 기록을 지어낸다. analyze 가 그 값을 되찾아야 한다."""
     rng = np.random.default_rng(seed)
     os.makedirs(dirpath, exist_ok=True)
@@ -1151,8 +1304,18 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
     x = 3.5
     dt = 1.0 / 30.0
 
-    def frame(t_cap, movement, forward=None, heading=None, block=None, gyro=0.0,
+    def setcmd(tt, movement):
+        """명령 한 번 = set(결정) + tx(버스에 나감). 둘의 차가 **명령 지연** 진값이다."""
+        N.append({"dir": "set", "movement": movement, "t_cmd_set": tt, "ts": tt})
+        N.append({"dir": "tx", "movement": movement,
+                  "t_cmd_tx": tt + cmd_lat_s, "ts": tt + cmd_lat_s})
+
+    def frame(t_true, movement, forward=None, heading=None, block=None, gyro=0.0,
               tilt=20.0):
+        # ε = 카메라 시계가 시스템 시계보다 얼마나 어긋났나. **모든 프레임에 똑같이**
+        # 적용된다(예전 픽스처는 회전 프레임에만 넣어서, 전진 출발 지연 검사가
+        # ε 만큼 통째로 틀린 것을 "정상" 으로 통과시켰다).
+        t_cap = t_true - eps_s
         F.append({"t_capture": t_cap, "t_arrival": t_cap + 0.055,
                   "L_ms": 55.0, "delta_fs_ms": 20.0, "row_px": 300.0,
                   "movement": movement, "forward": forward, "heading_deg": heading,
@@ -1162,15 +1325,15 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
 
     # ── 직진 정속정지 ──
     for k in range(n_runs):
-        N.append({"dir": "set", "movement": "forward", "t_cmd_set": t})
+        setcmd(t, "forward")
         x0 = x
         for i in range(int(4.0 / dt)):
-            moving = (i * dt) > 1.0
+            moving = (i * dt) > t_dead_fwd
             x -= (v * dt if moving else 0.0)
             frame(t, "forward", forward=x + rng.normal(0, 0.002), heading=0.0,
                   block="forward_%d" % k)
             t += dt
-        N.append({"dir": "set", "movement": "stop", "t_cmd_set": t})
+        setcmd(t, "stop")
         x -= v * tau_eff                              # 코스팅
         for i in range(60):
             frame(t, "stop", forward=x + rng.normal(0, 0.002), heading=0.0,
@@ -1179,13 +1342,13 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
         E.append({"event": "forward_run", "phase": "end", "trial": k,
                   "start_forward": x0})
         # 원위치 복귀(후진)
-        N.append({"dir": "set", "movement": "backward", "t_cmd_set": t})
+        setcmd(t, "backward")
         for i in range(int(4.0 / dt)):
-            moving = (i * dt) > 1.0
+            moving = (i * dt) > t_dead_fwd
             x += (v * dt if moving else 0.0)
             frame(t, "backward", forward=x, heading=0.0, block="back_%d" % k)
             t += dt
-        N.append({"dir": "set", "movement": "stop", "t_cmd_set": t})
+        setcmd(t, "stop")
         x += v * tau_eff
         for i in range(60):
             frame(t, "stop", forward=x, heading=0.0, block="back_%d" % k)
@@ -1193,24 +1356,24 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
 
     # ── 저속 97 ──
     for k in range(10):
-        N.append({"dir": "set", "movement": "forward_slow", "t_cmd_set": t})
+        setcmd(t, "forward_slow")
         for i in range(int(4.0 / dt)):
-            moving = (i * dt) > 1.0
+            moving = (i * dt) > t_dead_fwd
             x -= (v97 * dt if moving else 0.0)
             frame(t, "forward_slow", forward=x, heading=0.0, block="creep_%d" % k)
             t += dt
-        N.append({"dir": "set", "movement": "stop", "t_cmd_set": t})
+        setcmd(t, "stop")
         x -= v97 * tau_eff
         for i in range(40):
             frame(t, "stop", forward=x, heading=0.0, block="creep_%d" % k)
             t += dt
-        N.append({"dir": "set", "movement": "backward", "t_cmd_set": t})
+        setcmd(t, "backward")
         for i in range(int(2.0 / dt)):                # 후진 복귀 (실제 도구와 같게)
-            moving = (i * dt) > 1.0
+            moving = (i * dt) > t_dead_fwd
             x += (v * dt if moving else 0.0)
             frame(t, "backward", forward=x, heading=0.0, block="creep_%d" % k)
             t += dt
-        N.append({"dir": "set", "movement": "stop", "t_cmd_set": t})
+        setcmd(t, "stop")
         x += v * tau_eff
         for i in range(40):
             frame(t, "stop", forward=x, heading=0.0, block="creep_%d" % k)
@@ -1221,19 +1384,21 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
     for k in range(6):
         side = "ccw" if k % 2 == 0 else "cw"
         sgn = 1.0 if side == "ccw" else -1.0
-        N.append({"dir": "set", "movement": "rotate_%s" % side, "t_cmd_set": t})
+        setcmd(t, "rotate_%s" % side)
         w = 0.0
-        t_end = t + 3.0
+        t0_rot = t
+        t_end = t + 3.0 + t_dead_rot
         while t < t_end:
-            w += (8.0 - w) * min(1.0, 0.005 / 0.3)
+            if (t - t0_rot) >= t_dead_rot:            # **출발 죽은시간** 뒤에 램프 시작
+                w += (8.0 - w) * min(1.0, 0.005 / 0.3)
             psi += sgn * w * 0.005
             I.append({"s": "gyro", "t": t, "x": 0.0,
                       "y": -math.radians(sgn * w), "z": 0.0})
             if abs((t / dt) % 1.0) < 0.15:
-                frame(t - eps_s, "rotate_%s" % side, forward=3.5, heading=psi,
+                frame(t, "rotate_%s" % side, forward=3.5, heading=psi,
                       block="rot_center_%d" % k, gyro=sgn * w)
             t += 0.005
-        N.append({"dir": "set", "movement": "stop", "t_cmd_set": t})
+        setcmd(t, "stop")
         t_end = t + 2.0
         while t < t_end:                               # 코스팅: τ_r 로 지수 감쇠
             w *= math.exp(-0.005 / tau_r)
@@ -1241,7 +1406,7 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
             I.append({"s": "gyro", "t": t, "x": 0.0,
                       "y": -math.radians(sgn * w), "z": 0.0})
             if abs((t / dt) % 1.0) < 0.15:
-                frame(t - eps_s, "stop", forward=3.5, heading=psi,
+                frame(t, "stop", forward=3.5, heading=psi,
                       block="rot_center_%d" % k, gyro=sgn * w)
             t += 0.005
 
@@ -1249,8 +1414,12 @@ def _synth_session(dirpath, tau_eff=0.50, v=0.28, tau_r=0.18, eps_s=0.0,
     for truth in (0.0, 5.0, -5.0, 15.0, -15.0):
         tilt = abs(truth)
         bias = 2.5 if tilt < 10 else 0.2
-        E.append({"event": "grid_cell", "phase": "start", "heading_cmd": truth})
+        # 실제 도구와 같은 형식 — 진값은 **실측**(카메라 앵커 + 자이로 누적)이다.
+        # heading_cmd 는 "가려고 한 자세" 일 뿐 진값이 아니다(analyze 가 거부한다).
+        E.append({"event": "grid_cell", "phase": "start", "heading_cmd": truth,
+                  "truth_deg": truth, "truth_source": "camera-pose+gyro-truth"})
         E.append({"event": "grid_cell", "phase": "end", "heading_deg": truth + bias,
+                  "truth_deg": truth, "truth_source": "camera-pose+gyro-truth",
                   "tilt_deg": tilt, "forward": 3.5, "n": 30})
 
     # ── 회전 팔 A (Δβ/Δψ = s(1 + A cosβ/d)) ──
@@ -1320,6 +1489,14 @@ def selftest():
             chk("theta_min", an["G"]["theta_min_deg"], 15.0, 0.6)
             chk("epsilon_ms", an["T"]["epsilon_ms"]["value"], eps_inject * 1000.0, 12.0)
             chk("L median", an["T"]["L_ms"]["median"], 55.0, 1.0)
+            # ── 사용자가 요구한 두 값: 명령 지연 · 실제 움직이기 시작한 시각 ──
+            # 진값: 명령 지연 8 ms · 전진 죽은시간 1.00 s(+3 cm 가는 시간) · 회전 0.85 s
+            chk("명령 지연 [ms]", (an["T"].get("cmd_latency") or {}).get("value"),
+                8.0, 3.0)
+            chk("출발 지연 전진 [s]",
+                (an["F"].get("tau_start_fwd") or {}).get("value"),
+                1.00 + 0.03 / truth["v"], 0.05)
+            chk("출발 지연 회전 [s]", an["R"].get("tau_start_s"), 0.85, 0.06)
             if an["K"]["stiction_ok"] is not True:
                 print("  stiction_ok FAIL (%s)" % an["K"]["stiction_ok"])
                 ok = False

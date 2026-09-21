@@ -80,13 +80,35 @@ CUT_MARGIN_PX = 60.0
 #: tagcut 안전 바닥 — 포크 끝이 태그면(벽)에서 이만큼 앞이면 컷 판정과 무관하게 선다 [m].
 #: tagcut 은 전진을 켜 놓고 폴링하는 유일한 모드라 시간 말고 거리 backstop 이 필요하다.
 TAGCUT_FLOOR_M = 0.40
+#: 움직이기 시작했다고 보는 문턱. 카메라 3 cm(잡음 ~1 cm), 자이로 0.3도.
+ONSET_FWD_M = 0.03
+ONSET_ROT_DEG = 0.3
+#: 9/7 실측 출발 지연 [s] — 현장에서 눈으로 대조하라고 옆에 같이 찍는다(값 자체는 안 쓴다).
+REF_ONSET_FWD_S = 1.00
+REF_ONSET_ROT_S = 0.85
+
+#: grid 가 훑는 자리 [m] — 도킹축에서 왼쪽으로. **자리가 tilt 를 정한다**(회전이 아니라).
+#: 3.5 m 기준 대략 tilt 0 / 8 / 16 / 23 / 30 도. 걸음으로 재도 될 만큼만 정확하면 된다.
+GRID_LATERALS_M = (0.0, 0.5, 1.0, 1.5, 2.0)
+#: 그 자리에서 차가 흔드는 각 [도]. 태그가 화면에 남을 만큼 작아야 한다.
+GRID_WIGGLE_DEG = 3.0
+
+#: safety 안전 바닥 — 포크 끝이 태그면에서 이만큼 앞이면 그 단계를 멈춘다 [m].
+#: safety 는 **일부러 CAN 을 끊고 4 s 를 기어가는** 시험이라 제일 위험하다.
+#: 시행마다 복귀하지만 복귀가 모자랄 수 있으니 바닥을 따로 둔다.
+SAFETY_FLOOR_M = 0.80
 #: tagcut 한 번에 갈 수 있는 최대 주행량 [m] (정상 경로는 0.2 m 쯤이다).
 TAGCUT_MAX_TRAVEL_M = 1.20
 
 # 단계별 시작 거리 [m]. **태그 컷(≈3.3 m, 카메라가 태그보다 1.1 m 아래)** 위에 남아야
 # 한 번의 주행을 끝까지 카메라로 볼 수 있다 — dry-run 에서 3.5 m 시작이 주행 도중
 # 태그를 잃는 것을 보고 잡았다(67·4 s ≈ 1.25 m, 97·4 s ≈ 0.6 m).
-START_M = {"forward": 5.5, "creep": 4.5, "oblique": 5.0}
+#: 단계별 시작 거리 [m] — 두 가지가 싸운다.
+#:  · 멀수록 **안전**(벽까지 여유). safety 는 일부러 제어를 끊고 기어가는 시험이라 제일 멀리.
+#:  · 가까울수록 **정밀**. 8 m 는 lateral 잡음 60~145 mm(9/7), 태그가 작아 깊이 역산도 흐리다.
+#:    정지 관성 12~14 cm 를 재려면 그보다 σ 가 작아야 해서 forward 는 5.5 m 가 한계.
+#:    회전팔 A 는 효과가 (1 + A·cosβ/d) 라 **멀수록 신호가 준다** → rotate 는 3.5·6 m.
+START_M = {"safety": 8.0, "forward": 5.5, "creep": 4.5, "oblique": 5.0}
 START_M_DEFAULT = 3.5
 
 
@@ -238,8 +260,9 @@ class Session:
         from src.models.detection.image import intrinsics_from_ref
         self.say("DRY-RUN — 가짜 카메라·자이로·CAN. 아무것도 안 보낸다")
         intr = intrinsics_from_ref((480, 640))      # 가짜는 작게 — 검출은 진짜로 돈다
-        self.plant = FakePlant(forward=self.start_m, lateral=0.05,
-                               heading_deg=2.0, vertical=-1.10)
+        _lat, _psi = _dry_pose(self.args, self.mode, self.start_m)
+        self.plant = FakePlant(forward=self.start_m, lateral=_lat,
+                               heading_deg=_psi, vertical=-1.10)
         # vertical < 0 = 카메라가 태그보다 낮다 (계약 §1.1). 이 리그가 그렇다.
         # 예전 +1.10 은 fake_rig 렌더가 180° 뒤집혀 있던 때의 보상값이었다(E6, 9/21 고침)
         self.cam = FakeCamera(self.plant, intr, self.tag_size, tag_id=self.tag_id,
@@ -448,6 +471,23 @@ class Session:
     def stop(self, why="stop"):
         return self.cmd("stop", why)
 
+    def _last_tx_t(self):
+        """가장 최근에 **CAN 버스로 나간** 시각. 없으면 None(그러면 결정 시각을 쓴다)."""
+        try:
+            if self.tx is not None and self.tx.probe is not None and self.tx.probe.tx_marks:
+                return float(self.tx.probe.tx_marks[-1][0])
+        except Exception:
+            pass
+        return None
+
+    def _say_onset(self, what, onset_s, ref_s, lat_ms):
+        """현장에서 눈으로 확인하라고 두 값을 9/7 실측과 나란히 찍는다."""
+        flag = ""
+        if ref_s and abs(onset_s - ref_s) > 0.35 * max(ref_s, 1e-6):
+            flag = "   ← 9/7 과 30% 넘게 다르다. 확인할 것"
+        self.say("    명령→움직임 %s: **%.3f s** (9/7 %.2f s) | 명령 지연 %.1f ms%s"
+                 % (what, onset_s, ref_s, lat_ms, flag))
+
     async def hold(self, movement, sec, why="", settle=1.5):
         """movement 를 sec 초 보내고 stop. 반환 = 기록용 dict."""
         sec = max(0.0, min(MAX_CMD_SEC, float(sec)))
@@ -457,7 +497,22 @@ class Session:
                    lateral=(self.last_doc or {}).get("lateral"),
                    heading_deg=(self.last_doc or {}).get("heading_deg"),
                    gyro_deg=(self.gyro.angle_deg if self.gyro else None))
-        await self.wait(sec, note=movement)
+        f0 = (self.last_doc or {}).get("forward")
+        g0 = self.gyro.angle_deg if self.gyro else None
+        # **출발 지연을 현장에서 바로 본다**(분석을 기다리지 않는다).
+        # 원점은 명령이 CAN 에 나간 시각(t_tx). 없으면 결정 시각(t_set).
+        t_org = self._last_tx_t() or t_set
+        onset, onset_by = None, None
+        t_deadline = self.now() + sec
+        while self.now() < t_deadline:
+            await self.pump(movement)
+            if onset is None:
+                d = (self.last_doc or {}).get("forward")
+                if f0 is not None and d is not None and abs(float(d) - float(f0)) > ONSET_FWD_M:
+                    onset, onset_by = self.now() - t_org, "camera"
+                elif self.gyro is not None and g0 is not None and \
+                        abs(self.gyro.angle_deg - g0) > ONSET_ROT_DEG:
+                    onset, onset_by = self.now() - t_org, "gyro"
         f_at_stop = (self.last_doc or {}).get("forward")
         t_stop = self.now()
         self.stop("end of %s" % movement)
@@ -468,9 +523,16 @@ class Session:
         self.event("cmd_end", movement=movement, sec=sec,
                    forward_at_stop=f_at_stop, t_stop=t_stop, t_cmd_tx=t_tx,
                    forward_after=(self.last_doc or {}).get("forward"),
-                   gyro_deg=(self.gyro.angle_deg if self.gyro else None))
+                   gyro_deg=(self.gyro.angle_deg if self.gyro else None),
+                   onset_s=onset, onset_by=onset_by, t_onset_org=t_org,
+                   cmd_latency_ms=((t_org - t_set) * 1000.0) if t_org else None)
+        if onset is not None:
+            self._say_onset("전진", onset, REF_ONSET_FWD_S, (t_org - t_set) * 1000.0)
+        elif not self.dry:
+            self.say("    !! %.1fs 안에 움직임을 못 봤다 — 차가 안 갔거나 문턱(%.0f mm) 미만"
+                     % (sec, ONSET_FWD_M * 1000))
         return {"movement": movement, "sec": sec, "t_stop": t_stop,
-                "forward_at_stop": f_at_stop,
+                "forward_at_stop": f_at_stop, "onset_s": onset,
                 "forward_after": (self.last_doc or {}).get("forward")}
 
     async def stage_gap(self, why=""):
@@ -562,10 +624,14 @@ class Session:
         self.event("rotate_start", target_deg=deg, movement=mv, why=why,
                    gyro_deg=start, t_cmd_set=t_set, cap_s=cap)
         t0 = self.now()
+        t_org = self._last_tx_t() or t_set
+        onset = None
         reason = "goal"
         while True:
             await self.pump(mv)
             prog = (self.gyro.angle_deg - start) * (1.0 if deg > 0 else -1.0)
+            if onset is None and abs(self.gyro.angle_deg - start) > ONSET_ROT_DEG:
+                onset = self.now() - t_org
             if prog >= abs(deg) - abs(lead_deg):
                 break
             if self.now() - t0 > cap:
@@ -584,9 +650,13 @@ class Session:
         turned = self.gyro.angle_deg - start
         out = {"target_deg": deg, "turned_deg": turned,
                "at_stop_deg": at_stop - start, "coast_deg": self.gyro.angle_deg - at_stop,
-               "t_cmd": t_set, "t_stop": t_stop, "elapsed_s": t_stop - t0,
+               "t_cmd": t_set, "t_cmd_tx": t_org, "t_stop": t_stop,
+               "elapsed_s": t_stop - t0, "onset_s": onset,
+               "cmd_latency_ms": ((t_org - t_set) * 1000.0) if t_org else None,
                "reason": reason, "dir": "L" if deg > 0 else "R"}
         self.event("rotate_end", **out)
+        if onset is not None:
+            self._say_onset("회전", onset, REF_ONSET_ROT_S, (t_org - t_set) * 1000.0)
         return out
 
     # ── 사람 ───────────────────────────────────────────────────────────────
@@ -712,8 +782,22 @@ async def mode_safety(s):
     ctl = CF.CAN_CONTROL_ID if CF else CAN_IDS["control"]
     blocks = [("heartbeat", {hb}), ("movement_0x1E3", {mov}),
               ("control_0x2E3", {ctl}), ("all", None)]
+    # 이 단계는 시행마다 6 s(2 s 크립 + 4 s 차단) 를 앞으로 간다. 복귀가 없으면
+    # 12 시행이 누적돼 벽까지 간다 → 시행마다 시작 자리로 되돌리고, 그래도 모자라면
+    # 포크 끝 기준 바닥(SAFETY_FLOOR_M)에서 단계를 멈춘다.
+    start = (await s.measure(30, note="safety_start") or {}).get("forward", s.start_m)
+    floor = C.CAM_TO_REF_M + SAFETY_FLOOR_M
+    s.say("시작 %.2f m · 바닥 %.2f m (포크 끝이 태그면 %.2f m 앞)"
+          % (start, floor, SAFETY_FLOOR_M))
     for name, ids in blocks:
         for k in range(n):
+            now_m = (s.last_doc or {}).get("forward")
+            if now_m is not None and float(now_m) <= floor:
+                s.say("!! %.2f m — 안전 바닥 %.2f m 이하다. safety 를 여기서 멈춘다"
+                      % (float(now_m), floor))
+                s.event("safety_floor", forward=float(now_m), floor=floor)
+                s.stop("안전 바닥")
+                return {"aborted": "floor", "forward": float(now_m)}
             s.event("safety_block", block=name, trial=k, phase="start")
             s.cmd("forward_slow", "차단 시험 크립")
             try:
@@ -735,6 +819,7 @@ async def mode_safety(s):
             await s.wait(s.dur(3.0), note="cut_recover")
             s.event("safety_block", block=name, trial=k, phase="end",
                     forward=(s.last_doc or {}).get("forward"))
+            await s.return_to(start)          # 누적 금지 — 매번 시작 자리로
             if s.tag_lost():
                 s.say("!! 태그를 5 s 넘게 못 봤다 — 이 단계를 중단한다")
                 return {"aborted": "tag_lost"}
@@ -793,6 +878,7 @@ async def mode_safety(s):
             movement=getattr(s.ctrl, "current_movement", None))
     s.say("데드맨: %s" % ("stop 강제됨(정상)" if tripped else "안 걸림 — 확인 필요"))
     await s.wait(s.dur(2.0), note="deadman_after")
+    await s.return_to(start)
 
     # ⑥ kill -STOP 2 s — 호스트 동결(FM8b). 소프트웨어 대응이 없다는 걸 확인하는 시험
     if s.args.kill_stop and not s.dry:
@@ -809,6 +895,7 @@ async def mode_safety(s):
         s.event("kill_stop", phase="after", t=time.time())
         s.stop("freeze 끝")
         await s.wait(3.0, note="post_freeze")
+        await s.return_to(start)
     else:
         s.event("kill_stop", skipped=True,
                 why="--kill-stop 을 안 줬거나 dry-run")
@@ -821,6 +908,7 @@ async def mode_safety(s):
         await s.wait(s.dur(4.0), note="joystick")
         s.stop()
         await s.wait(s.dur(2.0), note="joystick_after")
+        await s.return_to(start)
     await s.ask("리모컨 수신기를 켠 채로 두면 bus-off 가 나는가? 확인했으면 Enter",
                 key="dual_source")
     try:
@@ -1097,21 +1185,106 @@ async def mode_tagcut(s):
     return {"cut": cut}
 
 
+def _dry_pose(args, mode, start_m):
+    """dry-run 가짜 리그의 시작 (lateral, heading). grid 는 **비스듬**해야 앵커가 선다.
+
+    tilt(태그면을 얼마나 비스듬히 보나) ≈ atan(lateral / forward) 라 lateral 만 키우면
+    tilt 는 커지지만 차가 정면을 보고 있어 태그가 화면 밖으로 나간다 → heading 도 같이
+    틀어 태그를 보게 한다.
+    """
+    lat = float(args.lat) if getattr(args, "lat", None) is not None else 0.05
+    psi = getattr(args, "psi", None)
+    if psi is None:
+        # 태그를 보게 — 자리가 옆이면 그만큼 틀어야 화면에 남는다
+        psi = -math.degrees(math.atan2(lat, max(0.5, start_m))) if abs(lat) > 0.3 else 2.0
+    return lat, float(psi)
+
+
+def _f(v):
+    """ask_value 가 준 것을 float 로. 못 바꾸면 None."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 async def mode_grid(s):
-    """간이 정적 격자 — 3.5 m × heading {0,±5,±15} × 100 프레임 (사람이 자세를 잡는다)."""
-    s.say("=== grid: 정적 격자(간이) ===")
-    for head in (0.0, +5.0, -5.0, +15.0, -15.0):
-        await s.ask("%.1f m 에서 heading %+.0f 도가 되게 차를 세우고 Enter"
-                    % (s.start_m, head), key="grid_%+.0f" % head)
-        truth = await s.ask_value("줄자로 잰 lateral [m] (모르면 Enter)",
-                                  "grid_lateral_%+.0f" % head, None)
-        s.event("grid_cell", heading_cmd=head, truth_lateral=truth, phase="start")
-        for _ in range(100):
-            if await s.pump("grid_%+.0f" % head) is None:
-                break
-        m = await s.measure(30, note="grid_%+.0f" % head)
-        s.event("grid_cell", heading_cmd=head, phase="end", **(m or {}))
-    return {}
+    """heading 바이어스 격자 — **사람은 자리만 대충 잡고, 각도는 차가 잰다.**
+
+    무엇을 재나
+    ------------
+    "정면에서 카메라 heading 이 부드럽게 치우친다"(9/7) 를 tilt 별로 확인해 θ_min
+    (정면 불신 경계)을 낸다.
+
+    왜 줄자도, 큰 회전도 아닌가
+    ----------------------------
+    · 줄자로 각도를 재면 오차가 재려는 바이어스(1~2도)보다 크다 → 무의미.
+    · **제자리 큰 회전도 안 된다**: tilt 는 차의 **위치**가 정하지 회전이 안 바꾼다.
+      돌리면 tilt 는 그대로인 채 태그만 화면 밖으로 나간다(3.5 m 에서 36도면 FOV 밖).
+    그래서 이렇게 한다:
+      (1) 사람은 **자리만** 옮긴다 — "왼쪽으로 대략 0.5 m" 수준. 정확할 필요 없다.
+          자리가 tilt 를 정하고, **tilt 는 카메라가 정확히 잰다**(tilt 는 정면에서도 안 흔들린다).
+      (2) 그 자리에서 차가 **작게 ±흔든다**(태그가 화면에 남는 각도).
+          자이로가 실제로 돈 양 Δψ_gyro 를 재고, 카메라가 읽은 변화 Δψ_cam 과 비교한다.
+      (3) **ratio = Δψ_cam / Δψ_gyro.** 1 이면 카메라가 정직하고, 1 에서 벗어난 만큼이
+          그 tilt 에서의 왜곡이다. 9/7 정면쌍이 정확히 이것이었다: 7.02 / 5.61 = 1.25.
+
+    ratio 는 **차이(증분)로만** 나오므로 절대 기준(앵커·줄자)이 아예 필요 없다.
+    """
+    s.say("=== grid: heading 바이어스 vs tilt ===")
+    s.say("각도는 안 재도 된다. 자리만 대충 옮기면 차가 스스로 흔들어 잰다")
+    cells = []
+    for lat in GRID_LATERALS_M:
+        await s.ask("%.1f m 에서 도킹축 기준 **왼쪽으로 대략 %.1f m** 되게 세우고 Enter "
+                    "(자 없이 걸음으로 재도 된다 — 정확할 필요 없다)"
+                    % (s.start_m, lat), key="grid_lat_%.1f" % lat)
+        base = await s.measure(30, note="grid_base_%.1f" % lat)
+        if not base or base.get("heading_deg") is None:
+            s.say("  태그를 못 봤다 — 이 자리는 건너뛴다")
+            continue
+        tilt = float(base.get("tilt_deg") or 0.0)
+        s.say("  자리 확인: tilt %.1f 도 · %.2f m · 카메라 heading %+.2f 도"
+              % (tilt, base.get("forward") or 0.0, float(base["heading_deg"])))
+        for k in range(max(2, min(6, s.args.n * 2))):
+            deg = GRID_WIGGLE_DEG * (1.0 if k % 2 == 0 else -1.0)
+            before = await s.measure(20, note="wig_before")
+            r = await s.rotate_closed(deg, why="grid 흔들기 %+.1f" % deg)
+            after = await s.measure(20, note="wig_after")
+            if not (before and after and r):
+                continue
+            if before.get("heading_deg") is None or after.get("heading_deg") is None:
+                s.say("    태그를 놓쳤다 — 이 흔들기는 버린다")
+                continue
+            d_cam = float(after["heading_deg"]) - float(before["heading_deg"])
+            d_gyro = float(r.get("turned_deg") or 0.0)
+            if abs(d_gyro) < 0.5:
+                continue
+            ratio = d_cam / d_gyro
+            cells.append({"tilt_deg": tilt, "ratio": ratio,
+                          "d_cam_deg": d_cam, "d_gyro_deg": d_gyro,
+                          "forward": after.get("forward")})
+            s.say("    Δ카메라 %+.2f · Δ자이로 %+.2f → **비 %.3f**%s"
+                  % (d_cam, d_gyro, ratio, "  ← 1 에서 멀다" if abs(ratio - 1) > 0.10 else ""))
+            s.event("grid_wiggle", tilt_deg=tilt, ratio=ratio, d_cam_deg=d_cam,
+                    d_gyro_deg=d_gyro, forward=after.get("forward"),
+                    lateral_cmd=lat, trial=k)
+        # 이 자리의 요약 — analyze 가 tilt 별 바이어스로 읽는다
+        mine = [c["ratio"] for c in cells if c["tilt_deg"] == tilt]
+        if mine:
+            med = statistics.median(mine)
+            # 바이어스 등가값: 비가 1 에서 벗어난 만큼을 흔든 각도에 곱한다
+            bias_equiv = (med - 1.0) * GRID_WIGGLE_DEG
+            s.say("  tilt %.1f 도 → 비 중앙값 %.3f (바이어스 등가 %+.2f 도, n=%d)"
+                  % (tilt, med, bias_equiv, len(mine)))
+            s.event("grid_cell", heading_cmd=lat, truth_deg=0.0,
+                    truth_source="wiggle-ratio", tilt_deg=tilt,
+                    ratio_median=med, bias_deg=bias_equiv, n=len(mine),
+                    forward=base.get("forward"), heading_deg=bias_equiv, phase="end")
+    if cells:
+        lo = min(c["ratio"] for c in cells); hi = max(c["ratio"] for c in cells)
+        s.say("비 범위 %.3f ~ %.3f — 정면(tilt 작을 때)에서 1 에서 멀어지면 그게 찾던 것"
+              % (lo, hi))
+    return {"n": len(cells)}
 
 
 async def mode_oblique(s):
@@ -1410,6 +1583,10 @@ def main():
                     help="단계 이름(timing·safety·…) 또는 **번호 1~10**, 또는 all. "
                          "목록은 --list")
     ap.add_argument("--list", action="store_true", help="번호가 붙은 단계 목록만 찍고 끝")
+    ap.add_argument("--lat", type=float, default=None,
+                    help="[dry-run] 가짜 리그 시작 lateral [m]. grid 는 기본 1.6(tilt 25도)")
+    ap.add_argument("--psi", type=float, default=None,
+                    help="[dry-run] 가짜 리그 시작 heading [도]")
     ap.add_argument("--solo", action="store_true",
                     help="단계를 공유 세션에 안 넣고 제 폴더에 따로 남긴다")
     ap.add_argument("--dry-run", action="store_true",
