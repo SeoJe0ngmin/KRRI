@@ -39,6 +39,10 @@ import time
 
 #: 프레임이 이보다 묵었으면 판단·정지에 쓰지 않는다 [s] (plan 4-1; 옛 config STALE_MS 대체)
 STALE_S = 0.150
+#: hardware_reset 뒤 장치가 다시 열거될 때까지 기다리는 최대 시간 [s].
+#: VM(UTM USB 전달)은 재열거가 느리다 — 고정 5 s 로는 모자라 현장에서 죽었다.
+RESET_WAIT_MAX_S = 40.0
+
 #: 컬러·자이로가 GLOBAL 로 전환될 때까지 기다리는 시간 [s] (researcher 1-3: 첫 15 s 불안정)
 GLOBAL_WAIT_S = 15.0
 #: |t_capture − host_now| 상한 [s]. 넘으면 시계가 어긋난 것 (도메인 오류·랩)
@@ -66,10 +70,30 @@ def hardware_reset(wait_s=5.0, log=None):
         if log:
             log("  hardware_reset 실패(%s) — 그대로 진행" % exc)
         return False
+    # 고정 sleep 이 아니라 **장치가 돌아올 때까지 폴링**한다.
+    # VM 으로 USB 를 넘기면(UTM) 재열거가 호스트보다 오래 걸려 5 s 로는 모자란다
+    # — 2026-09-21 현장에서 "gyro 200Hz 스트림을 못 열었다 (No device connected)" 로 죽었다.
+    deadline = time.time() + max(float(wait_s), RESET_WAIT_MAX_S)
     if log:
-        log("  hardware_reset 후 %.0fs 재열거 대기..." % wait_s)
-    time.sleep(float(wait_s))
-    return True
+        log("  hardware_reset — 장치가 돌아올 때까지 최대 %.0fs 기다린다..."
+            % RESET_WAIT_MAX_S)
+    t0 = time.time()
+    time.sleep(1.0)                      # 리셋 직후엔 옛 핸들이 남아 있을 수 있다
+    while time.time() < deadline:
+        try:
+            if len(rs.context().query_devices()):
+                dt = time.time() - t0
+                time.sleep(1.0)          # 열거된 뒤 스트림이 준비될 여유
+                if log:
+                    log("  장치 복귀 %.1fs" % dt)
+                return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    if log:
+        log("  !! %.0fs 안에 장치가 안 돌아왔다 — UTM USB 아이콘에서 다시 넘기거나 "
+            "`--no-reset` 으로 돌려라" % RESET_WAIT_MAX_S)
+    return False
 
 
 class FrameStamps:

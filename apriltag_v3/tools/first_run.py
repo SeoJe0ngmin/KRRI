@@ -715,7 +715,10 @@ async def mode_timing(s):
     await s.return_heading(0.0)
 
     if not _want(s, "upper"):
-        return {"gate_passed": None, "parts": "center only"}
+        # center 만 돌아도 **게이트는 찍는다** — 이게 이 단계의 통과/불통과 신호다.
+        # (upper 는 T_line 을 하나 더 얻는 것뿐이고, 게이트 자체는 여기서 판정된다.)
+        _timing_gate(s)
+        return {"gate_passed": s.gate_passed, "parts": "center only"}
     await s.ask("태그가 화면 **위쪽 행**에 오게 (차를 태그 쪽으로 조금 붙여) Enter",
                 key="row_upper")
     s.block = "still_upper"
@@ -736,6 +739,12 @@ async def mode_timing(s):
             await s.wait(60.0, note="still_bag")
             await s.reopen_camera(record=None)
 
+    _timing_gate(s)
+    return {"gate_passed": s.gate_passed}
+
+
+def _timing_gate(s):
+    """타이밍 게이트 판정·출력. center 만 돌아도 여기서 찍는다."""
     summary = s.timing.summary()
     can = s.tx.stats() if s.tx is not None else {}
     gaps = (s.gyro.stats().get("gaps") if s.gyro is not None else None) or 0
@@ -755,7 +764,7 @@ async def mode_timing(s):
              "통과" if passed else ("미확인(가짜 장비)" if passed is None
                                  else "미통과(이후 단계는 원시 기록만)")))
     s.say("L 중앙값 %s ms / p99 %s ms" % (summary["L_ms_median"], summary["L_ms_p99"]))
-    return {"gate_passed": passed}
+    return passed
 
 
 async def mode_safety(s):
