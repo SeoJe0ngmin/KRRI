@@ -303,10 +303,23 @@ class Session:
         self.event("gyro_calibrate", **{k: v for k, v in rep.items() if k != "accel_mean"})
         # 2) 카메라 — queue=1 + global_time (CameraSettings.docking)
         tune = CameraSettings.docking()
-        if self.args.auto_exposure:
+        # 기본 8.3 ms 는 **실내 형광등 깜빡임(60 Hz 반주기)** 을 피하려는 값이다.
+        # 햇빛 아래에서는 너무 길어 하얗게 날아가고, 태그 모서리 대비가 죽어
+        # margin 이 뚝 떨어진다(2026-09-21 현장: 85 -> 35). 밖에서는 1~2 ms 로 줄인다.
+        # 자동노출로 돌리면 actual_exposure 메타데이터가 안 와서 노출중심 타임스탬프가
+        # 나빠지므로(CLAUDE.md), **고정 노출을 짧게** 주는 쪽이 낫다.
+        if self.args.exposure_ms is not None:
+            from src.utils.camera import exposure_units
+            tune.enable_auto_exposure = False
+            tune.exposure = exposure_units(float(self.args.exposure_ms))
+            self.say("노출 고정 %.2f ms (기본 8.33 ms). 밖이면 1~2 ms 가 맞다"
+                     % float(self.args.exposure_ms))
+        elif self.args.auto_exposure:
             tune.enable_auto_exposure = True
             tune.exposure = None
             tune.gain = None
+            self.say("!! 자동노출 — actual_exposure 메타데이터가 안 와서 "
+                     "노출중심 타임스탬프가 나빠진다. 되도록 --exposure-ms 를 써라")
         # 해상도는 기본(카메라 기본 = 1920x1080)을 쓰되, USB 가 불안정하면 --width/--height
         # 로 낮춘다. 전송량이 줄어 허브 경유에서 훨씬 안정적이다. 태그가 100 px 넘게
         # 잡히면 720p 로 낮춰도 검출엔 여유가 있다(최소 20 px).
@@ -1939,6 +1952,10 @@ def main():
                     help="가상머신에서도 hardware_reset 을 강행한다 "
                          "(UTM USB 전달이 끊겨 사람이 다시 넘겨야 할 수 있다)")
     ap.add_argument("--auto-exposure", action="store_true", help="노출 고정 대신 자동노출")
+    ap.add_argument("--exposure-ms", type=float, default=None,
+                    help="노출을 이 값으로 고정 [ms]. 기본 8.33 은 실내 형광등용이라 "
+                         "**햇빛 아래서는 하얗게 날아간다** — 밖이면 1~2 를 줘라. "
+                         "live_pose 로 margin 이 60 넘게 나오는 값을 찾은 뒤 쓰면 된다")
     ap.add_argument("--sweep", action="store_true", help="creep 에서 편향 스윕까지")
     ap.add_argument("--kill-stop", action="store_true",
                     help="safety 에서 kill -STOP 2 s(호스트 동결) 시험까지")
