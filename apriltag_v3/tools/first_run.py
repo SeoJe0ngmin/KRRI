@@ -291,7 +291,7 @@ class Session:
         from src.utils.imu_yaw import GyroYaw
         # 0) 세션 시작 hardware_reset (plan 4-1: 71.6 분 랩 역행 대응)
         if not self.args.no_reset:
-            TM.hardware_reset(log=self.say)
+            TM.hardware_reset(log=self.say, allow_vm=getattr(self.args, 'reset', False))
         # 1) 자이로 먼저 (RSUSB: 먼저 연 쪽이 IMU 를 갖는다)
         self.gyro = GyroYaw().start().enable_raw()
         self.say("자이로 열림. %.1fs 정지 보정 — 차를 세워 둘 것..." % 2.0)
@@ -1899,6 +1899,9 @@ def main():
     ap.add_argument("--no-bag", action="store_true", help="bag 녹화를 하지 않는다")
     ap.add_argument("--no-can", action="store_true", help="CAN 을 안 연다(카메라·IMU 만)")
     ap.add_argument("--no-reset", action="store_true", help="hardware_reset 생략")
+    ap.add_argument("--reset", action="store_true",
+                    help="가상머신에서도 hardware_reset 을 강행한다 "
+                         "(UTM USB 전달이 끊겨 사람이 다시 넘겨야 할 수 있다)")
     ap.add_argument("--auto-exposure", action="store_true", help="노출 고정 대신 자동노출")
     ap.add_argument("--sweep", action="store_true", help="creep 에서 편향 스윕까지")
     ap.add_argument("--kill-stop", action="store_true",

@@ -48,6 +48,24 @@ from config.imu import (IMU_BIAS_SEC, IMU_CALIB_MIN_RATIO, IMU_DT_GAP_SAMPLES,
 ACCEL_HZ_CANDIDATES = (63, 100, 200, 250)
 
 
+def _gyro_open_error(hz, exc):
+    """자이로 열기 실패 메시지. **진짜 원인을 앞세운다.**
+
+    예전엔 "유효값은 200/400 뿐이다" 를 조건 없이 붙여서, 장치가 아예 없을 때도
+    사람이 Hz 문제로 오해했다(2026-09-21 현장).
+    """
+    t = str(exc)
+    if "No device connected" in t or "no device" in t.lower():
+        return RuntimeError(
+            "**카메라가 안 보인다** (%s). Hz 문제가 아니다.\n"
+            "   · VM 이면 UTM 창 툴바 **USB 아이콘**에서 RealSense 를 VM 으로 넘겨라\n"
+            "   · 확인: lsusb | grep -i intel\n"
+            "   · hardware_reset 직후면 장치가 호스트로 돌아갔을 수 있다" % t)
+    return RuntimeError(
+        "gyro %dHz 스트림을 못 열었다 (%s) — 이 장치의 유효값은 200/400 뿐이다. "
+        "장치 확인: tools/check/device_check.py" % (hz, t))
+
+
 class GyroYaw:
     """자이로 적분 상대 yaw. +가 반시계(왼쪽) — heading_deg 와 같은 부호 규약."""
 
@@ -114,13 +132,9 @@ class GyroYaw:
                 try:
                     pipe.start(cfg, self._on_frame)
                 except RuntimeError as exc2:
-                    raise RuntimeError(
-                        "gyro %dHz 스트림을 못 열었다 (%s) — 이 장치의 유효값은 200/400 뿐이다. "
-                        "장치 확인: tools/realsense_check.py" % (self.hz, exc2)) from exc2
+                    raise _gyro_open_error(self.hz, exc2) from exc2
             else:
-                raise RuntimeError(
-                    "gyro %dHz 스트림을 못 열었다 (%s) — 이 장치의 유효값은 200/400 뿐이다. "
-                    "장치 확인: tools/realsense_check.py" % (self.hz, exc)) from exc
+                raise _gyro_open_error(self.hz, exc) from exc
         self._pipe = pipe
         # 모션 스트림도 **호스트 시계(global time)** 로 찍게 한다 — 컬러와 같은 시계라야
         # ψ_cam(t_capture) 과 ψ_gyro 를 같은 축에서 비교할 수 있다(plan 4-1).

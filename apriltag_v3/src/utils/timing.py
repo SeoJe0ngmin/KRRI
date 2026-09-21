@@ -52,7 +52,29 @@ DT_NOMINAL_S = 1.0 / 30.0
 DT_TOL_S = 0.010
 
 
-def hardware_reset(wait_s=5.0, log=None):
+def is_vm():
+    """이 호스트가 가상머신인가. UTM/QEMU 면 USB 전달이라 hardware_reset 이 위험하다."""
+    try:
+        import subprocess
+        r = subprocess.run(["systemd-detect-virt"], capture_output=True, text=True,
+                           timeout=2.0)
+        v = (r.stdout or "").strip()
+        if v and v != "none":
+            return v
+    except Exception:
+        pass
+    for f in ("/sys/class/dmi/id/product_name", "/sys/class/dmi/id/sys_vendor"):
+        try:
+            with open(f) as fh:
+                t = fh.read().strip()
+            if any(k in t for k in ("QEMU", "Virtual", "VMware", "KVM", "Apple Virtualization")):
+                return t
+        except Exception:
+            pass
+    return None
+
+
+def hardware_reset(wait_s=5.0, log=None, allow_vm=False):
     """세션 시작 hardware_reset (plan 4-1: 2.56.x 는 71.6 분 랩 역행 미수정).
 
     장치가 없거나 pyrealsense2 가 없으면 조용히 False 를 돌려준다(맥 개발·dry-run).
@@ -60,6 +82,18 @@ def hardware_reset(wait_s=5.0, log=None):
     try:
         import pyrealsense2 as rs
     except Exception:
+        return False
+    # **VM 에서는 기본으로 리셋하지 않는다.** UTM USB 전달은 "이 장치를 VM 에 준다" 는
+    # 연결이라, 리셋으로 장치가 USB 에서 사라지면 그 연결이 끊기고 다시 나타난 장치는
+    # **호스트(맥) 것이 된다** — 사람이 UTM USB 아이콘으로 다시 넘겨야 한다.
+    # 2026-09-21 현장에서 이것 때문에 1번이 두 번 죽었다.
+    v = is_vm()
+    if v and not allow_vm:
+        if log:
+            log("  hardware_reset 생략 — 가상머신(%s)에서는 리셋이 USB 전달을 끊는다.\n"
+                "     (librealsense 2.56 의 71.6분 타임스탬프 랩을 피하려면 카메라를\n"
+                "      오래 켜 두지 말고 세션마다 UTM 에서 뺐다 넣어라. 굳이 리셋하려면\n"
+                "      --reset 을 줘라)" % v)
         return False
     try:
         devs = rs.context().query_devices()

@@ -387,7 +387,7 @@ class Dock:
         from src.utils.camera import CameraSettings
         from src.utils.imu_yaw import GyroYaw
         if not self.args.no_reset:
-            TM.hardware_reset(log=self.say)
+            TM.hardware_reset(log=self.say, allow_vm=getattr(self.args, 'reset', False))
         # 1) 자이로 **먼저** — RSUSB 는 먼저 연 쪽이 IMU 를 갖는다. 순서를 바꾸면
         #    뒤에 여는 자이로가 'failed to set power state' 로 안 열린다
         self.gyro = GyroYaw().start().enable_raw()
@@ -781,6 +781,8 @@ def build_args(argv=None):
     p.add_argument("--force", action="store_true",
                    help="GLOBAL 전환 실패에도 강행")
     p.add_argument("--no-reset", action="store_true", help="hardware_reset 생략")
+    p.add_argument("--reset", action="store_true",
+                   help="가상머신에서도 hardware_reset 강행")
     p.add_argument("--auto-exposure", action="store_true")
     p.add_argument("--tag-id", type=int, default=D.TAG_ID)
     p.add_argument("--tag-size", type=float, default=D.TAG_SIZE_M)
