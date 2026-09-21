@@ -29,6 +29,10 @@ MOVEMENT_CAN_ID = 0x1E3
 SAFE_MOVEMENTS = ("stop", "forward", "forward_slow", "backward", "rotate_ccw", "rotate_cw")
 #: byte4 는 **포크 리프트**다(2026-09-07 실차). 회전·주행에 절대 안 쓴다.
 FORK_BYTE = 4
+#: 주행·제어 프레임 ID 와 중립값 — _fork_guard 가 쓴다(순환 import 를 피해 여기 둔다)
+MOVEMENT_ID = 0x01E3
+CONTROL_ID = 0x02E3
+AN_NEUTRAL = 127
 
 
 def check_templates(names=SAFE_MOVEMENTS, log=print, forward_slow_expect=None):
@@ -90,6 +94,7 @@ class ChannelProbe:
         self.foreign_movement_frames = 0     # 우리가 안 보낸 0x1E3 수신 수 (FM11)
         self.last_payload = {}           # can_id -> tuple(bytes)
         self.writes = 0
+        self.fork_guard_drops = 0        # 포크를 움직일 뻔해서 버린 프레임 수 (0 이어야 정상)
         self.tx_marks = []               # (t_cmd_tx, can_id, payload) — payload 가 바뀐 것만
         self.txack_ms = []               # write → TXACK 잔차 [ms]
         self.txack_t = []                # 그 시각 [s]
@@ -117,7 +122,49 @@ class ChannelProbe:
             return False
         return len(d) == 8 and all(b == 127 for b in d)
 
+    #: 주행 프레임에서 byte1(조향)·byte2(주행) 말고는 전부 중립이어야 한다.
+    #: byte4 가 포크 리프트라 여기가 마지막 방어선이다(2026-09-07 사고).
+    _DRIVE_FREE_BYTES = (1, 2)
+    #: 제어 프레임(0x2E3)에서 **절대 안 보내는** 모드들. byte3 이 모드 선택자다.
+    #: lift_mode 0x05 · lift_up 0x15 · lift_down 0x25 · fold 0x26 · unfold 0x16 ·
+    #: reach_forward 0x19 … 우리가 쓰는 건 driving_mode 0x0A 뿐이다.
+    _CTRL_ALLOW_BYTE3 = (0x0A,)
+
+    def _fork_guard(self, frame):
+        """포크·마스트를 움직일 수 있는 프레임이면 **버리고 알린다**.
+
+        set_movement 가 이미 SAFE_MOVEMENTS 6개만 허용하고, 템플릿은 출발 전
+        check_templates 가 본다. 여기는 **런타임에 값이 바뀌어도** 못 나가게 하는
+        마지막 관문이다. 우리는 직진·후진·제자리회전만 한다.
+        """
+        try:
+            cid = int(getattr(frame, "id", -1))
+            data = [int(b) for b in frame.data]
+        except Exception:
+            return None
+        if cid == MOVEMENT_ID and len(data) >= 8:
+            bad = [i for i in range(8)
+                   if i not in self._DRIVE_FREE_BYTES and data[i] != AN_NEUTRAL]
+            if bad:
+                return ("주행 프레임 byte%s 가 중립(%d)이 아니다 (byte%d = 포크 리프트)"
+                        % (bad, AN_NEUTRAL, FORK_BYTE))
+        if cid == CONTROL_ID and len(data) >= 4:
+            if data[3] not in self._CTRL_ALLOW_BYTE3:
+                return ("제어 프레임 모드 0x%02X — 우리는 driving_mode(0x0A) 만 쓴다 "
+                        "(0x05/0x15/0x25 = 리프트, 0x16/0x26 = 폴딩)" % data[3])
+        return None
+
     def write(self, frame):
+        why = self._fork_guard(frame)
+        if why is not None:
+            self.fork_guard_drops += 1
+            msg = "!! 포크 차단: %s — 이 프레임은 안 보낸다" % why
+            if self.logger is not None:
+                self.logger.can(dir="fork_blocked", can_id=int(getattr(frame, "id", -1)),
+                                data=[int(b) for b in frame.data], why=why, t=time.time())
+            if self.fork_guard_drops == 1:
+                print("  " + msg)
+            return None
         blocked = self.blocked_all or (self.blocked
                                        and int(getattr(frame, "id", -1)) in self.blocked)
         if blocked and self.never_block_stop and self._is_stop_payload(frame):
@@ -210,6 +257,7 @@ class ChannelProbe:
 
         first10 = self.txack_ms[:10]
         return {"writes": self.writes, "changes": len(self.tx_marks),
+                "fork_guard_drops": self.fork_guard_drops,   # 0 이 아니면 즉시 조사
                 "txack_on": self.txack_on, "txack_n": len(self.txack_ms),
                 "txack_first10_max_ms": max(first10) if first10 else None,
                 "txack_p99_ms": p99(self.txack_ms),
@@ -312,6 +360,7 @@ class SafeCanTx:
         return 0 if self.probe is None else self.probe.foreign_movement_frames
 
     def stats(self):
+        # fork_guard_drops 는 아래 dict 에 합쳐진다(0 이 아니면 즉시 조사할 것)
         out = {"deadman_trips": self.deadman_trips, "deadman_s": self.deadman_s}
         if self.probe is not None:
             out.update(self.probe.stats(now=self.clock()))
