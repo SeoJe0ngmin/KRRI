@@ -82,6 +82,12 @@ CUT_MARGIN_PX = 60.0
 #: tagcut 안전 바닥 — 포크 끝이 태그면(벽)에서 이만큼 앞이면 컷 판정과 무관하게 선다 [m].
 #: tagcut 은 전진을 켜 놓고 폴링하는 유일한 모드라 시간 말고 거리 backstop 이 필요하다.
 TAGCUT_FLOOR_M = 0.40
+#: 회전팔 A 측정 자세 — tilt 가 이보다 작으면 각도를 못 믿어 A 가 무의미해진다.
+#: (tilt = 태그 법선과 카메라 광축 사이 각. 옆으로만 서고 앞을 보면 0 이다 —
+#:  **옆으로 비켜서서 태그 쪽으로 몸을 틀어야** 생긴다.)
+ARM_TILT_MIN_DEG = 20.0
+ARM_TILT_WANT_DEG = 25.0        # 안내용 권장값(여유 5도)
+
 #: 움직이기 시작했다고 보는 문턱. 카메라 3 cm(잡음 ~1 cm), 자이로 0.3도.
 ONSET_FWD_M = 0.03
 ONSET_ROT_DEG = 0.3
@@ -997,8 +1003,32 @@ async def mode_rotate(s):
     # --start-m 을 주면 그 거리 하나만 — 거리를 바꾸려면 어차피 수동으로 옮겨야 한다
     dists = ((s.args.start_m,) if s.args.start_m else (3.5, 6.0)) if _want(s, "arm") else ()
     for dist in dists:
-        await s.ask("태그를 **비스듬히(tilt ≥ 20도)** 보는 자리, 거리 %.1f m 로 옮기고 Enter" % dist,
-                    key="rotate_cam_%.1f" % dist)
+        # tilt 는 눈으로 못 잰다 — 재서 알려주고, 모자라면 옮겨 다시 재게 한다.
+        # 모자란 채로 하면 회전팔 A 측정이 통째로 무의미해진다(각도를 못 믿는 자세).
+        for _try in range(6):
+            await s.ask(
+                "태그에서 **%.1f m**(수직거리) 떨어져, 옆으로 **약 %.1f m** 비켜서서 "
+                "몸을 태그 쪽으로 돌려 세우고 Enter   (tilt %d도 이상이면 된다)"
+                % (dist, dist * math.tan(math.radians(ARM_TILT_WANT_DEG)),
+                   ARM_TILT_MIN_DEG),
+                key="rotate_cam_%.1f_%d" % (dist, _try))
+            m = await s.measure(20, note="arm_pose_check")
+            t = (m or {}).get("tilt_deg")
+            d_now = (m or {}).get("forward")
+            if t is None:
+                s.say("  !! 태그가 안 보인다 — 몸을 태그 쪽으로 더 돌려라")
+                continue
+            s.say("  지금 자세: tilt **%.1f도** · 거리 %.2f m" % (float(t), float(d_now or 0)))
+            if float(t) >= ARM_TILT_MIN_DEG:
+                s.say("  좋다 — 이 자세로 간다")
+                break
+            need = dist * math.tan(math.radians(ARM_TILT_WANT_DEG))
+            s.say("  !! tilt 가 %.0f도 미만이다. **옆으로 더 비켜서고**(약 %.1f m) "
+                  "몸을 태그 쪽으로 더 돌려라" % (ARM_TILT_MIN_DEG, need))
+        else:
+            s.say("  !! tilt 를 못 맞췄다 — 이 거리는 건너뛴다(A 측정 신뢰 불가)")
+            s.event("arm_skipped", dist=dist, why="tilt_too_low")
+            continue
         for k in range(n if s.args.n_given else min(5, n * 2)):
             before = await s.measure(30, note="A_before")
             r = await s.rotate_closed(+20.0 if k % 2 == 0 else -20.0, why="A 측정 회전")
@@ -1630,103 +1660,169 @@ def _note_stage(root, mode, res):
 #: 한 줄이 시행 하나다. 줄 사이에 **프로그램이 종료되어 CAN 을 놓으므로** 수동으로
 #: 차를 옮길 수 있다. 자리가 같으면 연달아 쳐도 된다(차가 알아서 복귀한다).
 PLAN = [
-    ("1", "center", "", 1, "3.5 m 정면 · 태그가 화면 **중앙 높이**"),
-    ("1", "upper",  "", 1, "차를 조금 앞으로 · 태그가 화면 **위쪽 행**"),
-    ("2", "",       "", 3, "**8 m** 정면 · 앞 5 m 비움 · 사람 제동 위치"),
-    ("3", "",       "", 1, "3.5 m — 비스듬 1회 + 정면 1회 (줄자 입력)"),
-    ("4", "open",   "--sec 1.0 --side L", 4, "3.5 m 비스듬(tilt≥20°) · 제자리 회전"),
-    ("4", "open",   "--sec 1.0 --side R", 4, None),
-    ("4", "open",   "--sec 1.5 --side L", 4, None),
-    ("4", "open",   "--sec 1.5 --side R", 4, None),
-    ("4", "open",   "--sec 2.0 --side L", 4, None),
-    ("4", "open",   "--sec 2.0 --side R", 4, None),
-    ("4", "open",   "--sec 3.0 --side L", 4, None),
-    ("4", "open",   "--sec 3.0 --side R", 4, None),
-    ("4", "gyro",   "", 2, None),
-    ("4", "closed", "", 6, "★ σ_θ — 절대 못 버림"),
-    ("4", "arm",    "--start-m 3.5", 5, "★ 회전팔 A — 3.5 m"),
-    ("4", "arm",    "--start-m 6",   5, "★ **6 m 로 옮긴다** (안 하면 A 를 못 구함)"),
-    ("4", "small",  "", 10, "3.5 m 로 돌아와서"),
-    ("4", "beta",   "", 3, None),
-    ("5", "front",  "", 10, "**5.5 m** 정면(tilt<10°) ★ τ_eff"),
-    ("5", "oblique","", 10, "**5.5 m** 사각(tilt≈30°)"),
-    ("5", "short",  "--sec 1.5", 4, "5.5 m · 짧은 명령"),
-    ("5", "short",  "--sec 2.0", 4, None),
-    ("5", "short",  "--sec 3.0", 4, None),
-    ("6", "stiction", "", 10, "**4.5 m** 정면 ★ 97 이 움직이나"),
-    ("6", "pulse",  "--sec 1.0", 5, None),
-    ("6", "pulse",  "--sec 1.5", 5, None),
-    ("6", "pulse",  "--sec 2.0", 5, None),
-    ("6", "pulse",  "--sec 2.5", 5, None),
-    ("7", "",       "", 1, "3.5 m 정면 · 태그 컷까지"),
-    ("8", "",       "--pos 0",   6, "3.5 m · 도킹축 위(옆 0 m)"),
-    ("8", "",       "--pos 0.5", 6, "옆으로 **대략 0.5 m** (걸음으로 충분)"),
-    ("8", "",       "--pos 1.0", 6, "옆으로 대략 1 m"),
-    ("8", "",       "--pos 1.5", 6, "옆으로 대략 1.5 m"),
-    ("8", "",       "--pos 2.0", 6, "옆으로 대략 2 m"),
-    ("9", "",       "", 2, "**5 m** · heading ≈25° 비스듬"),
-    ("10", "",      "", 1, "태그가 **안 보이는** 방향"),
+    # (번호, 부분, 추가인자, 반복, 자세dict)
+    #   d   = 태그면까지 **수직거리** [m]
+    #   lat = 도킹축에서 옆으로 [m] (0 = 축 위)
+    #   face= 차가 어디를 보나
+    #   car = 차가 **스스로** 하는 동작 (사람이 안 해도 되는 것)
+    ("1", "center", "", 1, dict(d=3.5, lat=0.0, face="태그 정면(축 위)",
+         extra="태그가 화면 **중앙 높이**에 오게",
+         car="±12° 제자리 회전 3번 → 스스로 0°로 복귀")),
+    ("1", "upper", "", 1, dict(d=None, lat=0.0, face="태그 정면(축 위)",
+         extra="태그가 화면 **위쪽 행**에 오게 차를 조금 앞으로 (잘리지는 않을 만큼)",
+         car="±12° 제자리 회전 3번 → 스스로 0°로 복귀")),
+    ("2", "", "", 3, dict(d=8.0, lat=0.0, face="태그 정면(축 위)",
+         extra="앞 5 m 비움 · 포크 완전히 내림 · **사람 제동 위치**",
+         car="저속 전진 6초 × 4종 → 매번 스스로 8 m 로 복귀")),
+    ("3", "", "", 1, dict(d=3.5, lat=1.6, face="태그 쪽으로 약 25° 틀어서",
+         extra="이 단계는 자리 **2곳**: ①비스듬(위 자세) ②정면(옆 0 m). 줄자 7개 입력",
+         car="없음 — 차는 가만히 있는다")),
+    ("4", "open", "--sec 1.0 --side L", 4, dict(d=3.5, lat=1.6,
+         face="태그 쪽으로 약 25° 틀어서 (tilt ≥ 20°)",
+         extra="차 **주변이 원형으로** 비어야 한다 (앞뒤로는 안 간다)",
+         car="제자리 회전 → 스스로 원래 각도로 복귀")),
+    ("4", "open", "--sec 1.0 --side R", 4, None),
+    ("4", "open", "--sec 1.5 --side L", 4, None),
+    ("4", "open", "--sec 1.5 --side R", 4, None),
+    ("4", "open", "--sec 2.0 --side L", 4, None),
+    ("4", "open", "--sec 2.0 --side R", 4, None),
+    ("4", "open", "--sec 3.0 --side L", 4, None),
+    ("4", "open", "--sec 3.0 --side R", 4, None),
+    ("4", "gyro", "", 2, None),
+    ("4", "closed", "", 6, dict(same=True, star="σ_θ — 절대 못 버림")),
+    ("4", "arm", "--start-m 3.5", 5, dict(d=3.5, lat=1.6,
+         face="태그 쪽으로 약 25° 틀어서 (**tilt ≥ 20° 아니면 코드가 다시 세우라고 한다**)",
+         extra="★ 회전팔 A",
+         car="±20° 제자리 회전 → 스스로 복귀")),
+    ("4", "arm", "--start-m 6", 5, dict(d=6.0, lat=2.8,
+         face="태그 쪽으로 약 25° 틀어서 (tilt ≥ 20°)",
+         extra="★★ **6 m 로 옮긴다** — 이걸 빼면 회전팔 A 를 원리적으로 못 구한다",
+         car="±20° 제자리 회전 → 스스로 복귀")),
+    ("4", "small", "", 10, dict(d=3.5, lat=1.6, face="태그 쪽으로 약 25° 틀어서",
+         extra="3.5 m 자리로 되돌아온다",
+         car="±5° 제자리 회전 → 스스로 복귀")),
+    ("4", "beta", "", 3, dict(same=True, extra="태그가 안 보일 때까지 돌려 본다",
+         car="좌우로 천천히 회전(태그 놓치면 스스로 멈춤)")),
+    ("5", "front", "", 10, dict(d=5.5, lat=0.0, face="태그 정면(축 위) · tilt < 10°",
+         extra="★ τ_eff · 앞 2 m 여유",
+         car="4초 전진(약 1.3 m) → **스스로 5.5 m 로 후진 복귀**")),
+    ("5", "oblique", "", 10, dict(d=5.5, lat=2.6,
+         face="태그 쪽으로 약 25° 틀어서 (tilt 25~30°)",
+         extra="옆으로 2.6 m 가 어려우면 2.0 m(tilt 20°)도 된다",
+         car="4초 전진 → 스스로 복귀")),
+    ("5", "short", "--sec 1.5", 4, dict(d=5.5, lat=0.0, face="태그 정면(축 위)",
+         extra="짧은 명령 — 거리 변동을 본다", car="짧게 전진 → 스스로 복귀")),
+    ("5", "short", "--sec 2.0", 4, None),
+    ("5", "short", "--sec 3.0", 4, None),
+    ("6", "stiction", "", 10, dict(d=4.5, lat=0.0, face="태그 정면(축 위)",
+         extra="★ byte2=97 이 실제로 움직이나 (내일 처음 보내는 값)",
+         car="저속 4초 전진(약 0.5 m) → 스스로 복귀")),
+    ("6", "pulse", "--sec 1.0", 5, dict(same=True, car="저속 짧게 전진 → 스스로 복귀")),
+    ("6", "pulse", "--sec 1.5", 5, None),
+    ("6", "pulse", "--sec 2.0", 5, None),
+    ("6", "pulse", "--sec 2.5", 5, None),
+    ("7", "", "", 1, dict(d=3.5, lat=0.0, face="태그 정면(축 위)",
+         extra="앞 1.5 m 여유 (태그가 잘릴 때까지 조금 전진)",
+         car="태그 컷까지 전진 → 스스로 복귀. 안 멈추면 포크끝 0.40 m 앞에서 강제 정지")),
+    ("8", "", "--pos 0", 6, dict(d=3.5, lat=0.0, face="태그 쪽(태그가 화면 가운데 오게)",
+         extra="각도는 **안 재도 된다**. 옆 거리도 걸음으로 충분",
+         car="제자리 ±3° 흔들기 → 앞뒤로는 안 간다")),
+    ("8", "", "--pos 0.5", 6, dict(d=3.5, lat=0.5, face="태그 쪽(태그가 화면 가운데 오게)",
+         extra="옆으로 **대략** 0.5 m", car="제자리 ±3° 흔들기")),
+    ("8", "", "--pos 1.0", 6, dict(d=3.5, lat=1.0, face="태그 쪽",
+         extra="옆으로 대략 1 m", car="제자리 ±3° 흔들기")),
+    ("8", "", "--pos 1.5", 6, dict(d=3.5, lat=1.5, face="태그 쪽",
+         extra="옆으로 대략 1.5 m", car="제자리 ±3° 흔들기")),
+    ("8", "", "--pos 2.0", 6, dict(d=3.5, lat=2.0, face="태그 쪽",
+         extra="옆으로 대략 2 m", car="제자리 ±3° 흔들기")),
+    ("9", "", "", 2, dict(d=5.0, lat=2.3, face="태그 쪽으로 약 25° 틀어서",
+         extra="앞 2 m 여유", car="5 m → 3.5 m 전진 → 스스로 복귀")),
+    ("10", "", "", 1, dict(d=None, lat=None, face="**태그가 안 보이는** 방향",
+         extra="어디서 해도 된다 · 차 주변 원형으로 비움",
+         car="태그를 찾을 때까지 제자리 회전 — 찾으면 스스로 멈춤")),
 ]
 
 
 def print_plan(out=print):
-    """현장용 명령 목록 — 한 줄이 한 시행. 그대로 복붙한다."""
+    """현장용 명령 목록 — 한 줄이 한 시행. 자세까지 적는다."""
     L = []
-    L.append("# ══════════════════════════════════════════════════════════════")
-    L.append("# first_run 현장 명령 목록 — 한 줄이 **한 시행**이다")
-    L.append("#")
-    L.append("#  · 한 줄 치면 실험 1회 하고 **종료하면서 CAN 을 놓는다**")
-    L.append("#    → 그때 수동 컨트롤러로 차를 옮길 수 있다")
-    L.append("#  · 자리가 같은 줄은 연달아 쳐도 된다(차가 알아서 복귀한다)")
-    L.append("#  · 언제든 Ctrl+C = 즉시 정지 프레임 송신 후 종료")
-    L.append("#  · 진행 확인:  python tools/first_run.py --list")
-    L.append("#  · 시간 모자라면 10 → 9 → 7 → 8 → 6 순으로 버린다")
-    L.append("#    (★ 표시는 절대 못 버림)")
-    L.append("# ══════════════════════════════════════════════════════════════")
-    L.append("")
-    L.append("cd ~/krri/apriltag_v3")
-    L.append("")
-    L.append("# 장치 확인")
-    L.append("python tools/check/device_check.py --no-gui")
-    L.append('python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"')
-    L.append("")
-    cur = None
-    total = 0
-    for num, part, extra, rep, note in PLAN:
+    L += ["# " + "=" * 68,
+          "# first_run 현장 명령 목록 — 한 줄이 **한 시행**이다",
+          "#",
+          "#  · 한 줄 치면 실험 1회 하고 **종료하면서 CAN 을 놓는다**",
+          "#    → 그때 수동 컨트롤러로 차를 옮길 수 있다",
+          "#  · [사람] 표시가 나올 때만 차를 옮긴다. 그 아래 줄들은 같은 자리다",
+          "#  · [차]  는 지게차가 **스스로** 하는 것 — 사람이 안 건드려도 된다",
+          "#  · 거리(d)는 태그면까지 **수직거리**, 옆(lat)은 도킹축에서 옆으로",
+          "#  · 각도는 눈대중이면 된다. 정확히 맞출 필요 없다",
+          "#  · Ctrl+C = 즉시 정지 프레임 송신 후 종료 · 진행확인: --list",
+          "# " + "=" * 68,
+          "",
+          "cd ~/krri/apriltag_v3",
+          "",
+          "# 장치 확인",
+          "python tools/check/device_check.py --no-gui",
+          'python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"',
+          ""]
+    cur, last_pose, total = None, None, 0
+    for num, part, extra_args, rep, pose in PLAN:
         name = ORDER[int(num) - 1]
         if num != cur:
             cur = num
+            last_pose = None
             need = "필수" if name in REQUIRED else "선택"
-            L.append("")
-            L.append("# ─────────────────────────────────────────────────────────────")
-            L.append("# %s. %s  (%s · 시작 %.1f m)" %
-                     (num, name, need, START_M.get(name, START_M_DEFAULT)))
-            L.append("# ─────────────────────────────────────────────────────────────")
-        if note:
-            L.append("#   ▶ 여기에 차를 세운다: %s" % note)
-        args = " ".join(x for x in ("--part %s" % part if part else "", extra) if x)
+            L += ["", "# " + "-" * 68,
+                  "# %s. %s   (%s)" % (num, name, need),
+                  "# " + "-" * 68]
+        if pose and not pose.get("same"):
+            last_pose = pose
+            d, lat = pose.get("d"), pose.get("lat")
+            if d is None:
+                where = "아무 데나"
+            elif not lat:
+                where = "태그에서 **%.1f m**, 도킹축 **위**(옆 0 m)" % d
+            else:
+                where = "태그에서 **%.1f m**, 옆으로 **%.1f m**" % (d, lat)
+            L += ["",
+                  "#  [사람] 차를 세운다 ─────────────────────────────",
+                  "#     어디:  %s" % where,
+                  "#     자세:  %s" % pose.get("face", "-")]
+            if pose.get("extra"):
+                L.append("#     메모:  %s" % pose["extra"])
+            if pose.get("car"):
+                L.append("#  [차]   스스로 함: %s" % pose["car"])
+        elif pose and pose.get("same"):
+            note = pose.get("extra") or "바로 위와 **같은 자리**"
+            L += ["", "#  [사람] 옮기지 않는다 — %s" % note]
+            if pose.get("car"):
+                L.append("#  [차]   스스로 함: %s" % pose["car"])
+            if pose.get("star"):
+                L.append("#     ★ %s" % pose["star"])
+        elif pose is None and last_pose is not None:
+            L += ["", "#  [사람] 옮기지 않는다 — 바로 위와 같은 자리"]
+        args = " ".join(x for x in ("--part %s" % part if part else "", extra_args) if x)
         cmd = "python tools/first_run.py %s %s--n 1" % (num, (args + " ") if args else "")
         for i in range(rep):
             L.append("%-64s # %d/%d" % (cmd, i + 1, rep))
             total += 1
-        L.append("")
-    L.append("")
-    L.append("# ─────────────────────────────────────────────────────────────")
-    L.append("# 분석 → 캘리브 3종")
-    L.append("# ─────────────────────────────────────────────────────────────")
-    L.append("python tools/first_run.py --list          # 세션 폴더 이름 확인")
-    L.append("python tools/analyze_first_run.py work_dirs/first_run/<세션> --install")
-    L.append("cat work_dirs/first_run/<세션>/report.md")
-    L.append("")
-    L.append("# ─────────────────────────────────────────────────────────────")
-    L.append("# 도킹 주행")
-    L.append("# ─────────────────────────────────────────────────────────────")
-    L.append("python tools/dock.py --dry-run --show                 # CAN 안 보냄")
-    L.append("python tools/dock.py --show --record-events           # 실주행")
-    L.append("# 캘리브 없이 먼저 해보려면:")
-    L.append("python tools/dock.py --show --record-events --assume-calib --final-anyway")
-    L.append("")
-    L.append("# 총 %d 줄 = %d 시행" % (total, total))
+    L += ["", "", "# " + "-" * 68,
+          "# 분석 → 캘리브 3종",
+          "# " + "-" * 68,
+          "python tools/first_run.py --list          # 세션 폴더 이름·진행 확인",
+          "python tools/analyze_first_run.py work_dirs/first_run/<세션> --install",
+          "cat work_dirs/first_run/<세션>/report.md",
+          "",
+          "# " + "-" * 68,
+          "# 도킹 주행",
+          "# " + "-" * 68,
+          "python tools/dock.py --dry-run --show                 # CAN 안 보냄",
+          "python tools/dock.py --show --record-events           # 실주행",
+          "# 캘리브 없이 먼저 해보려면:",
+          "python tools/dock.py --show --record-events --assume-calib --final-anyway",
+          "",
+          "# 총 %d 줄 = %d 시행" % (total, total),
+          "# 시간 모자라면 버리는 순서: 10 → 9 → 7 → 8 → 6 → 4의 6 m 자리",
+          "# 절대 못 버림: 4 closed(σ_θ) · 4 arm 3.5+6 m(A) · 5 front(τ_eff) · 3 mount(줄자)"]
     out("\n".join(L))
     return total
 
