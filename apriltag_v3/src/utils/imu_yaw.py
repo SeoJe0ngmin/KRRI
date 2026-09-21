@@ -270,8 +270,15 @@ class GyroYaw:
             got_a, self._calib_a = self._calib_a, None
         need = self.hz * sec * IMU_CALIB_MIN_RATIO
         if len(got) < need:
-            raise RuntimeError("보정 샘플이 %d개뿐이다(기대 %d) — gyro 가 안 들어온다"
-                               % (len(got), int(self.hz * sec)))
+            raise RuntimeError(
+                "자이로 스트림은 열렸는데 **샘플이 안 온다** (%d개, 기대 %d).\n"
+                "   D435i 의 자이로는 **HID** 로 온다 — USB 를 여러 번 뗐다 붙이면\n"
+                "   그 노드가 낡은 채로 남아 카메라만 살고 자이로가 죽는다.\n"
+                "   · **USB 케이블을 물리적으로 뽑았다 꽂아라.** UTM 체크 토글로는 안 풀린다\n"
+                "     (장치 전원이 실제로 끊겨야 HID 가 초기화된다)\n"
+                "   · 확인: sudo dmesg -T | grep hid-sensor   (등록 번호가 계속 올라가면 그 증상)\n"
+                "   · 허브를 쓰면 다른 장치를 빼라 — 전력이 모자라면 자꾸 끊긴다"
+                % (len(got), int(self.hz * sec)))
         n = len(got)
         mean = [sum(v[i] for v in got) / n for i in range(3)]      # 평균 = 바이어스
 
