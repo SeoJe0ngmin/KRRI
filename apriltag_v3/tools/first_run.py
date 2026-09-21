@@ -77,6 +77,12 @@ SHORT_CMD_S = (1.5, 2.0, 3.0)
 #: (dynamics_calib.tag_cut.margin_px 의 기본값과 같은 60 px)
 CUT_MARGIN_PX = 60.0
 
+#: tagcut 안전 바닥 — 포크 끝이 태그면(벽)에서 이만큼 앞이면 컷 판정과 무관하게 선다 [m].
+#: tagcut 은 전진을 켜 놓고 폴링하는 유일한 모드라 시간 말고 거리 backstop 이 필요하다.
+TAGCUT_FLOOR_M = 0.40
+#: tagcut 한 번에 갈 수 있는 최대 주행량 [m] (정상 경로는 0.2 m 쯤이다).
+TAGCUT_MAX_TRAVEL_M = 1.20
+
 # 단계별 시작 거리 [m]. **태그 컷(≈3.3 m, 카메라가 태그보다 1.1 m 아래)** 위에 남아야
 # 한 번의 주행을 끝까지 카메라로 볼 수 있다 — dry-run 에서 3.5 m 시작이 주행 도중
 # 태그를 잃는 것을 보고 잡았다(67·4 s ≈ 1.25 m, 97·4 s ≈ 0.6 m).
@@ -1042,6 +1048,12 @@ async def mode_tagcut(s):
     t0 = s.now()
     cut = None
     last = {}
+    # 이 모드만 전진을 **켜 놓고** 폴링한다(다른 모드는 시간이 정해진 hold 를 쓴다).
+    # 그래서 컷 판정이 안 뜨면 멈출 근거가 시간뿐이라 벽까지 간다 → 거리 바닥과
+    # 주행량 상한을 둔다. 정상 경로(3.5 m 출발, 3.3 m 컷)는 0.2 m 라 절대 안 걸린다.
+    floor = C.CAM_TO_REF_M + TAGCUT_FLOOR_M      # 포크 끝이 태그면에서 이만큼 앞
+    cap = start + TAGCUT_MAX_TRAVEL_M            # 여기까지 오면 무조건 선다
+    why_stop = "태그 컷"
     while s.now() - t0 < 25.0:
         res = await s.pump("tagcut")
         if res is None:
@@ -1053,14 +1065,27 @@ async def mode_tagcut(s):
                 det = d
         if det is not None and doc is not None:
             mg = tag_edge_margin_px(det, res.image.shape)
-            last = {"forward": doc["forward"], "margin_px": mg}
+            fwd = float(doc["forward"])
+            last = {"forward": fwd, "margin_px": mg}
+            if fwd <= floor:
+                cut = dict(last, t=s.now(), why="거리 바닥 %.2f m — 컷 판정 전에 멈췄다" % floor)
+                why_stop = "!! 거리 바닥 %.2f m (컷 판정이 안 떴다)" % floor
+                break
+            if start - fwd >= TAGCUT_MAX_TRAVEL_M:
+                cut = dict(last, t=s.now(), why="주행량 상한 %.2f m" % TAGCUT_MAX_TRAVEL_M)
+                why_stop = "!! 주행량 상한 %.2f m (컷 판정이 안 떴다)" % TAGCUT_MAX_TRAVEL_M
+                break
             if mg < CUT_MARGIN_PX:
                 cut = dict(last, t=s.now())
                 break
         elif s.tag_lost():
             cut = dict(last, t=s.now(), why="검출 끊김")
             break
-    s.stop("태그 컷")
+    else:
+        why_stop = "!! 25 s 타임아웃 (컷 판정이 안 떴다)"
+    s.stop(why_stop)
+    if why_stop != "태그 컷":
+        s.say(why_stop)
     await s.wait(s.dur(3.0), note="tagcut_stop")
     m = await s.measure(20, note="tagcut_after")
     s.event("tagcut", cut=cut, after=m, margin_rule_px=CUT_MARGIN_PX,
@@ -1298,6 +1323,67 @@ async def run_all(args):
     return state
 
 
+def _resolve_mode(text):
+    """'3' · 'rotate' · '3.rotate' 를 단계 이름으로. 잘못 주면 목록을 보여준다."""
+    t = (text or "").strip()
+    if t == "all":
+        return "all"
+    if t in MODES:
+        return t
+    head = t.split(".")[0]
+    if head.isdigit():
+        i = int(head)
+        if 1 <= i <= len(ORDER):
+            return ORDER[i - 1]
+    raise SystemExit("단계를 못 알아들었다: %r\n%s" % (text, _stage_list()))
+
+
+def _stage_list(state=None):
+    """번호가 붙은 단계 목록. state 가 있으면 끝낸 것에 표시."""
+    done = (state or {}).get("stages", {})
+    out = ["  단계 목록 (번호로도 된다: python tools/first_run.py 4)"]
+    for i, m in enumerate(ORDER, 1):
+        st = done.get(m, {}).get("status")
+        mark = {"done": "✔", "interrupted": "…", "error": "✗",
+                "skipped": "-"}.get(st, " ")
+        need = "필수" if m in REQUIRED else "  "
+        start = START_M.get(m, START_M_DEFAULT)
+        out.append("   %s %2d. %-8s %s  시작 %.1f m" % (mark, i, m, need, start))
+    out.append("  (✔ 끝남 · … 중단됨 · ✗ 실패 · - 건너뜀)")
+    return "\n".join(out)
+
+
+def _shared_root(args, make=True):
+    """단계를 따로 돌려도 **한 세션 폴더**에 쌓이게 한다(끝에 분석을 한 번에 하려고)."""
+    if args.root:
+        return args.root
+    if getattr(args, "solo", False):
+        return None                      # 옛 동작 — 단계마다 제 폴더
+    root = _latest_all_root()
+    if root:
+        return root
+    if not make:
+        return None
+    return os.path.join(WORK, "%s_all" % _now_str())
+
+
+def _note_stage(root, mode, res):
+    """단계 하나의 결과를 세션 state.json 에 적는다(--resume·분석이 이걸 본다)."""
+    if not root:
+        return None
+    state = _load_state(root) or {"root": root, "started": _now_str(),
+                                  "stages": {}, "argv": sys.argv}
+    status = ("interrupted" if res.get("error") == "interrupt"
+              else "error" if res.get("error") else "done")
+    state["stages"][mode] = {"status": status, "dir": res.get("dir"),
+                             "error": res.get("error"),
+                             "gate_passed": res.get("gate_passed")}
+    if mode == "timing":
+        state["gate_passed"] = res.get("gate_passed")
+    _save_state(root, state)
+    return state
+
+
 def _preflight(args):
     """시작 전 사람 확인 — VM 이 멈추면 차가 안 선다."""
     print("\n" + "=" * 70)
@@ -1320,7 +1406,12 @@ def _preflight(args):
 
 def main():
     ap = argparse.ArgumentParser(description="first_run — 현장 측정(원시 기록만)")
-    ap.add_argument("mode", choices=tuple(MODES) + ("all",), nargs="?", default="all")
+    ap.add_argument("mode", nargs="?", default="all",
+                    help="단계 이름(timing·safety·…) 또는 **번호 1~10**, 또는 all. "
+                         "목록은 --list")
+    ap.add_argument("--list", action="store_true", help="번호가 붙은 단계 목록만 찍고 끝")
+    ap.add_argument("--solo", action="store_true",
+                    help="단계를 공유 세션에 안 넣고 제 폴더에 따로 남긴다")
     ap.add_argument("--dry-run", action="store_true",
                     help="가짜 카메라·자이로·CAN 으로 코드 경로만 돈다")
     ap.add_argument("--yes", action="store_true", help="프롬프트를 자동으로 넘긴다")
@@ -1348,6 +1439,13 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="GLOBAL 전환 실패에도 강행(기록 전용)")
     args = ap.parse_args()
+    if args.list:
+        root = _shared_root(args, make=False)
+        print(_stage_list(_load_state(root) if root else None))
+        if root:
+            print("  세션 폴더: %s" % root)
+        return
+    args.mode = _resolve_mode(args.mode)
     if args.n <= 0:
         args.n = 10 if args.mode in ("forward", "creep") else 3
     _preflight(args)
@@ -1360,7 +1458,22 @@ def main():
         if args.mode == "all":
             asyncio.run(run_all(args))
         else:
-            asyncio.run(run_stage(args, args.mode, root=args.root))
+            root = _shared_root(args)
+            if root:
+                print("  세션 폴더: %s  (단계를 따로 돌려도 여기 쌓인다)" % root)
+            res = asyncio.run(run_stage(args, args.mode, root=root)) or {}
+            state = _note_stage(root, args.mode, res)
+            print("\n" + _stage_list(state))
+            i = ORDER.index(args.mode) + 1
+            if i < len(ORDER):
+                print("  다음:  python tools/first_run.py %d      # %s" % (i + 1, ORDER[i]))
+            left = [m for m in REQUIRED
+                    if (state or {}).get("stages", {}).get(m, {}).get("status") != "done"]
+            if left:
+                print("  필수인데 아직 안 한 것: %s" % ", ".join(left))
+            else:
+                print("  필수 단계 전부 끝났다 → 분석:")
+                print("    python tools/analyze_first_run.py %s --install" % (root or "<폴더>"))
     except KeyboardInterrupt:
         print("\n  중단. 이어서 하려면:  python tools/first_run.py all --resume")
 
