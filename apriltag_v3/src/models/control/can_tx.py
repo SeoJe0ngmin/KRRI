@@ -194,11 +194,25 @@ class ChannelProbe:
             if len(self._pending) > 64:
                 self._pending.pop(0)
             if self.logger is not None:
+                # movement 를 같이 남긴다 — analyze 의 cmd_pairs 가 set↔tx 를 이 이름으로
+                # 짝지어 **명령 지연**(결정→버스)을 낸다. 없으면 n=0 이 된다
+                # (2026-09-21 현장: dry-run 은 fake_tx 에 movement 가 있어 통과했는데
+                #  실주행 tx 에는 없어서 명령 지연이 통째로 안 나왔다).
                 self.logger.can(dir="tx", can_id=cid, data=list(payload), t_cmd_tx=t,
-                                changed=True)
+                                movement=self._movement_now(), changed=True)
         if self.rx:
             self._drain()
         return out
+
+    def _movement_now(self):
+        """지금 송신 중인 동작 이름. SafeCanTx 가 붙어 있으면 그쪽 값을 쓴다."""
+        try:
+            c = getattr(self, "_owner", None)
+            if c is not None:
+                return getattr(c, "movement", None)
+        except Exception:
+            pass
+        return None
 
     def _drain(self, limit=8):
         """read(timeout=0) 로 TXACK·차량 프레임을 배수한다. 감사 전용이라 실패는 무시."""
@@ -293,6 +307,7 @@ class SafeCanTx:
         if ch is None or isinstance(ch, ChannelProbe):
             return self.probe
         self.probe = ChannelProbe(ch, logger=self.logger)
+        self.probe._owner = self          # tx 로그에 movement 를 넣으려고
         self.c.ch_a = self.probe
         if self.log:
             self.log("  CAN write 계측 붙음 (TXACK %s)"

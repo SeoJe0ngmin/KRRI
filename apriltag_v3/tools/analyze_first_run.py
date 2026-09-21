@@ -230,12 +230,20 @@ def cmd_pairs(stage):
     sets.sort()
     txs.sort()
     out = []
+    named = any(m for _t, m in txs)        # tx 에 movement 가 실려 있나
     for t_set, mv in sets:
         t_tx = None
-        for t, m in txs:                       # 그 시각 이후 같은 movement 의 첫 tx
-            if m == mv and t >= t_set - 0.020:  # 20 ms 앞까지는 같은 명령으로 본다
-                t_tx = t
+        for t, m in txs:
+            if t < t_set - 0.020:               # 20 ms 앞까지는 같은 명령으로 본다
+                continue
+            # 이름이 있으면 이름으로, 없으면(옛 기록) **시각으로만** 짝짓는다.
+            # 주행 프레임은 10 ms 주기라 set 직후 첫 변경이 그 명령이다.
+            if named and m and m != mv:
+                continue
+            if t - t_set > 0.30:                # 한 주기를 한참 넘으면 남의 것
                 break
+            t_tx = t
+            break
         out.append({"movement": mv, "t_set": t_set, "t_tx": t_tx})
     return out
 
