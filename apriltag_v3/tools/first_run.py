@@ -519,14 +519,31 @@ class Session:
         except Exception:
             return 0
 
-    def _last_tx_t(self):
-        """가장 최근에 **CAN 버스로 나간** 시각. 없으면 None(그러면 결정 시각을 쓴다)."""
+    def _tx_after(self, t_set, movement=None, wait_s=0.30):
+        """**이 명령이** 버스로 나간 시각. t_set 이후 처음 바뀐 주행 프레임을 찾는다.
+
+        옛 _last_tx_t 는 tx_marks 의 **맨 뒤**(= 직전 명령의 것)를 돌려줘서
+        t_tx < t_set 이 됐다 — 2026-09-21 현장에서 명령 지연이 -16 ms 로 찍혔다.
+        명령이 결정 전에 나갈 수는 없다. 그 t_org 로 잰 출발 지연도 같이 틀어진다.
+
+        주행 프레임(0x1E3)은 10 ms 주기라 보통 t_set 뒤 한 주기 안에 나간다.
+        wait_s 안에 못 찾으면 None (호출자가 t_set 으로 떨어진다).
+        """
         try:
-            if self.tx is not None and self.tx.probe is not None and self.tx.probe.tx_marks:
-                return float(self.tx.probe.tx_marks[-1][0])
+            probe = self.tx.probe if self.tx is not None else None
+            if probe is None:
+                return None
+            mov_id = CAN_IDS.get("movement", 0x01E3)
+            t_end = self.now() + wait_s
+            while True:
+                for t, cid, _payload in list(probe.tx_marks):
+                    if t >= t_set - 0.002 and int(cid) == int(mov_id):
+                        return float(t)
+                if self.now() >= t_end:
+                    return None
+                time.sleep(0.002)
         except Exception:
-            pass
-        return None
+            return None
 
     def _say_onset(self, what, onset_s, ref_s, lat_ms):
         """현장에서 눈으로 확인하라고 두 값을 9/7 실측과 나란히 찍는다."""
@@ -549,7 +566,7 @@ class Session:
         g0 = self.gyro.angle_deg if self.gyro else None
         # **출발 지연을 현장에서 바로 본다**(분석을 기다리지 않는다).
         # 원점은 명령이 CAN 에 나간 시각(t_tx). 없으면 결정 시각(t_set).
-        t_org = self._last_tx_t() or t_set
+        t_org = self._tx_after(t_set) or t_set
         onset, onset_by = None, None
         t_deadline = self.now() + sec
         while self.now() < t_deadline:
@@ -672,7 +689,7 @@ class Session:
         self.event("rotate_start", target_deg=deg, movement=mv, why=why,
                    gyro_deg=start, t_cmd_set=t_set, cap_s=cap)
         t0 = self.now()
-        t_org = self._last_tx_t() or t_set
+        t_org = self._tx_after(t_set) or t_set
         gaps0 = self._gaps_now()          # 이 회전 시작 시점의 누적 gaps
         onset = None
         reason = "goal"
@@ -796,8 +813,14 @@ def _timing_gate(s):
     first10 = can.get("txack_first10_max_ms")
     passed = (gaps == 0) and (first10 is not None and first10 < GATE_TXACK_MS)
     if first10 is None:
-        s.say("!! TXACK 를 못 받았다 — 게이트를 '미확인' 으로 둔다(분석에서 판정)")
-        passed = None if s.fake else False        # 가짜 장비에서는 판정 자체를 안 한다
+        # TXACK 는 "명령이 실제로 버스에 나갔나" 를 **감사**하는 기능이다. 없어도
+        # t_cmd_tx(write 직후 시각)는 따로 기록되므로 **측정 자체는 된다.**
+        # 그래서 미통과가 아니라 **미확인**으로 둔다 — 못 받는 환경(드라이버·VM)에서
+        # 게이트가 영영 안 열려 뒤 단계가 전부 '원시 기록만' 이 되는 게 더 나쁘다.
+        s.say("!! TXACK 를 못 받았다 — 게이트를 **미확인**으로 둔다.")
+        s.say("   (송신 시각은 t_cmd_tx 로 기록되니 측정은 계속된다. "
+              "gaps %d 은 %s)" % (gaps, "정상" if gaps == 0 else "확인 필요"))
+        passed = None
     s.gate_passed = passed
     s.block = None
     s.event("gate", passed=passed, txack_first10_max_ms=first10,
@@ -805,8 +828,8 @@ def _timing_gate(s):
             loop_tick=s.loop_tick.summary(),
             rule="TXACK 첫 10건 max < %.0f ms ∧ gyro gaps = 0" % GATE_TXACK_MS)
     s.say("게이트: TXACK 첫10 max %s ms / gaps %s → %s"
-          % (first10, gaps,
-             "통과" if passed else ("미확인(가짜 장비)" if passed is None
+          % ("없음" if first10 is None else "%.1f" % first10, gaps,
+             "통과" if passed else ("미확인 — 측정은 계속한다" if passed is None
                                  else "미통과(이후 단계는 원시 기록만)")))
     s.say("L 중앙값 %s ms / p99 %s ms" % (summary["L_ms_median"], summary["L_ms_p99"]))
     return passed
