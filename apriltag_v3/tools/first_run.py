@@ -29,6 +29,8 @@
 """
 import argparse
 import asyncio
+import glob
+import io
 import json
 import math
 import os
@@ -704,6 +706,8 @@ async def mode_timing(s):
         await s.rotate_closed(+12.0 if k % 2 == 0 else -12.0, why="ε 측정 회전")
     await s.return_heading(0.0)
 
+    if not _want(s, "upper"):
+        return {"gate_passed": None, "parts": "center only"}
     await s.ask("태그가 화면 **위쪽 행**에 오게 (차를 태그 쪽으로 조금 붙여) Enter",
                 key="row_upper")
     s.block = "still_upper"
@@ -966,30 +970,36 @@ async def mode_rotate(s):
     # 개루프 펄스 L/R × {1.0, 1.5, 2.0, 3.0 s} × n — ω(t) 에서 τ_r·α_up·α_r 를 뽑는다.
     # plan 2-4 가 지정한 격자다. {1.5, 3.0} 두 점만으로는 램프를 못 잡아 α 가 영영 None
     # 이었고, 회전 정지 규칙이 순수지연 1파라미터로 되돌아갔다(σ_θ ≤ 0.5° 요건 미달).
-    for sec in (1.0, 1.5, 2.0, 3.0):
-        for mv, side in (("rotate_ccw", "L"), ("rotate_cw", "R")):
-            for k in range(min(4, n * 2)):
+    _os = (s.args.sec,) if s.args.sec_given else (1.0, 1.5, 2.0, 3.0)
+    for sec in (_os if _want(s, "open") else ()):
+        _pairs = (("rotate_ccw", "L"), ("rotate_cw", "R"))
+        if s.args.side:
+            _pairs = tuple(x for x in _pairs if x[1] == s.args.side.upper())
+        for mv, side in _pairs:
+            for k in range(n if s.args.n_given else min(4, n * 2)):
                 s.block = "rot_open_%s_%.1f_%d" % (side, sec, k)
                 s.event("rotate_open", side=side, sec=sec, trial=k, block=s.block)
                 await s.hold(mv, sec, why="개루프 %s %.1fs" % (side, sec), settle=s.settle_sec())
                 await s.return_heading(start_heading)
     # 5 s 자이로 전용 ×2 (200 Hz 원시만 본다)
-    for k in range(min(2, n)):
+    for k in range((n if s.args.n_given else min(2, n)) if _want(s, "gyro") else 0):
         s.event("rotate_open_long", trial=k)
         await s.hold("rotate_ccw", 5.0, why="5 s 자이로 전용", settle=s.settle_sec())
         await s.return_heading(start_heading)
 
     # 폐루프 15도 × 6 — σ_θ 요건 0.5도 (plan 2-4)
-    for k in range(min(6, n * 3)):
+    for k in range((n if s.args.n_given else min(6, n * 3)) if _want(s, "closed") else 0):
         s.event("rotate_closed", target=15.0, trial=k)
         await s.rotate_closed(+15.0 if k % 2 == 0 else -15.0, why="폐루프 15도")
     await s.return_heading(start_heading)
 
     # tilt ≥ 20도, 3.5/6 m × n — Δβ_px vs Δψ_gyro 로 A·s 분리 (plan 1-1)
-    for dist in (3.5, 6.0):
+    # --start-m 을 주면 그 거리 하나만 — 거리를 바꾸려면 어차피 수동으로 옮겨야 한다
+    dists = ((s.args.start_m,) if s.args.start_m else (3.5, 6.0)) if _want(s, "arm") else ()
+    for dist in dists:
         await s.ask("태그를 **비스듬히(tilt ≥ 20도)** 보는 자리, 거리 %.1f m 로 옮기고 Enter" % dist,
                     key="rotate_cam_%.1f" % dist)
-        for k in range(min(5, n * 2)):
+        for k in range(n if s.args.n_given else min(5, n * 2)):
             before = await s.measure(30, note="A_before")
             r = await s.rotate_closed(+20.0 if k % 2 == 0 else -20.0, why="A 측정 회전")
             await s.wait(s.dur(3.0), note="A_settle")      # 자이로 +3 s 적분
@@ -1002,14 +1012,14 @@ async def mode_rotate(s):
         await s.return_heading(start_heading)
 
     # 3.5 m tilt 25도 ±5도 ×10 — 사후 일관성(회전 뒤 카메라-자이로 차)
-    for k in range(min(10, n * 5)):
+    for k in range((n if s.args.n_given else min(10, n * 5)) if _want(s, "small") else 0):
         r = await s.rotate_closed(+5.0 if k % 2 == 0 else -5.0, why="소각 일관성")
         m = await s.measure(20, note="small_rot")
         s.event("rotate_small", trial=k, rotate=r, after=m)
     await s.return_heading(start_heading)
 
     # 저속 회전으로 검출이 끊기는 β 좌우 ×3 (가시성 한계)
-    for k in range(min(3, n * 2)):
+    for k in range((n if s.args.n_given else min(3, n * 2)) if _want(s, "beta") else 0):
         for mv, side in (("rotate_ccw", "L"), ("rotate_cw", "R")):
             s.event("rotate_beta_limit", side=side, trial=k, phase="start",
                     beta=(s.last_doc or {}).get("heading_deg"))
@@ -1032,7 +1042,8 @@ async def mode_forward(s):
     level = s.args.level
     mv = "forward_slow" if int(level) == 97 else "forward"
     n = s.args.n if s.args.n else 10
-    for geom in ("front", "oblique"):
+    geoms = tuple(g for g in ("front", "oblique") if _want(s, g, "cruise"))
+    for geom in geoms:
         await s.ask("%s 자세(%s)로 %.1f m 에 세우고 Enter"
                     % ("정면" if geom == "front" else "사각 30도",
                        "tilt<10도" if geom == "front" else "tilt≈30도", s.start_m),
@@ -1054,11 +1065,17 @@ async def mode_forward(s):
     # **짧은 명령 격자** — δ_x(최소 신뢰 증분)와 S(T) 표는 길이가 **여러 개**라야 나온다.
     # 전부 --sec 하나로만 돌면 analyze 가 "더 짧은 걸 안 해 봤다" 며 None 을 내고,
     # δ_q 가 가정값 0.30 m 로 남아 상태기계가 그보다 작은 보정을 영영 거부한다(Tier 3).
+    if not _want(s, "short"):
+        return {"parts": "cruise only"}
     await s.ask("짧은 명령 격자(%s)를 돈다. 시작 자리로 세우고 Enter"
                 % ", ".join("%.1fs" % t for t in SHORT_CMD_S), key="forward_short")
     start = (await s.measure(30, note="short_start") or {}).get("forward", s.start_m)
-    for sec in SHORT_CMD_S:
-        for k in range(max(3, min(4, n))):      # 버킷당 3회 이상이라야 CV 가 뜻이 있다
+    _ss = (s.args.sec,) if s.args.sec_given else SHORT_CMD_S
+    for sec in _ss:
+        # 버킷당 3회 이상이라야 CV 가 뜻이 있다. 단 --n 을 직접 주면 그 값을 따른다
+        # (한 번에 한 시행만 하고 나가야 하는 현장 흐름 때문).
+        per = n if getattr(s.args, "n_given", False) else max(3, min(4, n))
+        for k in range(max(1, per)):
             if s.tag_lost():
                 s.say("!! 태그 실종 — 짧은 명령 격자 중단")
                 return {"aborted": "tag_lost"}
@@ -1079,7 +1096,7 @@ async def mode_creep(s):
     s.say("=== creep: 저속 97 ===")
     n = s.args.n if s.args.n else 10
     start = (await s.measure(30, note="creep_start") or {}).get("forward", s.start_m)
-    for k in range(n):
+    for k in range(n if _want(s, "stiction") else 0):
         s.block = "creep_%d" % k
         s.event("creep_stiction", trial=k, phase="start", block=s.block)
         r = await s.hold("forward_slow", 4.0, why="97 stiction %d" % k, settle=s.settle_sec())
@@ -1093,9 +1110,9 @@ async def mode_creep(s):
     elif s.args.sweep:
         base = list(CF.MOVEMENT_TEMPLATES["forward_slow"])
         try:
-            for bias in (10, 20, 30, 45):
+            for bias in ((10, 20, 30, 45) if _want(s, "sweep") else ()):
                 CF.MOVEMENT_TEMPLATES["forward_slow"][2] = CF.AN_NEUTRAL - bias
-                for k in range(min(3, n)):
+                for k in range(n if s.args.n_given else min(3, n)):
                     s.event("creep_sweep", bias=bias, byte2=CF.AN_NEUTRAL - bias, trial=k,
                             phase="start")
                     r = await s.hold("forward_slow", 4.0, why="편향 %d" % bias,
@@ -1109,8 +1126,9 @@ async def mode_creep(s):
             s.event("creep_sweep", restored=True,
                     byte2=CF.MOVEMENT_TEMPLATES["forward_slow"][2])
 
-    for sec in (1.0, 1.5, 2.0, 2.5):
-        for k in range(min(5, n)):
+    _ps = (s.args.sec,) if s.args.sec_given else (1.0, 1.5, 2.0, 2.5)
+    for sec in (_ps if _want(s, "pulse") else ()):
+        for k in range(n if s.args.n_given else min(5, n)):
             s.event("creep_pulse", sec=sec, trial=k, phase="start")
             r = await s.hold("forward_slow", sec, why="97 펄스 %.1fs" % sec,
                              settle=s.settle_sec())
@@ -1200,6 +1218,21 @@ def _dry_pose(args, mode, start_m):
     return lat, float(psi)
 
 
+def _want(s, *names):
+    """`--part` 로 고른 부분만 돈다. 안 주면 전부.
+
+    한 단계 안에서 **차를 옮기라고 시키는 곳**이 있으면 그 단계는 한 번에 못 끝낸다
+    (프로그램이 CAN 을 잡고 있어 수동 전환이 안 되므로 반드시 종료해야 한다).
+    그래서 자리가 바뀌는 지점마다 부분을 나눠, 부분 하나씩 돌리고 나가게 한다.
+    결과는 같은 세션 폴더에 쌓이고 analyze 가 전부 모아서 본다.
+    """
+    p = (getattr(s.args, "part", "") or "").strip().lower()
+    if not p:
+        return True
+    want = {x.strip() for x in p.split(",") if x.strip()}
+    return any(n in want for n in names)
+
+
 def _f(v):
     """ask_value 가 준 것을 float 로. 못 바꾸면 None."""
     try:
@@ -1234,7 +1267,10 @@ async def mode_grid(s):
     s.say("=== grid: heading 바이어스 vs tilt ===")
     s.say("각도는 안 재도 된다. 자리만 대충 옮기면 차가 스스로 흔들어 잰다")
     cells = []
-    for lat in GRID_LATERALS_M:
+    lats = GRID_LATERALS_M
+    if getattr(s.args, "pos", None) is not None:      # --pos 0.5 → 그 자리만
+        lats = tuple(float(x) for x in str(s.args.pos).split(",") if x.strip())
+    for lat in lats:
         await s.ask("%.1f m 에서 도킹축 기준 **왼쪽으로 대략 %.1f m** 되게 세우고 Enter "
                     "(자 없이 걸음으로 재도 된다 — 정확할 필요 없다)"
                     % (s.start_m, lat), key="grid_lat_%.1f" % lat)
@@ -1245,7 +1281,7 @@ async def mode_grid(s):
         tilt = float(base.get("tilt_deg") or 0.0)
         s.say("  자리 확인: tilt %.1f 도 · %.2f m · 카메라 heading %+.2f 도"
               % (tilt, base.get("forward") or 0.0, float(base["heading_deg"])))
-        for k in range(max(2, min(6, s.args.n * 2))):
+        for k in range(s.args.n if s.args.n_given else max(2, min(6, s.args.n * 2))):
             deg = GRID_WIGGLE_DEG * (1.0 if k % 2 == 0 else -1.0)
             before = await s.measure(20, note="wig_before")
             r = await s.rotate_closed(deg, why="grid 흔들기 %+.1f" % deg)
@@ -1290,7 +1326,7 @@ async def mode_grid(s):
 async def mode_oblique(s):
     """비스듬히 5 → 3.5 m 직진 ×2 — Δlat/Δs 로 CAM_YAW_OFFSET(δ) 를 뽑는다(plan 1-5)."""
     s.say("=== oblique: 비스듬 직진 ===")
-    for k in range(min(2, max(1, s.args.n))):
+    for k in range(s.args.n if s.args.n_given else min(2, max(1, s.args.n))):
         await s.ask("태그를 비스듬히(heading ≈ 25도) 보는 5 m 자리에 세우고 Enter",
                     key="oblique_%d" % k)
         before = await s.measure(30, note="oblique_before")
@@ -1511,18 +1547,47 @@ def _resolve_mode(text):
     raise SystemExit("단계를 못 알아들었다: %r\n%s" % (text, _stage_list()))
 
 
-def _stage_list(state=None):
+def _tally(root):
+    """세션 폴더에 쌓인 단계별 **실행 횟수와 차량 동작 수**. 나눠 돌린 것을 다 센다."""
+    out = {}
+    if not root or not os.path.isdir(root):
+        return out
+    for d in sorted(glob.glob(os.path.join(root, "*"))):
+        if not os.path.isdir(d):
+            continue
+        name = os.path.basename(d).split("_")[-1]
+        ev = os.path.join(d, "events.jsonl")
+        moves = 0
+        try:
+            with io.open(ev, encoding="utf-8") as f:
+                for line in f:
+                    if ('"cmd_start"' in line or '"rotate_start"' in line
+                            or '"safety_block"' in line or '"grid_wiggle"' in line):
+                        moves += 1
+        except Exception:
+            pass
+        r = out.setdefault(name, {"runs": 0, "moves": 0})
+        r["runs"] += 1
+        r["moves"] += moves
+    return out
+
+
+def _stage_list(state=None, root=None):
     """번호가 붙은 단계 목록. state 가 있으면 끝낸 것에 표시."""
     done = (state or {}).get("stages", {})
-    out = ["  단계 목록 (번호로도 된다: python tools/first_run.py 4)"]
+    tal = _tally(root or (state or {}).get("root"))
+    out = ["  단계 목록 (번호로도 된다: python tools/first_run.py 4)",
+           "        단계      시작    돌린횟수  차량동작"]
     for i, m in enumerate(ORDER, 1):
         st = done.get(m, {}).get("status")
         mark = {"done": "✔", "interrupted": "…", "error": "✗",
                 "skipped": "-"}.get(st, " ")
         need = "필수" if m in REQUIRED else "  "
         start = START_M.get(m, START_M_DEFAULT)
-        out.append("   %s %2d. %-8s %s  시작 %.1f m" % (mark, i, m, need, start))
-    out.append("  (✔ 끝남 · … 중단됨 · ✗ 실패 · - 건너뜀)")
+        t = tal.get(m, {})
+        out.append("   %s %2d. %-8s %s %5.1f m %6d 회 %7d 번"
+                   % (mark, i, m, need, start, t.get("runs", 0), t.get("moves", 0)))
+    out.append("  (✔ 끝남 · … 중단됨 · ✗ 실패 · - 건너뜀 | 나눠 돌린 것도 다 세어 합친다)")
     return "\n".join(out)
 
 
@@ -1557,6 +1622,115 @@ def _note_stage(root, mode, res):
     return state
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# --plan : 현장에서 그대로 복붙할 명령 목록 (한 줄 = 한 시행)
+# ═══════════════════════════════════════════════════════════════════════════
+#: (단계번호, 부분이름, 추가인자, 반복횟수, 자리 설명)
+#: 한 줄이 시행 하나다. 줄 사이에 **프로그램이 종료되어 CAN 을 놓으므로** 수동으로
+#: 차를 옮길 수 있다. 자리가 같으면 연달아 쳐도 된다(차가 알아서 복귀한다).
+PLAN = [
+    ("1", "center", "", 1, "3.5 m 정면 · 태그가 화면 **중앙 높이**"),
+    ("1", "upper",  "", 1, "차를 조금 앞으로 · 태그가 화면 **위쪽 행**"),
+    ("2", "",       "", 3, "**8 m** 정면 · 앞 5 m 비움 · 사람 제동 위치"),
+    ("3", "",       "", 1, "3.5 m — 비스듬 1회 + 정면 1회 (줄자 입력)"),
+    ("4", "open",   "--sec 1.0 --side L", 4, "3.5 m 비스듬(tilt≥20°) · 제자리 회전"),
+    ("4", "open",   "--sec 1.0 --side R", 4, None),
+    ("4", "open",   "--sec 1.5 --side L", 4, None),
+    ("4", "open",   "--sec 1.5 --side R", 4, None),
+    ("4", "open",   "--sec 2.0 --side L", 4, None),
+    ("4", "open",   "--sec 2.0 --side R", 4, None),
+    ("4", "open",   "--sec 3.0 --side L", 4, None),
+    ("4", "open",   "--sec 3.0 --side R", 4, None),
+    ("4", "gyro",   "", 2, None),
+    ("4", "closed", "", 6, "★ σ_θ — 절대 못 버림"),
+    ("4", "arm",    "--start-m 3.5", 5, "★ 회전팔 A — 3.5 m"),
+    ("4", "arm",    "--start-m 6",   5, "★ **6 m 로 옮긴다** (안 하면 A 를 못 구함)"),
+    ("4", "small",  "", 10, "3.5 m 로 돌아와서"),
+    ("4", "beta",   "", 3, None),
+    ("5", "front",  "", 10, "**5.5 m** 정면(tilt<10°) ★ τ_eff"),
+    ("5", "oblique","", 10, "**5.5 m** 사각(tilt≈30°)"),
+    ("5", "short",  "--sec 1.5", 4, "5.5 m · 짧은 명령"),
+    ("5", "short",  "--sec 2.0", 4, None),
+    ("5", "short",  "--sec 3.0", 4, None),
+    ("6", "stiction", "", 10, "**4.5 m** 정면 ★ 97 이 움직이나"),
+    ("6", "pulse",  "--sec 1.0", 5, None),
+    ("6", "pulse",  "--sec 1.5", 5, None),
+    ("6", "pulse",  "--sec 2.0", 5, None),
+    ("6", "pulse",  "--sec 2.5", 5, None),
+    ("7", "",       "", 1, "3.5 m 정면 · 태그 컷까지"),
+    ("8", "",       "--pos 0",   6, "3.5 m · 도킹축 위(옆 0 m)"),
+    ("8", "",       "--pos 0.5", 6, "옆으로 **대략 0.5 m** (걸음으로 충분)"),
+    ("8", "",       "--pos 1.0", 6, "옆으로 대략 1 m"),
+    ("8", "",       "--pos 1.5", 6, "옆으로 대략 1.5 m"),
+    ("8", "",       "--pos 2.0", 6, "옆으로 대략 2 m"),
+    ("9", "",       "", 2, "**5 m** · heading ≈25° 비스듬"),
+    ("10", "",      "", 1, "태그가 **안 보이는** 방향"),
+]
+
+
+def print_plan(out=print):
+    """현장용 명령 목록 — 한 줄이 한 시행. 그대로 복붙한다."""
+    L = []
+    L.append("# ══════════════════════════════════════════════════════════════")
+    L.append("# first_run 현장 명령 목록 — 한 줄이 **한 시행**이다")
+    L.append("#")
+    L.append("#  · 한 줄 치면 실험 1회 하고 **종료하면서 CAN 을 놓는다**")
+    L.append("#    → 그때 수동 컨트롤러로 차를 옮길 수 있다")
+    L.append("#  · 자리가 같은 줄은 연달아 쳐도 된다(차가 알아서 복귀한다)")
+    L.append("#  · 언제든 Ctrl+C = 즉시 정지 프레임 송신 후 종료")
+    L.append("#  · 진행 확인:  python tools/first_run.py --list")
+    L.append("#  · 시간 모자라면 10 → 9 → 7 → 8 → 6 순으로 버린다")
+    L.append("#    (★ 표시는 절대 못 버림)")
+    L.append("# ══════════════════════════════════════════════════════════════")
+    L.append("")
+    L.append("cd ~/krri/apriltag_v3")
+    L.append("")
+    L.append("# 장치 확인")
+    L.append("python tools/check/device_check.py --no-gui")
+    L.append('python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"')
+    L.append("")
+    cur = None
+    total = 0
+    for num, part, extra, rep, note in PLAN:
+        name = ORDER[int(num) - 1]
+        if num != cur:
+            cur = num
+            need = "필수" if name in REQUIRED else "선택"
+            L.append("")
+            L.append("# ─────────────────────────────────────────────────────────────")
+            L.append("# %s. %s  (%s · 시작 %.1f m)" %
+                     (num, name, need, START_M.get(name, START_M_DEFAULT)))
+            L.append("# ─────────────────────────────────────────────────────────────")
+        if note:
+            L.append("#   ▶ 여기에 차를 세운다: %s" % note)
+        args = " ".join(x for x in ("--part %s" % part if part else "", extra) if x)
+        cmd = "python tools/first_run.py %s %s--n 1" % (num, (args + " ") if args else "")
+        for i in range(rep):
+            L.append("%-64s # %d/%d" % (cmd, i + 1, rep))
+            total += 1
+        L.append("")
+    L.append("")
+    L.append("# ─────────────────────────────────────────────────────────────")
+    L.append("# 분석 → 캘리브 3종")
+    L.append("# ─────────────────────────────────────────────────────────────")
+    L.append("python tools/first_run.py --list          # 세션 폴더 이름 확인")
+    L.append("python tools/analyze_first_run.py work_dirs/first_run/<세션> --install")
+    L.append("cat work_dirs/first_run/<세션>/report.md")
+    L.append("")
+    L.append("# ─────────────────────────────────────────────────────────────")
+    L.append("# 도킹 주행")
+    L.append("# ─────────────────────────────────────────────────────────────")
+    L.append("python tools/dock.py --dry-run --show                 # CAN 안 보냄")
+    L.append("python tools/dock.py --show --record-events           # 실주행")
+    L.append("# 캘리브 없이 먼저 해보려면:")
+    L.append("python tools/dock.py --show --record-events --assume-calib --final-anyway")
+    L.append("")
+    L.append("# 총 %d 줄 = %d 시행" % (total, total))
+    out("\n".join(L))
+    return total
+
+
 def _preflight(args):
     """시작 전 사람 확인 — VM 이 멈추면 차가 안 선다."""
     print("\n" + "=" * 70)
@@ -1583,8 +1757,18 @@ def main():
                     help="단계 이름(timing·safety·…) 또는 **번호 1~10**, 또는 all. "
                          "목록은 --list")
     ap.add_argument("--list", action="store_true", help="번호가 붙은 단계 목록만 찍고 끝")
+    ap.add_argument("--plan", action="store_true",
+                    help="현장에서 그대로 복붙할 **전체 명령 목록**을 찍는다(한 줄 = 한 시행)")
     ap.add_argument("--lat", type=float, default=None,
                     help="[dry-run] 가짜 리그 시작 lateral [m]. grid 는 기본 1.6(tilt 25도)")
+    ap.add_argument("--part", default="",
+                    help="단계의 일부만 돈다(쉼표). 자리를 옮겨야 하는 단계를 나눠 돌 때. "
+                         "1 timing: center,upper / 4 rotate: open,gyro,closed,arm,small,beta / "
+                         "5 forward: front,oblique,short / 6 creep: stiction,pulse,sweep")
+    ap.add_argument("--side", default=None, choices=("L", "R", "l", "r"),
+                    help="4 rotate 개루프에서 한쪽만 (L=좌/ccw, R=우/cw)")
+    ap.add_argument("--pos", default=None,
+                    help="8 grid 에서 그 자리만 [m] (쉼표 가능). 예: --pos 0.5")
     ap.add_argument("--psi", type=float, default=None,
                     help="[dry-run] 가짜 리그 시작 heading [도]")
     ap.add_argument("--solo", action="store_true",
@@ -1616,13 +1800,18 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="GLOBAL 전환 실패에도 강행(기록 전용)")
     args = ap.parse_args()
+    if getattr(args, "plan", False):
+        print_plan()
+        return
     if args.list:
         root = _shared_root(args, make=False)
-        print(_stage_list(_load_state(root) if root else None))
+        print(_stage_list(_load_state(root) if root else None, root=root))
         if root:
             print("  세션 폴더: %s" % root)
         return
     args.mode = _resolve_mode(args.mode)
+    args.n_given = args.n > 0          # 사람이 --n 을 직접 줬나(바닥을 풀지 판단)
+    args.sec_given = any(a == "--sec" or a.startswith("--sec=") for a in sys.argv)
     if args.n <= 0:
         args.n = 10 if args.mode in ("forward", "creep") else 3
     _preflight(args)
@@ -1640,10 +1829,13 @@ def main():
                 print("  세션 폴더: %s  (단계를 따로 돌려도 여기 쌓인다)" % root)
             res = asyncio.run(run_stage(args, args.mode, root=root)) or {}
             state = _note_stage(root, args.mode, res)
-            print("\n" + _stage_list(state))
+            print("\n" + _stage_list(state, root=root))
+            print("\n  ━━ CAN 을 놓았다. 이제 **수동 컨트롤러로 차를 옮겨도 된다** ━━")
             i = ORDER.index(args.mode) + 1
+            if args.part or args.pos:
+                print("  같은 단계의 다른 부분이 남았으면 --part/--pos 를 바꿔 다시 실행")
             if i < len(ORDER):
-                print("  다음:  python tools/first_run.py %d      # %s" % (i + 1, ORDER[i]))
+                print("  다음 단계:  python tools/first_run.py %d      # %s" % (i + 1, ORDER[i]))
             left = [m for m in REQUIRED
                     if (state or {}).get("stages", {}).get(m, {}).get("status") != "done"]
             if left:
