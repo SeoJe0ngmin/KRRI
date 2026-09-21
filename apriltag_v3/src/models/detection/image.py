@@ -4,6 +4,7 @@
 """
 from config import detection as D
 from dataclasses import dataclass
+import concurrent.futures as _cf
 import json
 from pathlib import Path
 import subprocess
@@ -256,6 +257,10 @@ def _who_has_camera():
                                                        for l in ps.splitlines())
 
 
+#: 카메라 열기 시한 [s]. 넘으면 USB 문제로 보고 죽는다(무한 대기 금지).
+OPEN_TIMEOUT_S = 25.0
+
+
 def open_realsense(stream="color", width=None, height=None, fps=30,
                    depth=False, emitter=None, ir_index=1,
                    with_depth=False, depth_size=(1280, 720), depth_fps=None,
@@ -298,8 +303,25 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         rec.parent.mkdir(parents=True, exist_ok=True)
         config.enable_record_to_file(str(rec))
 
+    # **타임아웃 없이 부르면 영원히 멈춘다.** USB 가 여는 도중 빠지면 librealsense 가
+    # 돌아오지 않는다(2026-09-21 현장: 허브 경유 USB 가 끊겨 pipeline.start 에서 무한 대기).
+    # 별도 스레드에서 열고 기다렸다가, 시한을 넘기면 원인을 말하고 죽는다.
+    def _start():
+        return pipeline.start(config)
+
     try:
-        profile = pipeline.start(config)
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_start)
+            try:
+                profile = fut.result(timeout=OPEN_TIMEOUT_S)
+            except _cf.TimeoutError:
+                raise RuntimeError(
+                    "카메라 여는 데 %.0fs 가 넘었다 — USB 가 불안정하다.\n"
+                    "  · 허브·어댑터를 거치지 말고 **본체 포트에 직결**할 것\n"
+                    "  · VM 이면 UTM USB 아이콘에서 뺐다 다시 넣을 것\n"
+                    "  · 확인: lsusb | grep -i intel ; sudo dmesg -T | tail -20\n"
+                    "  (dmesg 에 'USB disconnect' 가 보이면 케이블·허브 문제다)"
+                    % OPEN_TIMEOUT_S)
     except RuntimeError as exc:
         if "busy" in str(exc).lower():
             raise RuntimeError(
