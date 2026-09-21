@@ -171,6 +171,7 @@ class Session:
     def __init__(self, args, mode, root=None):
         self.args = args
         self.mode = mode
+        self.gaps_at_open = 0            # 기동이 끝난 시점의 누적 gaps (차분 기준점)
         self.dry = bool(args.dry_run)
         self.root = root
         self.dir = os.path.join(root or WORK, "%s_%s" % (_now_str(), mode))
@@ -343,6 +344,13 @@ class Session:
                 self.event("global_time", ok=True,
                            color_s=self.timing.t_global_color - self.timing.t_open,
                            gyro_s=self.timing.t_global_gyro - self.timing.t_open)
+                # 여기까지가 **기동**이다. 스트림이 붙는 동안 자이로 유실 1회는 흔하고
+                # 무해하므로, 게이트·회전 판정은 이 시점 이후의 **증가분**만 본다.
+                self.gaps_at_open = self._gaps_now()
+                if self.gaps_at_open:
+                    self.say("  (기동 중 자이로 유실 %d회 — 무해. 이후 증가분만 센다)"
+                             % self.gaps_at_open)
+                self.event("gaps_at_open", n=self.gaps_at_open)
                 return True
         miss = self.timing.global_missing()
         self.say("!! GLOBAL 전환 실패 %s — **실주행 거부**. 기록은 계속하되 캘리브는 못 만든다"
@@ -480,6 +488,13 @@ class Session:
 
     def stop(self, why="stop"):
         return self.cmd("stop", why)
+
+    def _gaps_now(self):
+        """자이로 누적 유실 구간 수. 비교는 **차분으로만** 할 것."""
+        try:
+            return int((self.gyro.stats() or {}).get("gaps") or 0)
+        except Exception:
+            return 0
 
     def _last_tx_t(self):
         """가장 최근에 **CAN 버스로 나간** 시각. 없으면 None(그러면 결정 시각을 쓴다)."""
@@ -635,6 +650,7 @@ class Session:
                    gyro_deg=start, t_cmd_set=t_set, cap_s=cap)
         t0 = self.now()
         t_org = self._last_tx_t() or t_set
+        gaps0 = self._gaps_now()          # 이 회전 시작 시점의 누적 gaps
         onset = None
         reason = "goal"
         while True:
@@ -650,7 +666,11 @@ class Session:
             if not self.gyro.alive:
                 reason = "gyro-dead"
                 break
-            if self.gyro.stats().get("gaps", 0) and not self.dry:
+            # **이 회전 동안 늘어난** gaps 만 본다. 누적값을 보면 세션 초반에 한 번
+            # 튄 1회가 래치돼 이후 모든 회전이 33 ms 만에 죽는다
+            # (2026-09-21 현장: ±12° 3회가 전부 turned 0.01° 로 끝났다).
+            # rot_control.py 는 원래 gaps_before 차분을 본다 — 같은 방식으로 맞춘다.
+            if not self.dry and (self._gaps_now() - gaps0) > 0:
                 reason = "gyro-gaps"
                 break
         t_stop = self.now()
@@ -747,7 +767,9 @@ def _timing_gate(s):
     """타이밍 게이트 판정·출력. center 만 돌아도 여기서 찍는다."""
     summary = s.timing.summary()
     can = s.tx.stats() if s.tx is not None else {}
-    gaps = (s.gyro.stats().get("gaps") if s.gyro is not None else None) or 0
+    # **단계가 시작된 뒤** 늘어난 gaps 만 센다. 스트림 기동 직후 1회는 흔하고 무해한데,
+    # 누적값을 쓰면 그 1회로 게이트가 영영 미통과가 된다(2026-09-21 현장).
+    gaps = max(0, s._gaps_now() - getattr(s, "gaps_at_open", 0))
     first10 = can.get("txack_first10_max_ms")
     passed = (gaps == 0) and (first10 is not None and first10 < GATE_TXACK_MS)
     if first10 is None:
