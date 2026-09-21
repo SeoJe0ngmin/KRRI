@@ -25,6 +25,9 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# live_pose 는 tools/check/ 로 옮겼는데 --show 경로의 import 는 tools/ 만 보고 있었다
+# → `ModuleNotFoundError: No module named 'live_pose'` (2026-09-21 현장, v2 도 같다).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "check"))
 
 # --record-events. 실행마다 새 파일 — live_pose.py 의 --log 와 같은 방식
 # (시각으로 이름 지음). 한 파일에 계속 이어붙이면 오래된 실행과 섞여서

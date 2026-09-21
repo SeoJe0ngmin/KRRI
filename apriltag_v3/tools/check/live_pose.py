@@ -661,7 +661,13 @@ def main():
                     print("saved: %s" % (OUTDIR / name))
                 if key == ord(' '):
                     paused = not paused
-                if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                # cv2 5.0 + Qt 는 창이 아직·이미 없으면 여기서 예외를 던진다
+                # ("NULL guiReceiver"). 창이 사라진 것으로 보고 조용히 끝낸다.
+                try:
+                    visible = cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE)
+                except cv2.error:
+                    break
+                if visible < 1:
                     raise KeyboardInterrupt
                 if not paused:
                     break
