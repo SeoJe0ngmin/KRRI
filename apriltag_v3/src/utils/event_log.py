@@ -68,8 +68,11 @@ def _jsonable(v):
     return False
 
 
-def snapshot_config(record_dir, argv=None):
+def snapshot_config(record_dir, argv=None, extra=None):
     """실행 시점의 config 상수를 record_dir/config.json 으로 저장하고 경로를 돌려준다.
+
+    extra 를 주면 그대로 스냅샷에 합친다 — 캘리브 파일 내용·해시(src/utils/calib.snapshot)를
+    같이 남기는 자리다(plan 4-2: "이 주행이 어느 캘리브로 돌았나" 가 로그만으로 재구성돼야 한다).
 
     control/detection/imu 세 모듈의 **대문자 상수**를 자동으로 긁으므로, 새 파라미터를
     추가해도 코드를 안 고쳐도 따라 남는다. 기록처럼 실패해도 예외를 안 던진다 —
@@ -98,6 +101,8 @@ def snapshot_config(record_dir, argv=None):
                 vals[k] = list(v) if isinstance(v, tuple) else v
         values[modname.split(".")[-1]] = vals   # {"control": {...}, "detection": {...}, "imu": {...}}
     snap["config"] = values
+    if extra:
+        snap.update(extra)
     try:
         os.makedirs(record_dir, exist_ok=True)
         path = os.path.join(record_dir, "config.json")

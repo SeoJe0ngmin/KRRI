@@ -164,8 +164,10 @@ class FrameStats:
 # 4. 프레임 메타데이터 / 타임스탬프
 
 # 값이 있을 때 자세 실패 원인 규명에 실제로 쓰이는 것들만 추렸음.
+# frame_timestamp - sensor_timestamp = Δ_FS (USB 전송 시작 ↔ 노출중심 차, plan 4-1).
+# 이 둘이 있어야 t_capture 를 노출중심으로 되돌릴 수 있다.
 _META_KEYS = ("actual_exposure", "gain_level", "frame_counter", "sensor_timestamp",
-              "time_of_arrival", "backend_timestamp", "actual_fps",
+              "frame_timestamp", "time_of_arrival", "backend_timestamp", "actual_fps",
               "auto_exposure", "white_balance", "frame_laser_power_mode")
 
 

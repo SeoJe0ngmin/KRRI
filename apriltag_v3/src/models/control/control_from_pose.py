@@ -9,11 +9,68 @@ import copy
 import math
 import statistics
 
-from config import control as C
+from config import control as _CFG
 from config import detection as D
 from ...utils.event_log import record_event
+from ..detection.detection_pose import MEASURE_FRAMES, MEASURE_MAX_FRAMES
 from .fwd_time_model import fwd_sec_from_offset_piecewise
 from .rot_control import rot_sec_from_deg, rot_timeout_sec, rotate_to
+
+# ── v2 전용 상수 (2026-09-21 config/control.py 에서 옮겨 왔다) ───────────────
+# plan 대문제 2·3 "상수 회계" 가 전부 **삭제 대상**으로 결론 낸 값들이다. v3 실행경로
+# (`tools/dock.py` → dock_fsm/estimate/dynamics)는 하나도 읽지 않는다 — 계약 §4.7 이
+# 그렇게 못 박았다. 지우지 않고 여기로 내린 이유: `tools/run.py`(v2 폴백)가 내일
+# 새 코드가 이상할 때의 퇴로라서 그대로 돌아야 한다. config 에는 "현장에서 사람이
+# 정하는 값" 만 남긴다(CLAUDE.md 상수 최소화).
+STEP_M = 1.0                   # 직진 한 조각 [m]
+FWD_SAFETY = 0.9               # 명령 거리 = 남은 거리 x 이 값 (모자라게 가는 쪽이 안전)
+SIDESTEP_BACKWARD_GAIN_DEG = 0.0   # 0 = 회전이 작은 쪽을 고른다
+TAG_CUT_MARGIN_PX = 60.0       # 잘리기 직전 문턱 [px]
+MAX_STEPS = 30                 # 넘기면 수렴 실패 (탐색 걸음은 안 셈)
+HOLD_MAX_CONSEC = 8            # hold 가 이만큼 연속이면 수동전환 (약 10초)
+SETTLE_SEC = 0.8               # 명령 끊은 뒤 실정지까지 대기 [s]
+SEARCH_BACKUP_M = 0.5          # 전진 중 관성으로 인한 실종 직후 후진 거리 [m]
+SEARCH_AFTER_MISSES = 3        # 연속 미검출 이만큼이면 Set3 시작
+SEARCH_MAX_ROUNDS = 3          # 1바퀴째=연속 360도, 2바퀴째부터=반화각 걸음
+CAM_TO_PIVOT_M = 1.46          # 카메라→제자리 회전 중심 [m]. ★철회된 값 — 9/7 18:14 로그
+                               # 13회 회전의 Δβ/Δψ 0.77~0.95 와 안 맞는다(|A| ≲ 0.4 또는
+                               # 자이로 스케일 오차). v3 는 회전팔 A 를 실시간 도출한다
+AIM_STANDOFF_M = 3.5           # T 까지 거리 [m] (카메라 기준)
+AIM_NEAR_T_M = 1.0             # T 까지 이 안이면 조준 회전을 더 안 한다 [m]
+AIM_CHUNK_MAX_M = 3.0          # 조준 뒤 한 번에 달리는 최대 거리 [m]
+AIM_MAX_BEARING_DEG = 45.0     # T 방위각이 이보다 크면 90도 사이드스텝(v1 규칙) 폴백
+AIM_MAX_TAG_OFF_DEG = 25.0     # 조준 뒤 태그가 코에서 이보다 벗어나면 폴백
+AIM_TOL_DEG = 3.0              # 조준 오차 허용 [도]
+AIM_AT_T_M = 0.3               # T 도착으로 보는 거리 [m]
+AIM_FINAL_MAX_LAT_M = 0.10     # T 에서 lateral 이 이 이하면 태그를 직접 겨냥
+AIM_FINAL_TOL_DEG = 1.5        # 태그 겨냥 각 오차 허용 [도]
+AIM_BACKUP_M = 1.5             # T 근처인데 lateral 이 크면 이만큼 후진해 재조준 [m]
+AIM_MAX_BACKUPS = 2            # 후진-재조준 최대 횟수
+AIM_ABORT_WINDOW = 30          # 직진 중 heading 중단 판정 창 [프레임]
+AIM_DRIFT_ABORT_DEG = 4.0      # 조준 직진 중 출발 heading 에서 이만큼 흘렀으면 중단 [도]
+AIM_STOP_LEAD_M = 0.15         # 카메라 조기 정지 리드 [m]
+AIM_STOP_CONFIRM = 3           # 조기 정지 판정 연속 프레임 수
+#: 태그면을 지나 더 갈 거리 [m] = −2.02. 값은 config 의 둘에서 나온다(plan 4-5 분리)
+DOCK_EXTRA_M = -(_CFG.CAM_TO_REF_M + _CFG.STANDOFF_M)
+
+
+class _C:
+    """옛 `C.XXX` 표기를 그대로 두기 위한 얇은 이름공간.
+
+    config 에 남은 값(LAT_TOL_M 등)은 config 로 넘기고, 위에서 옮겨 온 v2 전용
+    값은 이 모듈 것을 쓴다. 한 줄도 안 고치고 상수만 옮기려고 이렇게 했다.
+    """
+    _moved = {k: v for k, v in list(globals().items())
+              if k.isupper() and not k.startswith("_")}
+
+    def __getattr__(self, name):
+        try:
+            return self._moved[name]
+        except KeyError:
+            return getattr(_CFG, name)
+
+
+C = _C()
 
 
 def normalize_deg(deg):
@@ -296,7 +353,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
     from ..detection.detection_pose import measure
     tag_id = D.TAG_ID if tag_id is None else tag_id
     max_steps = C.MAX_STEPS if max_steps is None else max_steps
-    n_frames = int(n_frames or D.MEASURE_FRAMES)
+    n_frames = int(n_frames or MEASURE_FRAMES)
     half_fov = _half_fov_deg(pipe)
     st = {"half_fov_deg": half_fov, "prev_forward": None,
           "drove_forward": False, "backed_up_once": False}
@@ -377,7 +434,7 @@ async def dock_live(pipe, driver, tag_id=None, max_steps=None, log=print,
                     mg = _margin_px(res, tag_id)
                     if mg is not None:
                         margins.append(mg)
-                if len(buf) >= n_frames or waited >= D.MEASURE_MAX_FRAMES:
+                if len(buf) >= n_frames or waited >= MEASURE_MAX_FRAMES:
 
 
                     m = measure(buf, tag_id=tag_id, n=n_frames) if buf else None

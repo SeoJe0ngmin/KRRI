@@ -72,6 +72,8 @@ JOYSTICK_LEFT = 60                # 좌회전 강도 (127+60=187)
 JOYSTICK_RIGHT = 60               # 우회전 강도 (127-60=67)
 JOYSTICK_ROTATE_CCW = 20          # 제자리 반시계 강도: 조향축(byte1)을 1/3 강도로 (127+20=147)
 JOYSTICK_ROTATE_CW = 20           # 제자리 시계 강도 (127-20=107)  — 광운대 최신 control 검증값
+JOYSTICK_FORWARD_SLOW = 30        # 저속 전진 강도 (127-30=97) — 광운대 control 의 forward_slow 와 같은 값.
+                                  # 우리 config 의 FORWARD_SLOW 와 같아야 한다(run.py 가 대조한다)
 
 # 계산된 실제 조이스틱 값들
 AN_FORWARD = min(255, AN_NEUTRAL - JOYSTICK_FORWARD)   # 67
@@ -80,6 +82,7 @@ AN_LEFT =     min(255, AN_NEUTRAL + JOYSTICK_LEFT)     # 187
 AN_RIGHT =    max(0,   AN_NEUTRAL - JOYSTICK_RIGHT)    # 67
 AN_ROTATE_CCW = min(255, AN_NEUTRAL + JOYSTICK_ROTATE_CCW)   # 147  좌 = 조향축 +, turn_left 와 같은 방향
 AN_ROTATE_CW  = max(0,   AN_NEUTRAL - JOYSTICK_ROTATE_CW)    # 107
+AN_FORWARD_SLOW = min(255, AN_NEUTRAL - JOYSTICK_FORWARD_SLOW)   # 97
 
 # =============================================================================
 # 🎮 움직임/제어 프레임 템플릿
@@ -89,6 +92,9 @@ AN_N = AN_NEUTRAL
 MOVEMENT_TEMPLATES: Dict[str, list[int]] = {
     "stop":            [AN_N, AN_N, AN_N, AN_N, AN_N, AN_N, AN_N, AN_N],
     "forward":         [AN_N, AN_N, AN_FORWARD,  AN_N, AN_N, AN_N, AN_N, AN_N],
+    # 저속 전진(byte2=97). 광운대 control 의 forward_slow 와 같은 매핑 — 데드밴드 바로 위라
+    # 블라인드 마지막 다리를 반 속도로 간다(plan 2-5). m/s 는 미측정 = 내일 first_run creep.
+    "forward_slow":    [AN_N, AN_N, AN_FORWARD_SLOW, AN_N, AN_N, AN_N, AN_N, AN_N],
     "backward":        [AN_N, AN_N, AN_BACKWARD, AN_N, AN_N, AN_N, AN_N, AN_N],
     "turn_left":       [AN_N, AN_LEFT, AN_N,     AN_N, AN_N, AN_N, AN_N, AN_N],
     "turn_right":      [AN_N, AN_RIGHT,AN_N,     AN_N, AN_N, AN_N, AN_N, AN_N],

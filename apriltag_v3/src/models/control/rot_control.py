@@ -7,14 +7,46 @@ import asyncio
 from dataclasses import dataclass
 from typing import Optional
 
-from config import control as C
-
 ROT_T0 = 0.85            # 명령→실회전 지연 [s]. 2026-09-07 can_pulse 실측 (IMU 가 0.8~0.9s 뒤 움직임)
 ROT_DEG_PER_SEC = 8.0    # 강도 20 에서 1.5s 펄스 끝에 7.3도/s, 아직 가속 중 — 보수적으로 8. 표시·워치독 전용
 
 
 ROT_MIN_SEC = 1.0
 ROT_MAX_SEC = 30.0
+
+# ── 이 모듈 전용 상수 (2026-09-21 config/control.py 에서 옮겨 왔다) ──────────
+# 전부 v2 폴백(rotate_to) 이 쓰는 값이다. v3 실행경로(dock_fsm)는 이 함수를 안 부르고
+# 회전 정지를 `dynamics.should_stop_rotate` 실시간 규칙으로 낸다(plan 2-4, 계약 §3.3).
+# 차량이 바뀌어도 사람이 손으로 고칠 값이 아니라 측정 산출물이라 config 에서 뺐다.
+ROT_WATCHDOG_GAIN = 5.0        # 워치독 = max(30s, 예상시간 x 이 값)
+ROT_LEAD_DEG = 2.5             # 관성만큼 미리 끊는 각 [도]. 2026-09-07 can_pulse 실측
+ROT_WRONG_WAY_DEG = 5.0        # 반대로 이만큼 돌면 부호가 뒤집힌 것 → 즉시 정지
+ROT_POLL_SEC = 0.01            # 회전 중 IMU 확인 주기 [s]
+ROT_SETTLE_MAX_SEC = 2.0       # 멎기 대기 상한 [s]. 명령지연 0.51s 실측 반영
+ROT_SETTLE_MIN_SEC = 0.2       # 최소 대기 [s] (명령 반영 지연)
+ROT_SETTLE_POLL_SEC = 0.05     # 멎었나 확인 주기 [s]
+ROT_SETTLE_RATE_K = 3.0        # 멎음 판정 = 보정 때 잰 잡음 x 이 값
+ROT_SETTLE_RATE_FLOOR = 1.0    # 그 판정의 하한 [도/s]
+ROT_SETTLE_RATE_CEIL = 2.0     # 그 판정의 상한 [도/s]
+SETTLE_SEC = 0.8               # 명령 끊은 뒤 실정지까지 대기 [s]. 명령지연 실측 0.51s 기반
+
+
+class _C:
+    """옛 `C.ROT_*` 표기를 그대로 두기 위한 얇은 이름공간 (값은 위 모듈 상수)."""
+    ROT_WATCHDOG_GAIN = ROT_WATCHDOG_GAIN
+    ROT_LEAD_DEG = ROT_LEAD_DEG
+    ROT_WRONG_WAY_DEG = ROT_WRONG_WAY_DEG
+    ROT_POLL_SEC = ROT_POLL_SEC
+    ROT_SETTLE_MAX_SEC = ROT_SETTLE_MAX_SEC
+    ROT_SETTLE_MIN_SEC = ROT_SETTLE_MIN_SEC
+    ROT_SETTLE_POLL_SEC = ROT_SETTLE_POLL_SEC
+    ROT_SETTLE_RATE_K = ROT_SETTLE_RATE_K
+    ROT_SETTLE_RATE_FLOOR = ROT_SETTLE_RATE_FLOOR
+    ROT_SETTLE_RATE_CEIL = ROT_SETTLE_RATE_CEIL
+    SETTLE_SEC = SETTLE_SEC
+
+
+C = _C
 
 
 @dataclass(frozen=True)

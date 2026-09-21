@@ -139,11 +139,14 @@ class Frame(np.ndarray):
     meta = None
     exposure_us = None
     gain = None
+    # 타이밍층(src/utils/timing.FrameStamps). 절대 캡처시각을 여기 실어 흘린다.
+    stamps = None
 
     def __array_finalize__(self, obj):
         # 뷰/슬라이스로 파생될 때도 속성이 따라가게 함.
         if obj is None:
             return
+        self.stamps = getattr(obj, "stamps", None)
         self.depth = getattr(obj, "depth", None)
         self.depth_scale = getattr(obj, "depth_scale", 0.0)
         self.luma = getattr(obj, "luma", None)
@@ -159,9 +162,10 @@ _EXPOSURE_UNIT_US = {"color": COLOR_EXPOSURE_UNIT_US, "infrared": 1.0}
 
 
 def _attach(img, depth=None, depth_scale=0.0, luma=None, frame_number=None,
-            meta=None, dropped_before=0, exposure_unit_us=1.0):
+            meta=None, dropped_before=0, exposure_unit_us=1.0, stamps=None):
     """이미지에 곁다리 정보를 붙여 Frame 으로 만듦."""
     f = img.view(Frame)
+    f.stamps = stamps
     f.depth = depth
     f.depth_scale = float(depth_scale)
     f.luma = luma
@@ -257,8 +261,14 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                    with_depth=False, depth_size=(1280, 720), depth_fps=None,
                    color_format="bgr8", ae_roi=False, stats=None, meta=True,
                    exposure_us=None, ae_priority=None, tune=False, restore=True,
-                   record=None):
-    """RealSense 를 열고 (프레임 제너레이터, CameraIntrinsics) 를 돌려줌."""
+                   record=None, timing=None):
+    """RealSense 를 열고 (프레임 제너레이터, CameraIntrinsics) 를 돌려줌.
+
+    timing: src/utils/timing.TimingSession 을 주면 프레임마다 절대 시각을 계산해
+        Frame.stamps 로 실어 보낸다(plan 4-1). 3-튜플 계약(i, ts, img)은 그대로다 —
+        ts 는 예전처럼 첫 프레임 기준 상대시각이고, **절대 시각은 stamps 에만** 있다.
+        queue=1·global_time 은 tune= 경로에서 걸린다(CameraSettings.docking).
+    """
     import pyrealsense2 as rs
 
     want_depth = bool(depth or with_depth)
@@ -414,6 +424,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
             while True:
                 # wait_for_frames 는 절대 밀리지 않음 — pipeline 의 출력 큐가
                 fs = pipeline.wait_for_frames()
+                t_arrival = time.time()          # 도착시각은 **기다림이 끝난 바로 그 자리**에서
                 if align is not None:
                     fs = align.process(fs)
                 f = fs.get_color_frame() if stream == "color" \
@@ -442,8 +453,17 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                 # 드롭 회계를 먼저 돌려 "이 프레임 앞에서 몇 장 사라졌나"를 받아옴.
                 fn = f.get_frame_number()
                 missed = stats.update(fn, ts - t0)
+                md = reader.read(f) if reader is not None else None
+                stamps = None
+                if timing is not None:
+                    try:
+                        stamps = timing.stamp(ts, t_arrival=t_arrival, meta=md,
+                                              domain=str(f.get_frame_timestamp_domain()),
+                                              frame_number=fn, dropped_before=missed)
+                    except Exception:
+                        stamps = None            # 기록 때문에 주행이 멈추면 안 된다
                 img = _attach(img, dm, depth_scale, luma=luma, frame_number=fn,
-                              meta=(reader.read(f) if reader is not None else None),
+                              meta=md, stamps=stamps,
                               dropped_before=missed, exposure_unit_us=exp_unit)
                 # depth 를 켜든 말든 항상 3-튜플. 소비자(tools/live_pose.py)가
                 yield i, ts - t0, img

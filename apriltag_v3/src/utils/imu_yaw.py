@@ -34,6 +34,7 @@ y축만 읽으면 cos(기울기)만큼 적게 세어, 15도 기울이면 90도 �
 가속도계를 못 열면 y축만 쓰는 예전 방식으로 떨어지고, 그때는
 axis_note() 가 경고를 돌려준다.
 """
+import collections
 import math
 import threading
 import time
@@ -76,6 +77,10 @@ class GyroYaw:
         # 샘플이 이보다 벌어지면 그 구간은 적분하지 않는다(유실 구간을
         # 마지막 각속도로 메꾸면 조용히 틀어진다. 안 더한 쪽이 눈에 보인다).
         self._dt_max = float(IMU_DT_GAP_SAMPLES) / self.hz
+        # 타임스탬프 도메인(plan 4-1: 컬러·자이로 **둘 다** GLOBAL 이어야 출발).
+        self._domain = None
+        # 원시 기록용 링버퍼. enable_raw() 를 부른 뒤 drain_raw() 로 퍼 간다.
+        self._raw = None
 
     # ── 수명 ────────────────────────────────────────────────────────────────
 
@@ -117,6 +122,15 @@ class GyroYaw:
                     "gyro %dHz 스트림을 못 열었다 (%s) — 이 장치의 유효값은 200/400 뿐이다. "
                     "장치 확인: tools/realsense_check.py" % (self.hz, exc)) from exc
         self._pipe = pipe
+        # 모션 스트림도 **호스트 시계(global time)** 로 찍게 한다 — 컬러와 같은 시계라야
+        # ψ_cam(t_capture) 과 ψ_gyro 를 같은 축에서 비교할 수 있다(plan 4-1).
+        try:
+            prof = pipe.get_active_profile()
+            for s in prof.get_device().query_sensors():
+                if s.supports(rs.option.global_time_enabled):
+                    s.set_option(rs.option.global_time_enabled, 1.0)
+        except Exception:
+            pass                                # 지원 안 하면 도메인 검사에서 걸린다
         return self
 
     def close(self):
@@ -147,11 +161,23 @@ class GyroYaw:
             with self._lock:
                 if self._calib_a is not None:
                     self._calib_a.append((v.x, v.y, v.z))
+                if self._raw is not None:
+                    self._raw.append({"s": "accel", "t": m.get_timestamp() / 1000.0,
+                                      "th": time.time(),
+                                      "x": v.x, "y": v.y, "z": v.z})
             return
         if name != "gyro":
             return
         ts = m.get_timestamp() / 1000.0       # 장치 시각 [s]
+        try:
+            domain = str(m.get_frame_timestamp_domain())
+        except Exception:
+            domain = None
         with self._lock:
+            self._domain = domain
+            if self._raw is not None:
+                self._raw.append({"s": "gyro", "t": ts, "th": time.time(),
+                                  "x": v.x, "y": v.y, "z": v.z})
             self._n += 1
             self._last_w = (v.x, v.y, v.z)
             if self._t_first is None:
@@ -333,6 +359,34 @@ class GyroYaw:
         고정 상수보다 잘 맞는다.
         """
         return self._noise_dps
+
+    @property
+    def domain(self):
+        """마지막 gyro 프레임의 타임스탬프 도메인 문자열. GLOBAL 이 아니면 실주행 금지."""
+        with self._lock:
+            return self._domain
+
+    @property
+    def bias_dps(self):
+        """지금 쓰고 있는 바이어스 [도/s] 3축. 기록용."""
+        with self._lock:
+            return tuple(math.degrees(b) for b in self._bias)
+
+    def enable_raw(self, maxlen=200 * 300):
+        """200 Hz 원시 샘플을 링버퍼에 쌓기 시작한다(imu.jsonl 용). drain_raw() 로 퍼 간다."""
+        with self._lock:
+            if self._raw is None:
+                self._raw = collections.deque(maxlen=int(maxlen))
+        return self
+
+    def drain_raw(self):
+        """쌓인 원시 샘플을 통째로 꺼내 온다. 기록 스레드가 주기적으로 부른다."""
+        with self._lock:
+            if self._raw is None:
+                return []
+            out = list(self._raw)
+            self._raw.clear()
+        return out
 
     def axis_note(self):
         """회전축을 어떻게 정했는지 한 줄. 로그에 남겨 두면 나중에 원인을 찾기 쉽다."""

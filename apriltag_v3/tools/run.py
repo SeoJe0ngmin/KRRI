@@ -39,7 +39,9 @@ from config.main import TAG_ID, TAG_SIZE_M                                # noqa
 from src.models import TagPipeline                                       # noqa: E402
 from src.models.control.control_from_pose import (CanDriver,             # noqa: E402
                                                   DryRunDriver, dock_live)
-from config.main import MAX_STEPS                                  # noqa: E402
+# MAX_STEPS 는 v2 전용이라 2026-09-21 에 config 에서 control_from_pose 로 내려갔다
+# (계약 §4.7·§8 상수 최소화). 값·동작은 그대로 30 이다.
+from src.models.control.control_from_pose import MAX_STEPS         # noqa: E402
 from src.models.detection.image import intrinsics_from_ref        # noqa: E402                        # noqa: E402
 from src.utils.imu_yaw import GyroYaw                                    # noqa: E402
 from src.utils.event_log import snapshot_config              # noqa: E402

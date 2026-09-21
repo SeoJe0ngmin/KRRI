@@ -25,7 +25,6 @@ from .models import (
     # 5) 품질 판정
     pose_quality, depth_cross_check,
     MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, RELIABLE_TILT_DEG,
-    DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M, DEPTH_CHECK_MAX_Z,
     # 6) 파이프라인 — 편의층이다. 위 낱개 함수들을 대체하지 않는다
     TagPipeline, Result,
 )
@@ -41,5 +40,4 @@ __all__ = ["CameraIntrinsics", "intrinsics_from_hfov", "fov_edges_deg", "tag_vis
            "docking_state", "tag_tilt_deg", "heading_sigma_deg",
            "pose_quality", "depth_cross_check",
            "MAX_REPROJ_RMS_PX", "MIN_DECISION_MARGIN", "RELIABLE_TILT_DEG",
-           "DEPTH_TOL_COEF", "DEPTH_TOL_FLOOR_M", "DEPTH_CHECK_MAX_Z",
            "TagPipeline", "Result"]

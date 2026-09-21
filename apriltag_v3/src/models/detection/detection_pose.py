@@ -5,6 +5,7 @@ lateral / forward / heading 이 제어에 쓰는 값.
 from config import detection as D
 from dataclasses import dataclass, field
 from pathlib import Path
+import time
 
 import cv2
 import numpy as np
@@ -14,6 +15,19 @@ from .image import (depth_at, from_video, intrinsics_from_hfov,
                     intrinsics_from_ref,
                     open_bag, open_realsense, open_webcam, to_gray)
 from .detection_tag import detect, make_detector, tag_pixel_size
+
+
+# ── 30프레임 대표값(measure/stable) 전용 상수 ────────────────────────────────
+# 2026-09-21 에 config/detection.py 에서 옮겨 왔다. plan 4-3 "상수 회계" 가 여섯 개를
+# **삭제(→ VERIFY 전용 코드 내부)** 로 결론 냈다 — v3 실행경로는 정지 후 확인에만
+# 30프레임을 쓰고(dock_fsm.VERIFY_FRAMES) 주행 중에는 연속 추정기가 답을 낸다.
+# 허용치에서 파생되던 세 개는 그 관계를 그대로 유지한다.
+MEASURE_FRAMES = 30                        # 대표값 하나를 만들 때 모으는 프레임 수
+MEASURE_MAX_FRAMES = MEASURE_FRAMES * 5    # 이만큼 봐도 못 모으면 포기
+STABLE_LATERAL_M = D.LAT_TOL_M / 3.0       # 표준오차가 이보다 크면 명령 안 냄 [m]
+STABLE_HEADING_DEG = D.HEAD_TOL_DEG / 3.0  # 위와 같음 [도]
+MAX_HEADING_SIGMA_DEG = D.HEAD_TOL_DEG / 4.0   # 예측 흔들림이 이보다 크면 각도 불신 [도]
+STABLE_SPREAD_K = 3.0                      # 관측이 예측의 이 배를 넘으면 모르는 일이 있는 것
 
 
 # 태그 네 모서리의 3D 좌표. detection.corners 와 같은 순서.
@@ -41,6 +55,80 @@ def pose_by_pnp(detection, intrinsics, tag_size):
     proj, _ = cv2.projectPoints(obj, rvec, tvec, intrinsics.K, dist)
     err = float(np.sqrt(((proj.reshape(-1, 2) - img.reshape(-1, 2)) ** 2).sum(axis=1)).mean())
     return T, err
+
+
+def bearing_px_deg(detection, intrinsics):
+    """태그 중심 **픽셀**로 낸 방위각 β [도]. + 가 반시계(왼쪽). (plan 1-2)
+
+    PnP 유효성·quality 와 **무관하게 매 프레임** 난다 — 원거리에서 태그를 화면
+    중앙에 유지하는 조준 변수이고, 2중해·정면 heading 바이어스의 영향을 안 받는다.
+    왜곡계수가 있으면 cv2.undistortPoints 로 편 뒤 정규화 광선에서 atan2(x_n, 1).
+
+    부호: 화면 오른쪽(+u)에 보이면 태그가 오른쪽 = 우리가 왼쪽으로 돌아야 한다 →
+    heading/회전 규약(+가 반시계)과 맞추려고 **−atan2(x_n, 1)** 로 돌려준다.
+    (docking_state 의 lateral + = 태그가 오른쪽 과 같은 규약)
+    """
+    c = np.asarray(getattr(detection, "center", None), dtype=np.float64)
+    if c is None or c.size != 2 or not np.isfinite(c).all():
+        return float("nan")
+    dist = (np.array(intrinsics.distortion, dtype=np.float64)
+            if getattr(intrinsics, "distortion", None) else np.zeros(5))
+    if np.any(dist):
+        n = cv2.undistortPoints(c.reshape(1, 1, 2), intrinsics.K, dist)
+        xn = float(n[0, 0, 0])
+    else:
+        xn = (c[0] - intrinsics.cx) / intrinsics.fx
+    return float(-np.degrees(np.arctan2(xn, 1.0)))
+
+
+# IPPE_SQUARE 가 요구하는 코너 순서(좌상 → 우상 → 우하 → 좌하)로 가는 치환.
+# _object_points 는 [(-s,-s), (s,-s), (s,s), (-s,s)] 순이라 뒤집으면 맞는다.
+_IPPE_ORDER = (3, 2, 1, 0)
+
+
+def pnp2_solutions(detection, intrinsics, tag_size):
+    """평면 PnP **두 해**를 그대로 뽑는다. (plan 1-3 데이터 확보용 — 선택 로직은 G_code-B)
+
+        {'yaw_deg': [해0, 해1], 'pitch_deg': [...], 'reproj_px': [...],
+         'z_m': [...], 'err_ratio': e0/e1}
+
+    yaw/pitch 는 pose_to_forklift 규약(태그 원점·항공기 축)이라 heading 과 같은 값.
+    두 해 중 어느 쪽이 맞는지는 **여기서 안 고른다** — 매 프레임 기록만 하고,
+    pitch-cue SPRT·직진 다리 일관성(plan 4-4 FM1)은 나중에 이 로그로 만든다.
+    실패하면 None (기록 때문에 루프가 죽으면 안 된다).
+    """
+    try:
+        obj = _object_points(tag_size)[list(_IPPE_ORDER)].reshape(-1, 1, 3)
+        img = np.asarray(detection.corners, dtype=np.float64)[list(_IPPE_ORDER)]
+        img = img.reshape(-1, 1, 2)
+        dist = (np.array(intrinsics.distortion, dtype=np.float64)
+                if getattr(intrinsics, "distortion", None) else np.zeros(5))
+        out = cv2.solvePnPGeneric(obj, img, intrinsics.K, dist,
+                                  flags=cv2.SOLVEPNP_IPPE_SQUARE)
+    except Exception:
+        return None
+    # OpenCV 버전에 따라 (retval, rvecs, tvecs) 또는 (+reprojectionError)
+    rvecs, tvecs = out[1], out[2]
+    if not rvecs:
+        return None
+    yaw, pitch, err, z = [], [], [], []
+    for rv, tv in zip(rvecs, tvecs):
+        R, _ = cv2.Rodrigues(rv)
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = np.asarray(tv).ravel()
+        fk = pose_to_forklift(T)
+        yaw.append(fk["yaw"])
+        pitch.append(fk["pitch"])
+        z.append(float(T[2, 3]))
+        proj, _ = cv2.projectPoints(obj, rv, tv, intrinsics.K, dist)
+        d = proj.reshape(-1, 2) - img.reshape(-1, 2)
+        err.append(float(np.sqrt((d ** 2).sum(axis=1).mean())))     # 픽셀 RMS
+    ratio = None
+    if len(err) == 2 and err[1] > 0:
+        ratio = float(min(err) / max(err)) if max(err) > 0 else None
+    return {"yaw_deg": yaw, "pitch_deg": pitch, "reproj_px": err, "z_m": z,
+            "err_ratio": ratio, "n_sol": len(yaw)}
 
 
 def estimate_pose(detector, detection, intrinsics, tag_size, method="auto"):
@@ -194,7 +282,7 @@ def docking_state(T_camera_tag, intrinsics=None, tag_size=None):
     reliable = tilt >= D.RELIABLE_TILT_DEG
     if intrinsics is not None and tag_size:
         sigma = heading_sigma_deg(T_camera_tag, intrinsics, tag_size)
-        reliable = sigma <= D.MAX_HEADING_SIGMA_DEG
+        reliable = sigma <= MAX_HEADING_SIGMA_DEG
     return {"lateral": lateral, "vertical": vertical, "forward": forward,
             "distance": distance,
             "approach_deg": approach, "heading_deg": heading,
@@ -285,6 +373,14 @@ def _sample_depth_m(detection, depth, patch, depth_scale):
     return depth_at(depth, u, v, patch=patch, scale=depth_scale)
 
 
+#: depth 대조 허용치 = max(FLOOR, COEF·z²). **config 가 아니다** — 현장에서 사람이
+#: 고칠 값이 아니라 구현 세부라 여기 둔다(CLAUDE.md 상수 최소화, plan 4-5 상수 회계).
+#: v3 실행경로(tools/dock.py)는 이 함수를 쓰지 않는다 — v2 폴백(tools/run.py)용이다.
+DEPTH_TOL_COEF = 0.05
+DEPTH_TOL_FLOOR_M = 0.02
+DEPTH_CHECK_MAX_Z = 1.5
+
+
 def depth_cross_check(detection, depth, T_camera_tag, patch=5, depth_scale=None):
     """태그 자세의 z 와 depth 센서의 z 를 대조함. 원리가 다른 두 측정이라
     어긋나면 tag_size 나 내부파라미터가 틀렸다는 신호.
@@ -300,9 +396,9 @@ def depth_cross_check(detection, depth, T_camera_tag, patch=5, depth_scale=None)
     z 가 DEPTH_CHECK_MAX_Z(1.5m) 를 넘으면 허용치가 너무 헐거워져 판정을 건너뜀.
     """
     z_pose = float(np.asarray(T_camera_tag)[2, 3])
-    tol = max(D.DEPTH_TOL_FLOOR_M, D.DEPTH_TOL_COEF * z_pose * z_pose)
+    tol = max(DEPTH_TOL_FLOOR_M, DEPTH_TOL_COEF * z_pose * z_pose)
     out = {"z_pose": z_pose, "z_depth": None, "diff_m": None, "diff_pct": None,
-           "tol_m": float(tol), "in_range": bool(0.0 < z_pose <= D.DEPTH_CHECK_MAX_Z),
+           "tol_m": float(tol), "in_range": bool(0.0 < z_pose <= DEPTH_CHECK_MAX_Z),
            "agree": False}
 
     z_depth = _sample_depth_m(detection, depth, patch, depth_scale)
@@ -317,7 +413,8 @@ def depth_cross_check(detection, depth, T_camera_tag, patch=5, depth_scale=None)
     return out
 
 
-def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method="auto"):
+def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method="auto",
+                 thresholds=None):
     """이 프레임의 자세를 믿어도 되는지 한 번에 판정함. 실측 예:
 
         {'reproj_rms_px': 1.4e-06,   구한 자세로 모서리를 되찍어 본 오차 [px]
@@ -333,7 +430,17 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
 
     depth 를 넘기면 'depth' 키가 더 붙음(depth_cross_check 결과).
     거르는 기준: tag_px >= 20, reproj <= 2.0px, margin >= 20, hamming == 0.
+
+    `thresholds` 로 그 문턱을 덮어쓸 수 있다 — **실측이 있으면 config 옛값 대신 그걸 쓴다**
+    (perception_calib.static 의 stable_tag_px·max_reproj_rms_px·reliable_tilt_deg).
+    없으면 config 기본값. 키: stable_tag_px / max_reproj_rms_px / min_decision_margin /
+    reliable_tilt_deg.
     """
+    th = dict(thresholds or {})
+    t_px = float(th.get("stable_tag_px") or D.STABLE_TAG_PX)
+    t_rms = float(th.get("max_reproj_rms_px") or D.MAX_REPROJ_RMS_PX)
+    t_mar = float(th.get("min_decision_margin") or D.MIN_DECISION_MARGIN)
+    t_tilt = float(th.get("reliable_tilt_deg") or D.RELIABLE_TILT_DEG)
     T = np.asarray(T_camera_tag, dtype=np.float64)
 
     if method == "pnp":
@@ -358,12 +465,12 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
     reasons = []
     if not np.isfinite(T).all():
         reasons.append("pose_nan")
-    if tag_px < D.STABLE_TAG_PX:
-        reasons.append(f"tag_px<{D.STABLE_TAG_PX:g}")
-    if not np.isfinite(rms) or rms > D.MAX_REPROJ_RMS_PX:
-        reasons.append(f"reproj>{D.MAX_REPROJ_RMS_PX:g}px")
-    if margin < D.MIN_DECISION_MARGIN:
-        reasons.append(f"margin<{D.MIN_DECISION_MARGIN:g}")
+    if tag_px < t_px:
+        reasons.append(f"tag_px<{t_px:g}")
+    if not np.isfinite(rms) or rms > t_rms:
+        reasons.append(f"reproj>{t_rms:g}px")
+    if margin < t_mar:
+        reasons.append(f"margin<{t_mar:g}")
     if hamming != 0:
         reasons.append("hamming!=0")
 
@@ -372,7 +479,7 @@ def pose_quality(detector, detection, intrinsics, tag_size, T_camera_tag, method
             "reproj_rms_px": rms,
             "tag_px": tag_px,
             "tilt_deg": tilt,
-            "reliable_angle": bool(tilt >= D.RELIABLE_TILT_DEG),
+            "reliable_angle": bool(tilt >= t_tilt),
             "decision_margin": margin,
             "hamming": hamming,
             "ok": not reasons,
@@ -390,6 +497,10 @@ class Result:
     quality: dict = field(default_factory=dict)
     intrinsics: object = None
     errors: dict = field(default_factory=dict)
+    # 타이밍층(plan 4-1). 프레임의 절대 시각들 — 소스가 줬으면 image.stamps 를 옮겨 담고,
+    # 여기에 t_detect_done 을 더한다. 없으면 None 이라 예전 계약은 그대로다.
+    stamps: object = None
+    t_detect_done: float = None
 
     @property
     def tag_ids(self):
@@ -416,7 +527,7 @@ class Result:
 
 _PIPE_KEYS = ("detector", "families", "quad_blur", "method", "min_margin",
               "max_hamming", "gray_channel",
-              "hfov", "quality", "depth_check", "label", "origin")
+              "hfov", "quality", "depth_check", "heading_sigma", "label", "origin")
 
 class TagPipeline:
     """소스 한 개 + 검출기 한 개를 들고, 프레임마다 Result 를 뱉음."""
@@ -425,7 +536,7 @@ class TagPipeline:
                  families="tag36h11", quad_blur=D.DEFAULT_QUAD_BLUR, method="auto",
                  min_margin=0.0, max_hamming=0, gray_channel=None,
                  hfov=None, quality=True, depth_check=True,
-                 label="", origin="", close=None):
+                 heading_sigma=True, label="", origin="", close=None):
         """Args:
         tag_size: **필수. 기본값을 두지 않았음.**
             이 값이 틀리면 거리 전체가 그 비율만큼 조용히 틀어짐(화면은
@@ -445,7 +556,12 @@ class TagPipeline:
         self.gray_channel = gray_channel
         self.hfov = None if hfov is None else float(hfov)
         self.quality = bool(quality)
+        #: 프레임 채택 문턱. 비면 config 기본값. 통합이 perception_calib.static 으로 채운다
+        #: — σ_c 를 실측해 놓고 채택 판정만 옛 고정값이 지배하면 캘리브가 반쪽이다.
+        self.quality_thresholds = {}
         self.depth_check = bool(depth_check)
+        #: docking_state 안에서 heading 흔들림 몬테카를로를 돌릴까 (v2 전용, 위 process 주석)
+        self.heading_sigma = bool(heading_sigma)
         self.label = label
         self.origin = origin or ("given" if intrinsics is not None else "")
         self.intrinsics_assumed = False
@@ -529,7 +645,8 @@ class TagPipeline:
 
         res = Result(index=int(index),
                      timestamp=float(timestamp) if timestamp is not None else 0.0,
-                     image=img, intrinsics=intr)
+                     image=img, intrinsics=intr,
+                     stamps=getattr(src, "stamps", None))
 
         try:
             res.detections = detect(self.detector, gray,
@@ -539,6 +656,7 @@ class TagPipeline:
         except Exception as exc:
 
             res.errors["detect"] = "%s: %s" % (type(exc).__name__, exc)
+            res.t_detect_done = time.time()
             return res
 
         depth = getattr(src, "depth", None)
@@ -558,13 +676,26 @@ class TagPipeline:
                 continue
 
             res.poses[tid] = T
-            res.docking[tid] = docking_state(T, intr, self.tag_size)
+            # heading_sigma=False 면 프레임마다 도는 몬테카를로(heading_sigma_deg,
+            # 60 x solvePnP ≈ 4 ms)를 건너뛴다 — v3 실행경로(tools/dock.py)는 σ_ψ 를
+            # 추정기가 해석식으로 내므로 이게 순수 낭비다(계약 §2.5 "프레임 루프에서
+            # 부르지 마라"). v2 폴백(tools/run.py)은 reliable_angle 을 쓰므로 기본은 True.
+            res.docking[tid] = docking_state(
+                T, intr if self.heading_sigma else None,
+                self.tag_size if self.heading_sigma else None)
             if self.quality:
                 q = pose_quality(self.detector, d, intr, self.tag_size, T,
-                                 method=self.method)
+                                 method=self.method, thresholds=self.quality_thresholds)
                 if self.depth_check and depth is not None:
                     q["depth"] = depth_cross_check(d, src, T, depth_scale=depth_scale)
                 res.quality[tid] = q
+        # 검출·자세가 끝난 절대 시각(plan 4-1 의 여섯 시각 중 셋째).
+        res.t_detect_done = time.time()
+        if res.stamps is not None:
+            try:
+                res.stamps.t_detect_done = res.t_detect_done
+            except Exception:
+                pass
         return res
 
     def __iter__(self):
@@ -638,8 +769,8 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     stable 이 False 면 **명령을 내지 말고 다시 재라.** 누가 지나갔거나
     조명이 깜빡였거나 아직 안 멈춘 것.
     """
-    n = int(n or D.MEASURE_FRAMES)
-    max_frames = int(max_frames or D.MEASURE_MAX_FRAMES)
+    n = int(n or MEASURE_FRAMES)
+    max_frames = int(max_frames or MEASURE_MAX_FRAMES)
 
     keys = ("lateral", "vertical", "forward", "distance",
             "approach_deg", "heading_deg", "tilt_deg",
@@ -687,7 +818,7 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     out["n"] = m
     out["spread"] = {k: stderr(v) for k, v in got.items()}
     sig = out.get("heading_sigma_deg", float("nan"))
-    out["reliable_angle"] = bool(sig <= D.MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
+    out["reliable_angle"] = bool(sig <= MAX_HEADING_SIGMA_DEG) if np.isfinite(sig) \
         else bool(out["tilt_deg"] >= D.RELIABLE_TILT_DEG)
 
     # 흔들림 판정은 **두 조건을 같이** 본다.
@@ -707,11 +838,11 @@ def measure(results, tag_id=None, n=None, max_frames=None, require_ok=True):
     pred_h = out.get("heading_sigma_deg")
     pred_h = (pred_h / np.sqrt(m)) if (pred_h and np.isfinite(pred_h)) else None
     obs_l, obs_h = out["spread"]["lateral"], out["spread"]["heading_deg"]
-    if obs_l > D.STABLE_LATERAL_M:
+    if obs_l > STABLE_LATERAL_M:
         reasons.append("lateral 흔들림 %.1fmm" % (obs_l * 1000))
-    if obs_h > D.STABLE_HEADING_DEG:
+    if obs_h > STABLE_HEADING_DEG:
         reasons.append("heading 흔들림 %.2f도" % obs_h)
-    if pred_h and obs_h > max(D.STABLE_SPREAD_K * pred_h, D.STABLE_HEADING_DEG / 3.0):
+    if pred_h and obs_h > max(STABLE_SPREAD_K * pred_h, STABLE_HEADING_DEG / 3.0):
         reasons.append("예측보다 %.1f배 흔들림 (%.3f -> %.3f도)"
                        % (obs_h / pred_h, pred_h, obs_h))
     out["stable"] = not reasons

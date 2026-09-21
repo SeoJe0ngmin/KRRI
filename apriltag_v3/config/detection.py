@@ -8,7 +8,9 @@
 
     ★ 현장에서 확정할 것    △ 실측 후 조정 가능
 """
-from .control import HEAD_TOL_DEG, LAT_TOL_M   # 흔들림 문턱을 도킹 허용치에서 뽑는다
+# 재수출이다 — 이 모듈에서 직접 안 써도 지우지 마라. `config.main` 의 `import *` 와
+# `detection_pose.py` 의 30프레임 상수(STABLE_* = D.LAT_TOL_M/3 …)가 여기를 거쳐 읽는다.
+from .control import HEAD_TOL_DEG, LAT_TOL_M   # noqa: F401
 
 # ── 무엇을 보나 ─────────────────────────────────────────────────────────────
 TAG_SIZE_M = 0.300             # 태그 한 변 [m], 검은 테두리 바깥까지  ★인쇄물 실측
@@ -24,9 +26,6 @@ MIN_DECISION_MARGIN = 20.0     # 저조도 하한 (거리에는 둔감하다)
 RELIABLE_TILT_DEG = 10.0       # 옛 각도 신뢰 판정. 지금은 폴백 전용
 DEFAULT_QUAD_BLUR = 0.0        # 검출 전 블러. 안 넣는 게 최선이었다
 
-DEPTH_TOL_COEF = 0.05          # depth 대조 허용치 = max(FLOOR, COEF x z^2)
-DEPTH_TOL_FLOOR_M = 0.02       # 그 하한 [m]
-DEPTH_CHECK_MAX_Z = 1.5        # 이 거리 넘으면 판정이 무의미 [m]
 
 # ── 각도를 몇 도 오차로 아는가 ──────────────────────────────────────────────
 # tilt 로 판단하면 안 된다 — 정면 접근에선 거리와 무관하게 늘 0 이라 각도를
@@ -35,14 +34,12 @@ CORNER_NOISE_PX = 0.07         # 코너 검출 잡음 [px]                   △
 SIGMA_SAMPLES = 60             # 그 예측에 쓰는 몬테카를로 표본 수
 
 # ── 대표값 하나를 만들 때 ───────────────────────────────────────────────────
-MEASURE_FRAMES = 30            # 모으는 프레임 수 (흔들림 1/5.5)
-MEASURE_MAX_FRAMES = MEASURE_FRAMES * 5   # 이만큼 봐도 못 모으면 포기
-
-# 아래 셋은 허용치에서 파생된다 — 따로 박으면 허용치를 바꿀 때 안 따라온다.
-STABLE_LATERAL_M = LAT_TOL_M / 3.0          # 표준오차가 이보다 크면 명령 안 냄
-STABLE_HEADING_DEG = HEAD_TOL_DEG / 3.0     # 위와 같음 [도]
-MAX_HEADING_SIGMA_DEG = HEAD_TOL_DEG / 4.0  # 예측 흔들림이 이보다 크면 각도 불신
-STABLE_SPREAD_K = 3.0          # 관측이 예측의 이 배를 넘으면 모르는 일이 있는 것
+# MEASURE_FRAMES·MEASURE_MAX_FRAMES·STABLE_LATERAL_M·STABLE_HEADING_DEG·
+# MAX_HEADING_SIGMA_DEG·STABLE_SPREAD_K 는 2026-09-21 에 여기서 **뺐다**
+# (plan 4-3 상수 회계: "→ VERIFY 전용 코드 내부"). 지금은
+# `src/models/detection/detection_pose.py` 맨 위 모듈 상수다 — 30프레임 중앙값은
+# v3 에서 정지 후 확인(VERIFY)에만 쓰고, 주행 중에는 연속 추정기가 답을 낸다.
+# 허용치에서 파생되는 관계(LAT_TOL_M/3 등)는 거기서 그대로 유지한다.
 
 # ── 카메라 장착 보정 ────────────────────────────────────────────────────────
 # 미리 못 잰다 — IMU 가 카메라에 붙어 같이 틀어져 있고 중력은 yaw 를 모른다.

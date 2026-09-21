@@ -16,7 +16,6 @@ from .detection.detection_tag import (
 from config.detection import (
     D435I_COLOR_REF, DEFAULT_QUAD_BLUR, MIN_TAG_PX, STABLE_TAG_PX,
     MAX_REPROJ_RMS_PX, MIN_DECISION_MARGIN, RELIABLE_TILT_DEG,
-    DEPTH_TOL_COEF, DEPTH_TOL_FLOOR_M, DEPTH_CHECK_MAX_Z,
 )
 from .detection.detection_pose import (
     estimate_pose, pose_by_pnp, pose_to_xyzrpy, pose_to_forklift,
@@ -36,5 +35,4 @@ __all__ = ["CameraIntrinsics", "intrinsics_from_hfov", "fov_edges_deg", "tag_vis
            "docking_state", "tag_tilt_deg", "heading_sigma_deg",
            "pose_quality", "depth_cross_check",
            "MAX_REPROJ_RMS_PX", "MIN_DECISION_MARGIN", "RELIABLE_TILT_DEG",
-           "DEPTH_TOL_COEF", "DEPTH_TOL_FLOOR_M", "DEPTH_CHECK_MAX_Z",
            "TagPipeline", "Result", "measure"]
