@@ -316,6 +316,74 @@ PC = {"title": (150, 220, 255), "sec": (150, 150, 150), "lab": (140, 140, 140),
 ROW_H = {"title": 25, "rule": 18, "sec": 24, "big": 69, "kv": 20}
 
 
+
+# ── 한글 그리기 ─────────────────────────────────────────────────────────────
+# cv2.putText 의 Hershey 폰트는 **ASCII 만** 된다 — 한글이 전부 '?' 로 찍힌다.
+# (2026-09-21 현장 화면에서 경고 줄이 통째로 '???? ???' 로 나와 못 읽었다.)
+# 그래서 글자에 한글이 섞여 있으면 Pillow + 시스템 CJK 폰트로 그린다.
+_CJK_FONT_PATHS = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/System/Library/Fonts/AppleSDGothicNeo.ttc",          # macOS
+)
+_font_cache = {}
+_font_warned = [False]
+
+
+def _cjk_font(px):
+    """크기별 CJK 폰트. 없으면 None(그러면 ASCII 로 옮겨 적는다)."""
+    px = max(9, int(px))
+    if px in _font_cache:
+        return _font_cache[px]
+    f = None
+    try:
+        from PIL import ImageFont
+        import os
+        for path in _CJK_FONT_PATHS:
+            if os.path.exists(path):
+                try:
+                    f = ImageFont.truetype(path, px)
+                    break
+                except Exception:
+                    continue
+    except Exception:
+        f = None
+    _font_cache[px] = f
+    return f
+
+
+def _put(img, text, org, font, scale, color, thickness=1, lineType=cv2.LINE_AA):
+    """cv2.putText 와 같은 인자. 한글이 섞이면 Pillow 로 그린다."""
+    text = str(text)
+    if all(ord(c) < 128 for c in text):
+        cv2.putText(img, text, org, font, scale, color, thickness, lineType)
+        return
+    f = _cjk_font(scale * 26)
+    if f is None:
+        if not _font_warned[0]:
+            print("  !! CJK 폰트가 없다 — 한글이 '?' 로 나온다. "
+                  "우분투: sudo apt install fonts-noto-cjk")
+            _font_warned[0] = True
+        cv2.putText(img, text.encode("ascii", "replace").decode(), org,
+                    font, scale, color, thickness, lineType)
+        return
+    try:
+        from PIL import Image, ImageDraw
+        import numpy as _np
+        pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        d = ImageDraw.Draw(pil)
+        # cv2 의 org 는 **글자 아래쪽 기준선**, PIL 은 왼쪽 위 → 대략 폰트 높이만큼 올린다
+        d.text((org[0], org[1] - int(scale * 26)), text,
+               font=f, fill=(int(color[2]), int(color[1]), int(color[0])))
+        img[:, :, :] = cv2.cvtColor(_np.asarray(pil), cv2.COLOR_RGB2BGR)
+    except Exception:
+        cv2.putText(img, text.encode("ascii", "replace").decode(), org,
+                    font, scale, color, thickness, lineType)
+
+
 def render_panel(items, width, height, scale=1.0, margin=18):
     """항목 목록을 패널 이미지로.
 
@@ -333,27 +401,27 @@ def render_panel(items, width, height, scale=1.0, margin=18):
         if k == "rule":
             cv2.line(p, (margin, y - 7), (width - margin, y - 7), PC["rule"], 1)
         elif k == "title":
-            cv2.putText(p, it[1], (margin, y), PFONT, 0.60 * scale, PC["title"], 1, cv2.LINE_AA)
+            _put(p, it[1], (margin, y), PFONT, 0.60 * scale, PC["title"], 1, cv2.LINE_AA)
         elif k == "sec":
-            cv2.putText(p, it[1], (margin, y), PFONT, 0.50 * scale, PC["sec"], 1, cv2.LINE_AA)
+            _put(p, it[1], (margin, y), PFONT, 0.50 * scale, PC["sec"], 1, cv2.LINE_AA)
         elif k == "big":
             _, lab, val, col, note = it
-            cv2.putText(p, lab, (margin, y), PFONT, 0.50 * scale, PC["lab"], 1, cv2.LINE_AA)
+            _put(p, lab, (margin, y), PFONT, 0.50 * scale, PC["lab"], 1, cv2.LINE_AA)
             c = PC.get(col, PC["val"])
-            cv2.putText(p, val, (margin, y + 29), PFONT, 1.12 * scale, c, 2, cv2.LINE_AA)
+            _put(p, val, (margin, y + 29), PFONT, 1.12 * scale, c, 2, cv2.LINE_AA)
             if note:
                 w = cv2.getTextSize(val, PFONT, 1.12 * scale, 2)[0][0]
-                cv2.putText(p, note, (margin + w + 14, y + 29), PFONT, 0.48 * scale,
+                _put(p, note, (margin + w + 14, y + 29), PFONT, 0.48 * scale,
                             c, 1, cv2.LINE_AA)
         elif k == "kv":
             _, key, val, col = it
             if key:
-                cv2.putText(p, key, (margin + 6, y), PFONT, 0.46 * scale, PC["dim"],
+                _put(p, key, (margin + 6, y), PFONT, 0.46 * scale, PC["dim"],
                             1, cv2.LINE_AA)
-            cv2.putText(p, val, (kx, y), PFONT, 0.46 * scale, PC.get(col, PC["dim"]),
+            _put(p, val, (kx, y), PFONT, 0.46 * scale, PC.get(col, PC["dim"]),
                         1, cv2.LINE_AA)
         else:                                   # msg
-            cv2.putText(p, it[1], (margin, y), PFONT, 0.50 * scale,
+            _put(p, it[1], (margin, y), PFONT, 0.50 * scale,
                         PC.get(it[2], PC["lab"]), 1, cv2.LINE_AA)
         y += ROW_H.get(k, 22)
     return p
