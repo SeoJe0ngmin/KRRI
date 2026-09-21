@@ -307,10 +307,20 @@ class Session:
             tune.enable_auto_exposure = True
             tune.exposure = None
             tune.gain = None
+        # 해상도는 기본(카메라 기본 = 1920x1080)을 쓰되, USB 가 불안정하면 --width/--height
+        # 로 낮춘다. 전송량이 줄어 허브 경유에서 훨씬 안정적이다. 태그가 100 px 넘게
+        # 잡히면 720p 로 낮춰도 검출엔 여유가 있다(최소 20 px).
+        res = {}
+        if self.args.width:
+            res["width"] = int(self.args.width)
+        if self.args.height:
+            res["height"] = int(self.args.height)
         self.pipe = TagPipeline.from_realsense(self.tag_size, tune=tune,
-                                               timing=self.timing, label="first_run")
-        self.say("카메라 열림 (queue=1, global_time). 태그 %d, %.3f m"
-                 % (self.tag_id, self.tag_size))
+                                               timing=self.timing, label="first_run",
+                                               **res)
+        self.say("카메라 열림 (queue=1, global_time%s). 태그 %d, %.3f m"
+                 % (", %dx%d" % (res["width"], res["height"])
+                    if len(res) == 2 else "", self.tag_id, self.tag_size))
         self.ctrl = None
         if self.args.no_can:
             from fake_rig import FakeController
@@ -1911,6 +1921,10 @@ def main():
     ap.add_argument("--start-m", type=float, default=None,
                     help="시작 거리 [m]. 안 주면 단계별 기본값(forward 5.5 / creep 4.5 / "
                          "oblique 5.0 / 나머지 3.5) — 태그 컷 3.3 m 위에 남도록 잡은 값")
+    ap.add_argument("--width", type=int, default=None,
+                    help="컬러 가로 [px]. USB 가 불안정하면 --width 1280 --height 720 "
+                         "(전송량이 절반 이하로 줄어 허브 경유에서 안정적이다)")
+    ap.add_argument("--height", type=int, default=None, help="컬러 세로 [px]")
     ap.add_argument("--tag-id", type=int, default=D.TAG_ID)
     ap.add_argument("--tag-size", type=float, default=D.TAG_SIZE_M)
     ap.add_argument("--resume", action="store_true", help="state.json 다음 단계부터")
