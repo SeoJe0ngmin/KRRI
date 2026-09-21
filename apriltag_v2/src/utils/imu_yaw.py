@@ -111,11 +111,11 @@ class GyroYaw:
                 except RuntimeError as exc2:
                     raise RuntimeError(
                         "gyro %dHz 스트림을 못 열었다 (%s) — 이 장치의 유효값은 200/400 뿐이다. "
-                        "장치 확인: tools/realsense_check.py" % (self.hz, exc2)) from exc2
+                        "장치 확인: tools/check/realsense_check.py" % (self.hz, exc2)) from exc2
             else:
                 raise RuntimeError(
                     "gyro %dHz 스트림을 못 열었다 (%s) — 이 장치의 유효값은 200/400 뿐이다. "
-                    "장치 확인: tools/realsense_check.py" % (self.hz, exc)) from exc
+                    "장치 확인: tools/check/realsense_check.py" % (self.hz, exc)) from exc
         self._pipe = pipe
         return self
 

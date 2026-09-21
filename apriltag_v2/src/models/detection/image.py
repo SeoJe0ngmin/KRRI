@@ -445,7 +445,7 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
                 img = _attach(img, dm, depth_scale, luma=luma, frame_number=fn,
                               meta=(reader.read(f) if reader is not None else None),
                               dropped_before=missed, exposure_unit_us=exp_unit)
-                # depth 를 켜든 말든 항상 3-튜플. 소비자(tools/live_pose.py)가
+                # depth 를 켜든 말든 항상 3-튜플. 소비자(tools/check/live_pose.py)가
                 yield i, ts - t0, img
                 i += 1
         finally:

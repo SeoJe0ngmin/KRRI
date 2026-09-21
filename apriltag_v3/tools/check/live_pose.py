@@ -1,9 +1,9 @@
 """도킹용 AprilTag 자세를 실시간 화면으로 봄.
 
-    python tools/live_pose.py                        # RealSense (Windows/Linux/Jetson)
-    python tools/live_pose.py --source webcam        # macOS: RealSense 컬러를 UVC 웹캠으로
+    python tools/check/live_pose.py                        # RealSense (Windows/Linux/Jetson)
+    python tools/check/live_pose.py --source webcam        # macOS: RealSense 컬러를 UVC 웹캠으로
                                                      #   (depth/IR/IMU/녹화 없음. 이유는 open_webcam)
-    python tools/live_pose.py --source bag --path x.db3
+    python tools/check/live_pose.py --source bag --path x.db3
 """
 import argparse
 import sys

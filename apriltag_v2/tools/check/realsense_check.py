@@ -327,7 +327,7 @@ def main():
         mark("SKIP", "장치 조회", "macOS 에서는 SDK 로 카메라를 못 연다 (--force-mac 으로 강행)")
         info("→ UVCAssistant 가 카메라를 선점해 librealsense 가 못 잡고, sudo 로도")
         info("   2.56.5 는 IMU 초기화에서 segfault 난다 (librealsense #14302).")
-        info("→ 컬러만 보려면  python tools/live_pose.py --source webcam   (sudo 불필요)")
+        info("→ 컬러만 보려면  python tools/check/live_pose.py --source webcam   (sudo 불필요)")
         info("→ depth / IR / IMU / bag 녹화는 Jetson 이나 Windows 에서.")
         ndev = None                                   # 모름 — 세지 않았다
     elif rs is not None:

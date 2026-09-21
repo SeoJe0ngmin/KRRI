@@ -400,7 +400,7 @@ def main():
 
     if not samples:
         print("자세가 나온 프레임이 하나도 없다. 잴 것이 없다.")
-        print("  - 태그가 화면에 있나 (tools/live_pose.py 로 눈으로 먼저 볼 것)")
+        print("  - 태그가 화면에 있나 (tools/check/live_pose.py 로 눈으로 먼저 볼 것)")
         return 1
 
     rows_stat = {k: stats([s[k] for s in samples]) for k, *_ in ROWS}

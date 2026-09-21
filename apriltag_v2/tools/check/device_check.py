@@ -1,10 +1,10 @@
 """장치 점검 — RealSense 카메라 + IMU 를 한 번 실행으로 다 본다.
 
-    python tools/device_check.py               카메라 진단 + IMU 드리프트·부호 (약 20초)
-    python tools/device_check.py --imu-sec 40  IMU 를 더 오래 (드리프트 정밀)
-    python tools/device_check.py --tag         IMU yaw 와 태그 heading 을 나란히 (부호·배율)
-    python tools/device_check.py --no-imu       카메라만
-    python tools/device_check.py --no-gui       cv2 창 검사 생략
+    python tools/check/device_check.py               카메라 진단 + IMU 드리프트·부호 (약 20초)
+    python tools/check/device_check.py --imu-sec 40  IMU 를 더 오래 (드리프트 정밀)
+    python tools/check/device_check.py --tag         IMU yaw 와 태그 heading 을 나란히 (부호·배율)
+    python tools/check/device_check.py --no-imu       카메라만
+    python tools/check/device_check.py --no-gui       cv2 창 검사 생략
 
 realsense_check(카메라) 와 imu_check(IMU) 를 합친 것이다. 따로 돌리면 장치를 두 번
 잡는데, RSUSB 백엔드는 카메라를 먼저 열면 뒤에 여는 자이로가 죽는다(2026-09-07 실측).

@@ -1,6 +1,6 @@
 """셋업 점검 — "이 컴퓨터에서 한 번에 다 되나"를 이 파일 하나로 확인한다.
 
-    python tools/check_setup.py
+    python tools/check/check_setup.py
 
 세 층을 따로 판정한다. 무엇이 안 되는지, 그래서 뭘 못 하는지가 바로 보인다.
 

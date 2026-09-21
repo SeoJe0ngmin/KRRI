@@ -1,6 +1,6 @@
 """도킹 루프 무하드웨어 스모크 — **진짜 TagPipeline** 으로 dock_live 를 돌린다.
 
-    python tools/smoke_dock.py
+    python tools/etc/smoke_dock.py
 
 카메라도 CAN 도 없이, 합성 태그 영상을 진짜 파이프라인에 넣어 dock_live 를
 몇 사이클 돌린다. 목적은 도킹이 잘 되나가 아니라 **부품 사이 계약이 맞나**다.

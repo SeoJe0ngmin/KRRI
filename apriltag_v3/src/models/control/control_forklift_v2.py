@@ -102,7 +102,7 @@ MOVEMENT_TEMPLATES: Dict[str, list[int]] = {
     # 이 지게차에서 byte4 는 리프트 축이다(2026-09-07 실차: byte4=97 을 보내자 포크가
     # 올라갔다). 워드 명령체계의 "제자리 회전 = byte4/5 = 118" 은 작년 방식.
     # 광운대 최신 control(control_광운대.py)의 rotate_left/right_slow 와 같은 매핑.
-    # 2026-09-07 15:13 실차 확인(tools/can_pulse.py rotate_ccw 1.5s): 차체가 반시계로
+    # 2026-09-07 15:13 실차 확인(tools/etc/can_pulse.py rotate_ccw 1.5s): 차체가 반시계로
     # 돌고 IMU yaw +3.4도. 지연 0.85s, 최대 7.3도/s, 정지 뒤 관성 +1.3도.
     "rotate_ccw":      [AN_N, AN_ROTATE_CCW, AN_N, AN_N, AN_N, AN_N, AN_N, AN_N],
     "rotate_cw":       [AN_N, AN_ROTATE_CW,  AN_N, AN_N, AN_N, AN_N, AN_N, AN_N],

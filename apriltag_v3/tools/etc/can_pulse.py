@@ -1,10 +1,10 @@
 """CAN 명령 펄스 시험 — 명령 하나를 잠깐만 보내고 IMU 로 반응을 잰다.
 
-    python tools/can_pulse.py rotate_ccw              # 0.5초 보내고 정지
-    python tools/can_pulse.py rotate_cw 0.3
-    python tools/can_pulse.py forward 0.5 --no-imu
-    python tools/can_pulse.py rotate_ccw --dry-run    # CAN 없이, 보낼 바이트만 찍는다
-    python tools/can_pulse.py rotate_ccw 1.0 --camera # 펄스 전후를 카메라(30프레임)로도 잰다
+    python tools/etc/can_pulse.py rotate_ccw              # 0.5초 보내고 정지
+    python tools/etc/can_pulse.py rotate_cw 0.3
+    python tools/etc/can_pulse.py forward 0.5 --no-imu
+    python tools/etc/can_pulse.py rotate_ccw --dry-run    # CAN 없이, 보낼 바이트만 찍는다
+    python tools/etc/can_pulse.py rotate_ccw 1.0 --camera # 펄스 전후를 카메라(30프레임)로도 잰다
                                                      #   -> 회전 팔 길이 A = Δlateral / sin(Δheading), 직진 속도
 
 도킹 루프(run.py)는 목표각에 닿을 때까지 계속 보내지만, 이건 정해진 시간만
