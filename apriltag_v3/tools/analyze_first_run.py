@@ -205,42 +205,47 @@ def gyro_debiased(stage):
 def cmd_pairs(stage):
     """can.jsonl → [{movement, t_set, t_tx}] 시간순. **두 시각을 짝지어** 돌려준다.
 
-    t_set = 우리가 명령을 바꾼 시각(결정 시각, dir="set").
-    t_tx  = 그 movement 가 **CAN 버스에 처음 나간** 시각(dir="tx"/"fake_tx").
-    둘의 차가 **명령 지연**(소프트웨어+드라이버)이고, **출발 지연은 t_tx 를 원점으로**
-    재야 한다. 옛 코드는 t_set 만 썼고 전진은 "라벨이 바뀐 첫 프레임" 을 원점으로 삼아,
-    프레임 양자화(최대 33 ms)와 송신 지연이 통째로 출발 지연에 섞여 들어갔다.
+    t_set = 우리가 명령을 바꾼 시각(dir="set").
+    t_tx  = 그 명령이 **주행 프레임(0x1E3)으로 버스에 나간** 시각.
+    둘의 차가 **명령 지연**(소프트웨어+드라이버)이고, 출발 지연은 t_tx 를 원점으로 잰다.
 
-    tx 줄은 매 주기 나오고 set 줄과 순서가 엇갈릴 수 있으므로, **set 마다 그 시각
-    이후 같은 movement 의 첫 tx** 를 찾는 방식으로 짝짓는다(순차 매칭 금지).
+    주의 두 가지 (2026-09-21 현장에서 n=0 이 나온 이유):
+      · 실주행 tx 로그에는 movement 가 없다 → 이름으로 거르면 tx 가 한 줄도 안 남는다.
+        **can_id 로** 거른다.
+      · tx 의 대부분은 제어 프레임(0x2E3)이다 — data[4] 가 동기 카운터라 매번 바뀌어
+        "changed" 로 찍힌다. 그걸 집으면 지연이 늘 0 에 가깝게 나온다.
+        명령이 실제로 나간 시각은 **주행 프레임**이다.
     """
+    MOV_ID = 0x01E3
     sets, txs = [], []
     for r in stage.can:
-        mv = r.get("movement")
-        if not mv:
-            continue
-        if r.get("dir") == "set":
-            t = r.get("t_cmd_set") or r.get("ts")
-            if t is not None:
+        d = r.get("dir")
+        if d == "set":
+            mv, t = r.get("movement"), (r.get("t_cmd_set") or r.get("ts"))
+            if mv and t is not None:
                 sets.append((float(t), mv))
-        elif r.get("dir") in ("tx", "fake_tx"):
+        elif d in ("tx", "fake_tx"):
             t = r.get("t_cmd_tx") or r.get("ts")
-            if t is not None:
-                txs.append((float(t), mv))
+            cid = r.get("can_id")
+            if t is None:
+                continue
+            # can_id 가 없는 옛/가짜 기록은 movement 이름이 있으면 그걸로 인정
+            if cid is None:
+                if r.get("movement"):
+                    txs.append((float(t), r.get("movement")))
+            elif int(cid) == MOV_ID:
+                txs.append((float(t), r.get("movement")))
     sets.sort()
     txs.sort()
     out = []
-    named = any(m for _t, m in txs)        # tx 에 movement 가 실려 있나
     for t_set, mv in sets:
         t_tx = None
         for t, m in txs:
-            if t < t_set - 0.020:               # 20 ms 앞까지는 같은 명령으로 본다
+            if t < t_set - 0.020:          # 20 ms 앞까지는 같은 명령으로 본다
                 continue
-            # 이름이 있으면 이름으로, 없으면(옛 기록) **시각으로만** 짝짓는다.
-            # 주행 프레임은 10 ms 주기라 set 직후 첫 변경이 그 명령이다.
-            if named and m and m != mv:
+            if m and m != mv:              # 이름이 있으면 맞는 것만
                 continue
-            if t - t_set > 0.30:                # 한 주기를 한참 넘으면 남의 것
+            if t - t_set > 0.30:           # 주행 프레임은 10 ms 주기 — 넘으면 남의 것
                 break
             t_tx = t
             break
