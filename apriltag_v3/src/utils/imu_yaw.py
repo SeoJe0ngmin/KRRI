@@ -46,6 +46,9 @@ from config.imu import (IMU_BIAS_SEC, IMU_CALIB_MIN_RATIO, IMU_DT_GAP_SAMPLES,
 
 # accel 스트림 속도 후보. 낮은 것부터 — 중력축만 잡으면 되니 느려도 된다.
 ACCEL_HZ_CANDIDATES = (63, 100, 200, 250)
+#: 자이로 열기 시한 [s]. 넘으면 USB 가 반쯤 잡힌 것으로 보고 죽는다(무한 대기 금지).
+GYRO_OPEN_TIMEOUT_S = 20.0
+
 
 
 def _gyro_open_error(hz, exc):
@@ -103,7 +106,27 @@ class GyroYaw:
     # ── 수명 ────────────────────────────────────────────────────────────────
 
     def start(self):
-        """gyro(+accel) 파이프라인을 콜백으로 연다. self 를 돌려준다."""
+        """gyro(+accel) 파이프라인을 콜백으로 연다. self 를 돌려준다.
+
+        **시한을 둔다.** USB 장치가 반쯤 잡힌 상태면(앞 프로세스를 kill -9 로 죽였거나
+        허브가 끊겼거나) can_resolve·pipe.start 가 돌아오지 않는다 — 2026-09-21 현장에서
+        자이로 열기에서 무한 대기했다.
+        """
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(self._start_blocking)
+            try:
+                return fut.result(timeout=GYRO_OPEN_TIMEOUT_S)
+            except _cf.TimeoutError:
+                raise RuntimeError(
+                    "자이로 여는 데 %.0fs 가 넘었다 — 장치가 반쯤 잡혀 있다.\n"
+                    "  · UTM USB 아이콘에서 RealSense 를 **체크 해제 후 다시 체크**\n"
+                    "    (앞 프로세스를 kill -9 로 죽이면 USB 가 정리되지 않는다)\n"
+                    "  · 그래도 안 되면 케이블을 뽑았다 꽂을 것\n"
+                    "  · 확인: lsusb | grep -i intel ; sudo dmesg -T | tail -20"
+                    % GYRO_OPEN_TIMEOUT_S)
+
+    def _start_blocking(self):
         import pyrealsense2 as rs
         pipe = rs.pipeline()
         cfg = rs.config()
