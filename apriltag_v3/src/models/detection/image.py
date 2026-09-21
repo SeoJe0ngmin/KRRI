@@ -260,6 +260,9 @@ def _who_has_camera():
 #: 카메라 열기 시한 [s]. 넘으면 USB 문제로 보고 죽는다(무한 대기 금지).
 OPEN_TIMEOUT_S = 25.0
 
+#: USB 2.0 으로 붙었을 때 쓰는 컬러 해상도. 1080p 는 대역폭이 모자라 아예 안 열린다.
+USB2_COLOR_SIZE = (640, 480)
+
 
 def open_realsense(stream="color", width=None, height=None, fps=30,
                    depth=False, emitter=None, ir_index=1,
@@ -302,6 +305,22 @@ def open_realsense(stream="color", width=None, height=None, fps=30,
         rec = Path(record)
         rec.parent.mkdir(parents=True, exist_ok=True)
         config.enable_record_to_file(str(rec))
+
+    # USB 2.0 으로 붙으면 1080p@30 은 대역폭이 모자라 `Couldn't resolve requests` 로
+    # 죽는다(2026-09-21 현장: 케이블을 다시 꽂았더니 480 Mbps 로 붙었다).
+    # 죽기 전에 **실제로 되는 해상도로 낮추고 그 사실을 말한다.**
+    if width is None and height is None:
+        try:
+            _dev = rs.context().query_devices()[0]
+            _usb = str(_dev.get_info(rs.camera_info.usb_type_descriptor))
+            if _usb.startswith("2"):
+                width, height = USB2_COLOR_SIZE
+                print("  !! 카메라가 **USB %s** 로 붙었다 — 1080p 는 못 준다.\n"
+                      "     %dx%d 로 낮춰서 연다. 각도 정밀도가 필요하면(4·8번 단계)\n"
+                      "     **USB 3 포트**(파란색/SS)에 다시 꽂아라. 확인: lsusb -t | grep -A1 8086"
+                      % (_usb, width, height))
+        except Exception:
+            pass
 
     # **타임아웃 없이 부르면 영원히 멈춘다.** USB 가 여는 도중 빠지면 librealsense 가
     # 돌아오지 않는다(2026-09-21 현장: 허브 경유 USB 가 끊겨 pipeline.start 에서 무한 대기).
