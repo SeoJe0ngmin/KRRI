@@ -2259,6 +2259,7 @@ config/control.py 캘리브 절   calibrate.py 가 잰 값 (찍어 주는 줄을
 | `CAM_TO_ROT_CENTER_M` · `ROT_CENTER_LATERAL_M` · `ROT_CENTER_RMS_MM` | None | **calibrate rotcenter 실측**(4-7). None 이면 회전 상한 5도·흩어짐 0 |
 | `CAM_YAW_OFFSET_DEG` | None | **calibrate camyaw 실측**(5-4). None 이면 출발 거부 |
 | `ROT_FLOOR_DEG` | None | **calibrate rotfloor 실측**(4-5). None 이면 씨앗 0.81(유도) |
+| `COLOR_AUTO_EXPOSURE` | True | **현장값.** 실외 = True(자동노출) · 실내 형광등 = False(8.3 ms 고정). 2026-10-02 실외에서 고정 노출은 화면이 날아가 태그를 못 찾았다 |
 | `SIGMA_STILL_S` | 60 | 출발 뒤 σ 기준선 정지 시간. 2026-09-30 결정 8 "정지 60초" (0.5초 블록 120개) |
 | `STANDOFF_M` | 0.50 | 결정. 주행실험 전용(탑재부 없이 태그면 앞 정지 여유) |
 

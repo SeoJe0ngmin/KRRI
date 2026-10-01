@@ -249,9 +249,12 @@ class Learner:
         }
 
     def seeds(self):
-        """다음 세션이 물려받을 값. 수렴한 것만 넘긴다."""
+        """다음 세션이 물려받을 값. 이번에 수렴한 것(n ≥ 3)은 새 값, 아니면 **시작할 때 받은 씨앗 그대로**.
+        (None 을 넘기면 회전이 세 번 안 된 판 하나에 그 전까지 쌓인 값이 전부 사라진다 — 2026-10-02 발견)"""
         def pick(e):
-            return round(e.value, 5) if e.n >= 3 else None
+            if e.n >= 3:
+                return round(e.value, 5)
+            return round(e.seed, 5) if e.seed else None
         return {"rot_tau_s": {d: pick(e) for d, e in self.rot_tau.items()},
                 "rot_rate_dps": {d: pick(e) for d, e in self.rot_rate.items()},
                 "rot_startup_s": {d: pick(e) for d, e in self.rot_startup.items()},

@@ -136,7 +136,8 @@ class Rig:
     # ── 수명 ──────────────────────────────────────────────────────────
     def open(self):
         from src.models.detection.image import open_realsense, to_gray
-        from src.utils.camera import set_global_time, CameraSettings
+        from src.utils.camera import set_global_time
+        from src.utils.tune import camera_tune
         self.log("== 장비 열기 (실물)")
         # 자이로 먼저, 컬러 나중 — RSUSB 는 먼저 연 쪽이 IMU 를 갖는다 (CLAUDE.md)
         try:
@@ -145,7 +146,7 @@ class Rig:
             self.log("  !! 자이로를 못 열었다: %s — 회전 단계는 못 한다" % e)
             self.gyro = None
         self.frames, self.intr = open_realsense(stream="color", meta=True,
-                                                tune=CameraSettings.docking())   # run.py 와 같은 노출 설정. 못 열면 예외 → 끝
+                                                tune=camera_tune())   # run.py 와 같은 노출 설정 (config COLOR_AUTO_EXPOSURE). 못 열면 예외 → 끝
         try:
             set_global_time(self.frames.profile)
         except Exception:

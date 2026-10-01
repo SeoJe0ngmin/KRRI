@@ -118,14 +118,15 @@ class RealSource:
 
     def __init__(self, log, raw=True):
         from src.models.detection.image import open_realsense, to_gray
-        from src.utils.camera import set_global_time, CameraSettings
+        from src.utils.camera import set_global_time
+        from src.utils.tune import camera_tune
         self.gyro = Gyro().start()
         if raw:
             self.gyro.enable_raw()
         try:
             # 9/21 실측(v3 dock.py:403)과 같은 설정 — 자동노출 끔·노출 8.3 ms(60 Hz 반주기)·게인 64·
             # 최신 프레임만(queue 1)·global_time. 빼먹으면 AE 가 프레임마다 흔들리고 큐 16장이 낡은 프레임을 준다
-            self.frames, self.intr = open_realsense(stream="color", meta=True, tune=CameraSettings.docking())
+            self.frames, self.intr = open_realsense(stream="color", meta=True, tune=camera_tune())
         except BaseException:
             self.gyro.close()
             raise
