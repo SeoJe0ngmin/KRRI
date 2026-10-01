@@ -2242,6 +2242,7 @@ config/control.py 캘리브 절   calibrate.py 가 잰 값 (찍어 주는 줄을
 | 11 | ~~before_run~~ → **2026-10-02 폐지.** 한 번 재는 셋(회전중심+RMS · cam_yaw_offset · rot_floor)은 `tools/calibrate.py` → config. σ 기준선·태그 기울기는 run 이 출발 뒤 그 자리에서. 나머지는 씨앗 + 학습(seeds.json). 결정 14 | 12-1 |
 | 12 | **run.py** `--show / --no-record / --video / --out / --dry-run`. 게이트: config `CAM_YAW_OFFSET_DEG` 있음 · 강도 30 · CAN 동결 · `clock.check` · 자이로 보정 → SPACE 출발 → (태그 보이면) σ 기준선 60초 → 계획. Ctrl+C 즉시 정지 | 12-0 |
 | 13 | **실패 7종 → 전부 정지 + 사람 호출.** 기록은 주행을 절대 막지 않는다 | 3-10 · 6-6 |
+| 15 | **(2026-10-02) 마지막 직진 구간 + 약한 회전 + 조준 판정.** 접근 계획(사이드스텝·빔서치)은 **정렬선 = 태그컷 + `FINAL_STRAIGHT_M`(1.5 m)** 까지 좌우·정면을 끝낸다. 그 안쪽은 태그를 보며 곧장 — 반 구간(0.75 m)씩 가고 서서 다시 본다. 회전은 **약한 강도 20**(`ROTATE_FINE_JOYSTICK_DEFLECTION`, 우리 9/21 실측 8.5°/s·관성 0.168 s)으로만. 판단은 PnP 방향·좌우가 아니라 **조준 빗나감** = 거리 × sin(c − β) + 카메라·목표 오프셋(`planning/aim.py`): c(카메라 축이 실제 진행 방향에서 틀어진 각)는 직진 다리마다 (거리, β, 자이로)에 직선을 맞춰 뽑는다 — 둘째 실주행 6 다리에서 +0.79 ±0.16°(3 m 에서 0.9 cm). 태그컷에서 `3 cm − |빗나감| − σ > 0` 이면 진입, 아니면 약한 회전 한 번(보정 횟수), 더 못 고치면 정지·사람. 마지막 구간엔 후진 없음. 조향+전진 동시는 여전히 안 한다 | 3-9 |
 | 14 | **(2026-10-02) measured.py · before_run.py 폐지.** 차 치수 셋만 `calibrate.py` → config(`CAM_TO_ROT_CENTER_M` · `ROT_CENTER_LATERAL_M` · `ROT_CENTER_RMS_MM` · `CAM_YAW_OFFSET_DEG` · `ROT_FLOOR_DEG`). σ 기준선은 **매 주행 출발 뒤 그 자리에서** 60초(`SIGMA_STILL_S`). **후진(187) 씨앗 = 직진값** — 안 쟀고 같다고 가정, 첫 후진에서 학습. 학습값은 `seeds.json` 으로 다음 주행에 | 12-1 |
 
 ## 14. 숫자 대장
@@ -2263,6 +2264,10 @@ config/control.py 캘리브 절   calibrate.py 가 잰 값 (찍어 주는 줄을
 | `ROT_FLOOR_DEG` | None | **calibrate rotfloor 실측**(4-5). None 이면 씨앗 0.81(유도) |
 | `COLOR_AUTO_EXPOSURE` | True | **현장값.** 실외 = True(자동노출) · 실내 형광등 = False(8.3 ms 고정). 2026-10-02 실외에서 고정 노출은 화면이 날아가 태그를 못 찾았다 |
 | `DEADMAN_S` · `IMU_STALE_SEC` | 1.0 · 1.0 | **플랫폼값(VM).** 광운대 0.30. 2026-10-02 VM 실주행에서 프로세스가 0.32 s 멎어 회전이 죽음(91초에 0.1 s 넘는 멈춤 23번, 최대 0.57 s). 사용자 결정 "넉넉하게". 대가: 진짜 죽으면 1초 더 간다(회전 12도·직진 0.29 m). 직결이면 0.30 |
+| `FINAL_STRAIGHT_M` | 1.5 | 태그컷 앞 '보면서 직진' 구간. 2026-10-02 사용자 결정 (한 걸음 상한과 같은 길이). 구간 안 한 다리는 그 절반 |
+| `ROTATE_FINE_JOYSTICK_DEFLECTION` | 20 | 약한 회전 (byte1 147/107). 우리 9/7·9/21 실측이 이 강도 — 씨앗 `learn.FINE_SEED`: 출발 1.0 s · 8.47°/s · 관성 0.168 s |
+| `ROT_FLOOR_FINE_DEG` | None | 약한 회전 하한. None 이면 유도값 0.20(출발 문턱 0.15 + ½·4.7·0.15²) → run 이 결과를 보고 올린다. calibrate rotfloor 가 잰다 |
+| `CAM_LATERAL_OFFSET_M` | 0.0 ★ | 카메라가 차 중심선에서 왼쪽으로 몇 m. **줄자 미측정** — 0 은 가운데라는 가정. 조준 빗나감에 그대로 더해진다 |
 | `SIGMA_STILL_S` | 60 | 출발 뒤 σ 기준선 정지 시간. 2026-09-30 결정 8 "정지 60초" (0.5초 블록 120개) |
 | `STANDOFF_M` | 0.50 | 결정. 주행실험 전용(탑재부 없이 태그면 앞 정지 여유) |
 

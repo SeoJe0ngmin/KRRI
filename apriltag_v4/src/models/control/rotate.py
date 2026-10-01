@@ -23,18 +23,19 @@ LEASE_S = C.DEADMAN_S  # 이 안에 명령이 안 갱신되면 CAN 스레드가 
 ABORT_FACTOR = 2.0     # 목표의 이 배를 넘으면 무조건 끊는다. 측정값이 아니라 중단 규칙이다
 
 
-def min_turn_deg(learner):
+def min_turn_deg(learner, fine=False):
     """이보다 작은 각은 안 돈다 [도] — 정지지연 동안 도는 각. 돌려도 그만큼 지나친다.
 
     광운대의 2.5도(ROT_MIN_COMMANDABLE_ANGLE_DEG)는 우리 하한이 아니다 — 그쪽은 시간으로
     끊어 짧은 명령을 못 맞추고, 우리는 자이로를 보고 끊는다. 씨앗 0.81 은 유도값이고
     calibrate.py rotfloor 가 재서 config ROT_FLOOR_DEG 에 적는다. 못 쟀으면 None 이고 그때는 제한도 없다.
     """
-    return learner.rot_floor_deg
+    return learner.rot_floor_fine_deg if fine else learner.rot_floor_deg
 
 
-def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety_s=None):
+def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety_s=None, fine=False):
     """제자리로 deg 만큼 돈다. +가 반시계. 돌린 결과(RotationResult)를 준다.
+    fine=True 면 약한 회전(ROTATE_FINE_JOYSTICK_DEFLECTION) — 마지막 직진 구간의 미세 조준용. 학습도 따로 한다.
 
     cap_deg 를 넘는 요청은 거부한다(기본 TURN_HARD_MAX_DEG). safety_s 는 CAN 쪽 시계 안전망의
     상한(기본 ROT_SAFETY_MAX_S). 하한(rot_floor) 아래 요청도 거부 — 돌려봐야 지나친다.
@@ -42,19 +43,20 @@ def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety
     deg = float(deg)
     cap = C.TURN_HARD_MAX_DEG if cap_deg is None else float(cap_deg)
     safety = C.ROT_SAFETY_MAX_S if safety_s is None else float(safety_s)
-    side = "L" if deg > 0 else "R"
+    side = learner.rot_side(deg, fine)
     movement = "rotate_left_slow" if deg > 0 else "rotate_right_slow"
-    rate = learner.rot_rate_dps(deg)
+    rate = learner.rot_rate_dps(deg, fine)
 
-    refused = _refuse(gyro, learner, deg, cap)
+    refused = _refuse(gyro, learner, deg, cap, fine)
     if refused:
         log("       !! 회전 거부(%s): %+.2f도" % (refused, deg))
         res = RotationResult(target_deg=deg)
         res.reason = refused
-        _record(rec, res, movement, rate, None, log)
+        _record(rec, res, movement, rate, None, log, fine)
         return res
 
-    hold_s = _hold_s(learner, deg, rate, safety)
+    driver.set_rotate_strength(fine)        # 서 있을 때 강도를 써넣고 8바이트를 확인한다 (frames.set_rotate_strength)
+    hold_s = _hold_s(learner, deg, rate, safety, fine)
     driver.arm_rotation_timeout(movement, hold_s)
     rot = Rotation(target_deg=deg,
                    tau_s=learner.rot_tau[side].value,
@@ -64,8 +66,8 @@ def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety
                    t_cmd=clock.now(),
                    max_deg=abs(deg) * ABORT_FACTOR)
     gyro.arm(rot, driver.stop_now)          # 명령보다 **먼저** 건다. 안 보는 구간을 안 만든다
-    log("       -> 회전 %+7.2f도  (안전망 %.1fs, 판정주기 %.1fms)"
-        % (deg, hold_s, rot.period_s * 1000))
+    log("       -> 회전%s %+7.2f도  (안전망 %.1fs, 판정주기 %.1fms)"
+        % ("(약)" if fine else "", deg, hold_s, rot.period_s * 1000))
     driver.lease(LEASE_S)                   # 명령보다 먼저 — set 직후 죽어도 데드맨이 세운다
     try:
         driver.set(movement, why="rotate %+.2f도" % deg)
@@ -85,8 +87,8 @@ def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety
             res.turned_deg = gyro.angle_deg - rot.start_angle
     driver.clear_lease()
 
-    learned = learner.rotation(res)
-    _record(rec, res, movement, rate, learned, log)
+    learned = learner.rotation(res, fine)
+    _record(rec, res, movement, rate, learned, log, fine)
     if res.ok:
         log("          끝: %+.2f도 요청 -> %+.2f도 (관성 %+.2f도, %.2fs)"
             % (deg, res.turned_deg, res.coast_deg, res.t_settled - res.t_cmd))
@@ -99,7 +101,7 @@ def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety
 
 
 # ── 속 ──────────────────────────────────────────────────────────────
-def _refuse(gyro, learner, deg, cap):
+def _refuse(gyro, learner, deg, cap, fine=False):
     """돌기 전에 막는다. 돌다가 막는 것보다 싸다."""
     if abs(deg) < 1e-6:
         return "zero"
@@ -109,15 +111,15 @@ def _refuse(gyro, learner, deg, cap):
         return "gyro_stale"
     if abs(deg) > cap:
         return "too_big"
-    floor = min_turn_deg(learner)
+    floor = min_turn_deg(learner, fine)
     if floor and abs(deg) < floor:
         return "too_small"          # 정지지연만큼 지나친다. 회전 대신 좌우로 비켜선다 (plan 3-6)
     return ""
 
 
-def _hold_s(learner, deg, rate, safety):
+def _hold_s(learner, deg, rate, safety, fine=False):
     """CAN 스레드가 회전을 쥐고 있을 최대 시간 [s]. 못 쟀으면 사람이 정한 상한."""
-    startup = learner.rot_startup_s(deg)
+    startup = learner.rot_startup_s(deg, fine)
     if not rate or startup is None:
         return safety
     return min(safety, (abs(deg) / rate + startup) * ABORT_FACTOR)
@@ -149,12 +151,14 @@ def _wait(driver, gyro, rot, hold_s):
         time.sleep(POLL_S)
 
 
-def _record(rec, res, movement, rate, learned, log):
+def _record(rec, res, movement, rate, learned, log, fine=False):
     """기록이 주행을 막지 않는다 (plan 6-6 ④). 못 적으면 시끄럽게 알리고 계속 간다."""
     if rec is None:
         return
     try:
-        rec.event("rotate_end", movement=movement, ok=res.ok, reason=res.reason,
+        rec.event("rotate_end", movement=movement, fine=fine,
+                  deflection=(C.ROTATE_FINE_JOYSTICK_DEFLECTION if fine else C.ROTATE_JOYSTICK_DEFLECTION),
+                  ok=res.ok, reason=res.reason,
                   target_deg=res.target_deg, turned_deg=res.turned_deg,
                   turned_at_stop=res.turned_at_stop, coast_deg=res.coast_deg,
                   omega_at_stop=res.omega_at_stop, rate_model_dps=rate,
@@ -206,6 +210,10 @@ if __name__ == "__main__":
 
         def arm_rotation_timeout(self, m, hold_s):
             self.hold = hold_s
+
+        def set_rotate_strength(self, fine):
+            assert self.movement == "stop", "서 있을 때만 강도를 바꾼다"
+            self.fine = bool(fine)
 
     class FakeGyro(Gyro):
         """GyroYaw 의 SDK 부분을 건너뛰고 _judge 만 그대로 쓴다."""
@@ -271,6 +279,18 @@ if __name__ == "__main__":
     assert r.ok and abs(r.turned_deg - 90.0) < 1.5, (r.reason, r.turned_deg)
     assert drv.hold <= C.SIDESTEP_ROT_SAFETY_S and drv.hold > C.ROT_SAFETY_MAX_S
     print("  +90.0도 요청 -> %+6.2f도 (안전망 %.1fs)" % (r.turned_deg, drv.hold))
+    # 3-b) 약한 회전(fine) — 강도를 바꿔 걸고, 학습은 Lf/Rf 에 따로. 가짜 차를 9/21 강도 20 실측(8.47 도/s · 관성 0.168 s)으로 바꿔 본다
+    gy.rate_cmd, gy.startup, gy.tau = 8.47, 1.0, 0.168
+    n_coarse = lrn.rot_tau["L"].n
+    for deg in (2.0, -1.0, 0.5):
+        r = rotate(drv, gy, lrn, deg, log=lambda *_: None, fine=True)
+        assert r.ok and drv.fine is True, (deg, r.reason)
+        print("  (약) %+5.2f도 요청 -> %+6.2f도 (관성 %.2f도)" % (deg, r.turned_deg, r.coast_deg))
+        assert abs(r.turned_deg - deg) < 0.6, (deg, r.turned_deg)
+    assert lrn.rot_tau["L"].n == n_coarse and lrn.rot_tau["Lf"].n >= 1          # 거친 회전 학습을 안 건드린다
+    assert rotate(drv, gy, lrn, 0.1, log=lambda *_: None, fine=True).reason == "too_small"   # 약한 회전에도 하한(씨앗 0.20)
+    r = rotate(drv, gy, lrn, 5.0, log=lambda *_: None)                           # 다시 거친 회전 — 강도가 되돌아간다
+    assert drv.fine is False
     # 4) 자이로 미보정이면 거부
     gy.calibrated_fake = False
     assert rotate(drv, gy, lrn, 5.0, log=lambda *_: None).reason == "gyro_uncalibrated"

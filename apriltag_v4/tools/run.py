@@ -22,6 +22,9 @@ SPACE 로 출발 (터미널에서 직접 읽는다 — SSH 터미널도 된다).
 ★카메라를 제어에서 뺀 이유: forward() 가 look_fn 을 5 ms 마다 부르는 폐루프라 직진 중에도 누군가 프레임을 먹어야 한다
 (calibrate 의 Rig 와 같은 구조). 회전 중엔 카메라 자세를 안 믿고(결정 7) 끝나면 추정기를 비운다.
 
+마지막 직진 구간(2026-10-02): 접근 계획은 **정렬선**(태그컷 + FINAL_STRAIGHT_M)까지 좌우·정면을 끝내고, 그 안쪽은 태그를 보며
+곧장 간다 — 약한 회전(강도 20)으로만 조금씩 고치고, 판단은 PnP 방향·좌우가 아니라 조준 빗나감(planning/aim.py: β·거리)으로 한다.
+직진 다리마다 그 프레임들로 조준각 c 를 다시 뽑는다(_aim_leg).
 상태: SEARCH(태그 없으면 plan 3-8 50도 훑기) → BASELINE(σ 기준선, 처음 한 번) → DECIDE(plan.decide) → SIDESTEP / STEP(돌고 → 보며 직진) / BACKUP / COMMIT(눈 감고) / 끝.
 실패 7종은 전부 정지 + 사람 호출 (plan 3-10): timeout · tag_lost · no_converge(모르겠다·경로 없음·마지막 상한·걸음 초과) ·
 gyro_stale · exception(CAN·시계·카메라) · deadman. 기록은 주행을 절대 막지 않는다 (plan 6-6).
@@ -60,6 +63,7 @@ from src.models.control.driver import Driver                         # noqa: E40
 from src.models.control.learn import Learner                         # noqa: E402
 from src.models.detection import estimate as E                       # noqa: E402
 from src.models.detection import tag as T                            # noqa: E402
+from src.models.planning import aim as AIM                           # noqa: E402
 from src.models.planning import plan as PL                           # noqa: E402
 from src.utils import clock, hud                                     # noqa: E402
 from src.utils.gyro import Gyro, max_rate_dps                        # noqa: E402
@@ -248,7 +252,7 @@ class Docking:
         self._stop_written = False
         self.seeds_from = None                   # 물려받은 seeds.json 경로 (없으면 None)
         self._collect = None                     # 켜져 있으면 카메라 스레드가 프레임 상태를 여기 모은다 (σ 기준선)
-        self.driver = self.src = self.gyro = self.est = self.learner = self.planner = None
+        self.driver = self.src = self.gyro = self.est = self.learner = self.planner = self.aim = None
         self.intr = self.shape = None
         self.camclock = clock.CameraClock()
         self.keys = Keys()
@@ -298,15 +302,22 @@ class Docking:
         seeds = LN.seeds(learned)
         if C.ROT_FLOOR_DEG is not None:
             seeds["rot_floor_deg"] = C.ROT_FLOOR_DEG
+        if C.ROT_FLOOR_FINE_DEG is not None:
+            seeds["rot_floor_fine_deg"] = C.ROT_FLOOR_FINE_DEG
         self.learner = Learner(mode=self.mode, seeds=seeds)
         # 계획기 — 기하는 config 의 calibrate 값 + 카메라 intrinsics
         self.planner = PL.Planner(self.learner, intr=live, A=C.CAM_TO_ROT_CENTER_M, b=C.ROT_CENTER_LATERAL_M,
-                                  rms_mm=C.ROT_CENTER_RMS_MM)
+                                  rms_mm=C.ROT_CENTER_RMS_MM, final_m=C.FINAL_STRAIGHT_M)
+        self.aim = AIM.Aim()                                     # 직진 다리마다 조준각 c 를 모은다 — 마지막 구간의 판단 근거
         g = self.planner.geo
         L("  씨앗: 광운대 KWU_SEED%s" % ((" + %s" % self.seeds_from) if self.seeds_from else " (지난 seeds.json 없음)"))
         L("  회전중심 %s · 회전 하한 %s · 최소걸음 %.3f m · 뒤공간 %.2f m · 태그컷 폴백 %.2f m (실행 중엔 프레임마다 다시 잰다)"
           % (("앞 %.2f m (RMS %s mm)" % (-g.A, C.ROT_CENTER_RMS_MM)) if g.center_known else "미확정(회전 5도)",
-             ("%.2f도" % g.floor) if g.floor else "없음", g.min_step, g.back_space, g.cut0))
+             ("%.2f도" % g.floor) if g.floor else "없음", g.min_step, g.back_space, g.tagcut0))
+        L("  마지막 직진 %.2f m (정렬선 = 태그컷 + %.2f) · 약한 회전 강도 %d · 하한 %s · 카메라 좌우 치우침 %+.3f m%s"
+          % (C.FINAL_STRAIGHT_M, C.FINAL_STRAIGHT_M, C.ROTATE_FINE_JOYSTICK_DEFLECTION,
+             ("%.2f도" % self.learner.rot_floor_fine_deg) if self.learner.rot_floor_fine_deg else "없음",
+             C.CAM_LATERAL_OFFSET_M, " (★0 = 가운데라는 가정 — 줄자로 확인)" if C.CAM_LATERAL_OFFSET_M == 0 else ""))
         if self.rec is not None:
             self.rec.snapshot(sys.argv, extra={"tool": "run", "mode": self.mode, "intrinsics": live,
                                                "seeds": _json_safe(seeds),
@@ -475,7 +486,7 @@ class Docking:
         if fix.ok:
             half = limits.corridor_half_m(fix.forward_m, geo.intr, geo.cut)
             corridor = {"half_m": half, "inside": abs(fix.lateral_m) <= half, "lateral_m": fix.lateral_m,
-                        "cut_m": geo.cut, "cut_from": geo.cut_from}
+                        "cut_m": geo.tagcut, "cut_from": geo.cut_from}
         d = self.decision
         plan = None if d is None else {"kind": d.kind, "turn_deg": d.turn_deg, "drive_m": d.drive_m, "why": d.why}
         prog, act = None, self.act
@@ -663,7 +674,7 @@ class Docking:
                 raise _Fail("no_converge", "σ 기준선이 없다 — 출발 전 기준선 측정이 안 됐다")
 
             self._set_state("DECIDE")
-            d = self.planner.decide(f)
+            d = self.planner.decide(f, aim=self.aim)
             self.decision = d
             self._log_decision(f, d)
             if d.kind == "stop":
@@ -825,7 +836,9 @@ class Docking:
             try:
                 self.rec.event("decision", decision=d.kind, why=d.why, turn_deg=d.turn_deg, drive_m=d.drive_m,
                                movement=d.movement, fwd_target_m=d.fwd_target_m, at_cut=d.at_cut,
-                               to_cut=d.to_cut, cut_m=d.cut_m, cut_from=d.cut_from,
+                               to_ref=d.to_ref, ref_m=d.ref_m, cut_m=d.cut_m, line_m=d.line_m, cut_from=d.cut_from,
+                               final=d.final, fine=d.fine, miss_m=d.miss_m, miss_sigma_m=d.miss_sigma_m,
+                               aim_c_deg=self.aim.c()[0], aim_c_sigma_deg=self.aim.c()[1], aim_legs=len(self.aim.fits),
                                corridor_half_m=d.corridor_half_m, inside=d.inside, margin_m=d.margin_m,
                                predicted_m=d.predicted_m, route=_json_safe(d.route), waypoints=_json_safe(d.waypoints), complete=d.complete,
                                correction=d.correction, stop_reason=d.stop_reason, steps=p.steps,
@@ -879,7 +892,7 @@ class Docking:
 
     def _look_step(self, d, sign=1.0):
         """forward() 가 볼 것 — 남은 거리 = (법선 거리 − 목표 법선 거리) ÷ cos(방향), 가는 방향으로 +.
-        태그컷에서 끝나는 다리(d.to_cut)는 목표를 **프레임마다 다시 잰 태그컷**에 붙인다 — 오르막·요철이면 목표가 따라 움직인다."""
+        정렬선·태그컷에서 끝나는 다리(d.to_ref)는 목표를 **프레임마다 다시 잰 그 선**에 붙인다 — 오르막·요철이면 목표가 따라 움직인다."""
         geo = self.planner.geo
 
         def look():
@@ -887,8 +900,10 @@ class Docking:
             if not f.ok:
                 return F.Look(ok=False, t_capture=f.t_capture)
             fwd_target = d.fwd_target_m
-            if d.to_cut:
-                fwd_target = geo.see(f) + (d.fwd_target_m - d.cut_m)   # 결정 때의 "태그컷 + 조금" 을 지금 태그컷 기준으로
+            if d.to_ref:
+                geo.see(f)                                            # 태그컷(과 정렬선)을 이 프레임으로
+                ref_now = geo.cut if d.to_ref == "line" else geo.tagcut
+                fwd_target = ref_now + (d.fwd_target_m - d.ref_m)     # 결정 때의 "그 선 + 조금" 을 지금 선 기준으로
             c = max(0.5, math.cos(math.radians(f.heading_deg)))       # 60도 넘게 비스듬하면 그 이상 늘리지 않는다
             sig = f.distance_sigma_m if math.isfinite(f.distance_sigma_m) else 0.0   # 밀림 기준선 있으면 hypot, 없으면 한 장 흔들림 — /√n 값은 가짜 출발을 잡는다 (검토 지적)
             return F.Look(remaining_m=sign * (f.forward_m - fwd_target) / c, t_capture=f.t_capture, ok=True, sigma_m=sig)
@@ -898,17 +913,37 @@ class Docking:
         self._set_state("BACKUP" if movement == "backward" else "DRIVE")
         f0 = self.fix()
         self.act = {"kind": "drive", "target": d.drive_m, "start_fwd": f0.forward_m if f0.ok else 0.0}
+        with self._lock:
+            self._collect = []                                        # 이 다리의 프레임들 — 조준각 c 를 뽑는다
+        rows = []
         try:
             res = F.forward(self.driver, self.learner, look, d.drive_m, movement=movement, rec=self.rec, log=self.log)
         finally:
             self.act = None
+            with self._lock:
+                rows, self._collect = (self._collect or []), None
+        self._aim_leg(rows)
         self._check_leg(res)
         return res
+
+    def _aim_leg(self, rows):
+        """직진 다리 하나의 (거리, β, 자이로)에 직선을 맞춰 조준각 c 를 모은다 (planning/aim.py). 계산이 틀어져도 주행은 간다."""
+        try:
+            fit = self.aim.add_leg(rows, self.planner.geo.dz)
+            if fit is None:
+                return
+            c, sc = self.aim.c()
+            self.log("          조준각: 이 다리 c %+.2f±%.2f도 (%d 장 · %.2f m · 잔차 %.1f mm) → 전체 %+.2f±%.2f도 (다리 %d개)"
+                     % (fit["c_deg"], fit["c_sigma_deg"], fit["n"], fit["span_m"], fit["resid_mm"], c, sc, len(self.aim.fits)))
+            if self.rec is not None and not self._stop_written:
+                self.rec.event("aim_leg", t=clock.now(), c_all_deg=c, c_all_sigma_deg=sc, legs=len(self.aim.fits), **_json_safe(fit))
+        except Exception as e:
+            self._warn("aim_leg", "조준각 계산 실패: %s" % e)
 
     def _step(self, d):
         ok = True
         if abs(d.turn_deg) > 1e-9:
-            res = self._rotate(d.turn_deg)
+            res = self._rotate(d.turn_deg, fine=d.fine)               # 마지막 구간의 회전은 약한 강도
             if not res.ok and res.reason not in ("zero", "too_small"):
                 ok = False
         if ok and d.drive_m > 0 and not self.stop_req.is_set():
@@ -1023,6 +1058,7 @@ class Docking:
                     "clock": self.camclock.report(),
                     "camera": (self.src.stats.summary() if getattr(self.src, "stats", None) else None),
                     "seeds_from": str(self.seeds_from) if self.seeds_from else None,
+                    "aim": {"c_deg": self.aim.c()[0], "c_sigma_deg": self.aim.c()[1], "legs": self.aim.fits} if getattr(self, "aim", None) else None,
                     "video_frames": self.video_k if self.video is not None else None})
         return _json_safe(out)
 

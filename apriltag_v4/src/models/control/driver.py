@@ -36,6 +36,7 @@ class Driver:
         self.aborted = False            # abort() 뒤 True. set/lease 가 전부 막힌다
         self.table = None
         self.t_cmd = 0.0
+        self.rotate_deflection = C.ROTATE_JOYSTICK_DEFLECTION   # 지금 회전 프레임에 써 있는 강도
 
     # ── 수명 ────────────────────────────────────────────────────────
     def open(self, channel=None, bitrate=None):
@@ -127,6 +128,15 @@ class Driver:
                     self.rec.event("cmd", movement="stop", why=why, t_cmd=clock.now(), aborted=True)
                 except Exception:
                     pass
+
+    def set_rotate_strength(self, fine):
+        """회전 강도를 고른다 — fine=True 면 약한 회전(ROTATE_FINE_JOYSTICK_DEFLECTION). **서 있을 때만.**
+        프레임을 다시 써넣고 8바이트를 확인한다(frames.set_rotate_strength)."""
+        if self.movement != "stop":
+            raise RuntimeError("움직이는 중엔 회전 강도를 못 바꾼다 (%s)" % self.movement)
+        d = frames.set_rotate_strength(C.ROTATE_FINE_JOYSTICK_DEFLECTION if fine else C.ROTATE_JOYSTICK_DEFLECTION)
+        self.rotate_deflection = d
+        return d
 
     def clear_lease(self):
         kwu.configure_motion_deadline(None)

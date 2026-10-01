@@ -35,7 +35,8 @@ FIT_MIN_STOPS = 4
 PAIR_MIN_DEG = 1.0
 
 #: results.json 의 이름 ↔ config/control.py 의 이름 (calibrate 가 찍어 주는 줄)
-CONFIG_KEYS = ("CAM_YAW_OFFSET_DEG", "CAM_TO_ROT_CENTER_M", "ROT_CENTER_LATERAL_M", "ROT_CENTER_RMS_MM", "ROT_FLOOR_DEG")
+CONFIG_KEYS = ("CAM_YAW_OFFSET_DEG", "CAM_TO_ROT_CENTER_M", "ROT_CENTER_LATERAL_M", "ROT_CENTER_RMS_MM",
+               "ROT_FLOOR_DEG", "ROT_FLOOR_FINE_DEG")
 
 
 # ── 작은 도구 ─────────────────────────────────────────────────────────
@@ -251,9 +252,10 @@ def reanalyze(run_dir):
             A, b = to_vehicle_frame(A, b, yaw)                  # calibrate 가 쓴 것과 같은 각으로 차체 축에
         out["CAM_TO_ROT_CENTER_M"], out["ROT_CENTER_LATERAL_M"] = A, b
         out["ROT_CENTER_RMS_MM"] = f.get("circle_rms_mm")
-    floors = [e.get("turned_deg") for e in ev if e.get("event") == "rotfloor" and e.get("ok")]
-    if floors:
-        out["ROT_FLOOR_DEG"] = rot_floor(floors)["rot_floor_deg"]
+    for key, fine in (("ROT_FLOOR_DEG", False), ("ROT_FLOOR_FINE_DEG", True)):     # 강도별로 따로 (fine 표시가 없는 옛 기록은 거친 쪽)
+        floors = [e.get("turned_deg") for e in ev if e.get("event") == "rotfloor" and e.get("ok") and bool(e.get("fine")) == fine]
+        if floors:
+            out[key] = rot_floor(floors)["rot_floor_deg"]
     return out
 
 
@@ -354,7 +356,7 @@ def _selftest():
         (Path(td) / "event.jsonl").write_text("\n".join(json.dumps(e) for e in ev))
         r = reanalyze(td)
         check(abs(r["CAM_TO_ROT_CENTER_M"] - f["cam_to_rot_center_m"]) < 1e-9 and r["ROT_FLOOR_DEG"] == 0.95
-              and r["CAM_YAW_OFFSET_DEG"] == 1.25, "reanalyze: event.jsonl → config 이름 5개")
+              and r["CAM_YAW_OFFSET_DEG"] == 1.25, "reanalyze: event.jsonl → config 이름")
     print("\n%s" % ("analyze_calibrate 자체 시험 통과" if not fails else "실패 %d: %s" % (len(fails), fails)))
     return 1 if fails else 0
 

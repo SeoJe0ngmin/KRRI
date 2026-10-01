@@ -41,10 +41,28 @@ KWU_SEED = {
 }
 
 
+#: 약한 회전(강도 20) 씨앗 — **우리 차 9/21 실측**(apriltag_v3/work_dirs/20260921_측정기록.json, 강도 20):
+#: 1.0 s 무반응 → 정속 8.19~8.75 도/s, 끊고 나서 0.168 s × 각속도 만큼 더 돈다. 열쇠는 방향 + "f"(fine)
+FINE_SEED = {
+    "rot_startup_s": {"Lf": 1.0, "Rf": 1.0},
+    "rot_rate_dps": {"Lf": 8.47, "Rf": 8.47},
+    "rot_tau_s": {"Lf": 0.168, "Rf": 0.168},
+    # 하한 [도] — **유도값, 실측 아님**: 출발 문턱 0.15(gyro.ONSET_DEG) + 정지 유지 0.15 s 동안 가속 4.7 도/s² 로 도는 ½·4.7·0.15² = 0.05.
+    # 강도 30 의 유도값 0.81 은 실제 3~5 도였다 — 이것도 틀릴 수 있어 run 이 약한 회전 결과를 보고 올린다(Learner.rotation)
+    "rot_floor_fine_deg": 0.20,
+}
+ROT_SIDES = ("L", "R", "Lf", "Rf")
+
+
 def seeds(learned=None):
     """학습이 시작할 값 = 광운대 씨앗 위에 지난 주행이 남긴 seeds.json(있으면). 기하(회전중심·카메라 어긋난 각)는
     여기 없다 — 차마다 달라서 남의 값을 쓰면 안 되고, config 에 calibrate 실측을 적는다."""
     s = {k: dict(v) if isinstance(v, dict) else v for k, v in KWU_SEED.items()}
+    for k, v in FINE_SEED.items():
+        if isinstance(v, dict):
+            s.setdefault(k, {}).update(v)
+        else:
+            s[k] = v
     for k, v in (learned or {}).items():
         if isinstance(v, dict):
             for kk, vv in v.items():
@@ -123,15 +141,15 @@ class Learner:
         self.mode = mode
         s = seeds or {}
         self.rot_tau = {d: self._ema(s.get("rot_tau_s", {}).get(d), *self.TAU_ROT)
-                        for d in ("L", "R")}
+                        for d in ROT_SIDES}
         self.fwd_tau = {k: self._ema(s.get("fwd_tau_s", {}).get(k), *self.TAU_FWD)
                         for k in ("67", "187")}
         self.rot_rate = {d: self._ema(s.get("rot_rate_dps", {}).get(d), *self.RATE_ROT)
-                         for d in ("L", "R")}
+                         for d in ROT_SIDES}
         self.rot_startup = {d: self._ema(s.get("rot_startup_s", {}).get(d), *self.STARTUP_ROT)
-                            for d in ("L", "R")}
+                            for d in ROT_SIDES}
         self.rot_residual = {d: self._ema(s.get("rot_residual_deg", {}).get(d), -2.0, 2.0)
-                             for d in ("L", "R")}
+                             for d in ROT_SIDES}
         self.fwd_speed = {k: self._ema(s.get("fwd_speed_mps", {}).get(k), *self.SPEED_FWD)
                           for k in ("67", "187")}
         self.fwd_startup = {k: self._ema(s.get("fwd_startup_s", {}).get(k), *self.STARTUP_FWD)
@@ -139,6 +157,7 @@ class Learner:
         self.fwd_residual = self._ema(s.get("fwd_residual_m"), -0.2, 0.2)
         self.rate = SessionSlope()      # 각속도 배율. 광운대 것 그대로
         self.rot_floor_deg = s.get("rot_floor_deg")   # 배우지 않는다. 씨앗 또는 config ROT_FLOOR_DEG (calibrate 실측)
+        self.rot_floor_fine_deg = s.get("rot_floor_fine_deg")   # 약한 회전의 하한. 씨앗(유도값) → 결과를 보고 올린다
         self.rejected = 0
 
     @staticmethod
@@ -147,19 +166,23 @@ class Learner:
         return Ema(value=v, seed=v, lo=lo, hi=hi, n=0)
 
     # ── 회전 ────────────────────────────────────────────────────────
-    def rotation(self, res):
-        """회전 하나에서 배운다. 물리(tau)와 잔여를 **다른 곳에** 넣는다.
+    def rotation(self, res, fine=False):
+        """회전 하나에서 배운다. 물리(tau)와 잔여를 **다른 곳에** 넣는다. fine=True 면 약한 회전 — 따로 배운다.
 
         필요한 시각은 전부 res 안에 있다 — 부르는 쪽이 따로 계산해 넘기지 않는다.
         """
         if not res or not res.done or res.reason != "predicted":
             self.rejected += 1
             return {}
+        if fine and abs(res.turned_deg) > abs(res.target_deg) and abs(res.turned_deg) > (self.rot_floor_fine_deg or 0.0):
+            # 요청보다 더 돌았다 = 이보다 작게는 못 돈다. 하한을 실제 값으로 올린다 (유도값 0.20 을 믿지 않는다)
+            self.rot_floor_fine_deg = abs(res.turned_deg)
+        floor = self.rot_floor_fine_deg if fine else self.rot_floor_deg
         # 하한 아래 회전은 정지지연만큼 지나치는 게 정상이라, 배우면 잔여가 오염된다
-        if self.rot_floor_deg and abs(res.target_deg) < self.rot_floor_deg:
+        if floor and abs(res.target_deg) < floor:
             self.rejected += 1
             return {}
-        side = "L" if res.target_deg > 0 else "R"
+        side = ("L" if res.target_deg > 0 else "R") + ("f" if fine else "")
         out = {}
         if res.tau_observed > 0:
             out["tau"] = self.rot_tau[side].observe(res.tau_observed)
@@ -171,21 +194,26 @@ class Learner:
         if active > 0.1 and abs(res.turned_at_stop) > 0:
             out["rate"] = self.rot_rate[side].observe(abs(res.turned_at_stop) / active)
             base = self.rot_rate[side].seed
-            if base > 0:
+            if base > 0 and not fine:
                 # 광운대 배율 — 물려받은 각속도 대비 오늘이 얼마나 빠른가 (adaptive_slope.py)
                 out["multiplier"] = self.rate.observe(
-                    "ROT_LEFT" if side == "L" else "ROT_RIGHT", base,
+                    "ROT_LEFT" if side == "L" else "ROT_RIGHT", base,   # (배율은 강도 30 것만 — 광운대 표가 그 강도다)
                     res.t_onset - res.t_cmd, res.t_stop_cmd - res.t_cmd,
                     abs(res.turned_deg)).get("slope_next_multiplier")
         return out
 
-    def rot_rate_dps(self, target_deg):
-        """이 방향의 각속도 [도/s]. 아직 한 번도 안 돌았으면 None — 부르는 쪽이 대비한다."""
-        return self._known(self.rot_rate["L" if target_deg > 0 else "R"])
+    @staticmethod
+    def rot_side(target_deg, fine=False):
+        """회전 학습값의 열쇠 — 방향(L/R) + 약한 회전이면 f."""
+        return ("L" if target_deg > 0 else "R") + ("f" if fine else "")
 
-    def rot_startup_s(self, target_deg):
+    def rot_rate_dps(self, target_deg, fine=False):
+        """이 방향의 각속도 [도/s]. 아직 한 번도 안 돌았으면 None — 부르는 쪽이 대비한다."""
+        return self._known(self.rot_rate[self.rot_side(target_deg, fine)])
+
+    def rot_startup_s(self, target_deg, fine=False):
         """명령 -> 실제 회전 시작 [s]. 모르면 None."""
-        return self._known(self.rot_startup["L" if target_deg > 0 else "R"])
+        return self._known(self.rot_startup[self.rot_side(target_deg, fine)])
 
     @staticmethod
     def _known(e):

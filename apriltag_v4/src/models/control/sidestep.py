@@ -334,6 +334,10 @@ if __name__ == "__main__":
         def arm_rotation_timeout(self, m, hold_s):
             self.hold = hold_s
 
+        def set_rotate_strength(self, fine):
+            assert self.movement == "stop"                # 서 있을 때만 강도를 바꾼다
+            self.fine = bool(fine)
+
     class FakeGyro(Gyro):
         def __init__(self, world):
             Gyro.__init__(self, hz=200)

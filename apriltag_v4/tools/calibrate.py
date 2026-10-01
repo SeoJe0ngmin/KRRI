@@ -11,7 +11,7 @@
 
     device     장비: 가속도계·자이로·카메라·CAN. intrinsics 를 참고값(D435I_COLOR_REF)과 대조
     camyaw     법선 위에 차체를 평행하게 세운 채 60초 heading 중앙값          = CAM_YAW_OFFSET_DEG
-    rotfloor   움직이자마자 끊기를 좌·우 5회씩 → 최대각                        = ROT_FLOOR_DEG
+    rotfloor   움직이자마자 끊기를 좌·우 5회씩, 강도 둘(30·20) → 최대각        = ROT_FLOOR_DEG · ROT_FLOOR_FINE_DEG
     rotcenter  5도씩 ±40도 스윙, 점마다 정지 자세 → 원 맞춤 (plan 4-7)         = CAM_TO_ROT_CENTER_M · ROT_CENTER_LATERAL_M · ROT_CENTER_RMS_MM
 
 안전: 움직이는 단계는 시작 전에 "사람이 제동 위치에 있나" 를 한 번 확인한다. Ctrl+C 는 **먼저 CAN 정지**, 그다음 기록.
@@ -304,11 +304,12 @@ class Rig:
     def rotate(self, deg, **kw):
         return R.rotate(self.driver, self.gyro, self.learner, deg, self.rec, self.log, **kw)
 
-    def rotate_until_onset(self, sign):
-        """"자이로가 움직였다고 하면 즉시 끊어라" (plan 4-5 하한). 안전망은 rotate() 와 같은 세 겹."""
+    def rotate_until_onset(self, sign, fine=False):
+        """"자이로가 움직였다고 하면 즉시 끊어라" (plan 4-5 하한). 안전망은 rotate() 와 같은 세 겹. fine=True 면 약한 강도로."""
         g, drv = self.gyro, self.driver
         movement = "rotate_left_slow" if sign > 0 else "rotate_right_slow"
-        startup = self.learner.rot_startup_s(sign) or LN.KWU_SEED["rot_startup_s"]["L"]
+        startup = self.learner.rot_startup_s(sign, fine) or LN.KWU_SEED["rot_startup_s"]["L"]
+        drv.set_rotate_strength(fine)                    # 서 있을 때 강도를 써넣고 8바이트를 확인한다
         drv.arm_rotation_timeout(movement, C.ROT_SAFETY_MAX_S)
         # 목표 = 출발 문턱. 출발을 본 순간 남은각 ≤ 0 이라 콜백이 바로 끊는다 (tau·잔여 0)
         rot = Rotation(target_deg=sign * g.ONSET_DEG, tau_s=0.0, residual_deg=0.0,
@@ -349,7 +350,7 @@ class Rig:
                 res.turned_deg = g.angle_deg - rot.start_angle
         drv.clear_lease()
         ok = res.done and res.reason == "predicted"
-        self.rec.event("rotfloor", sign=sign, ok=ok, reason=res.reason, turned_deg=res.turned_deg,
+        self.rec.event("rotfloor", sign=sign, fine=fine, ok=ok, reason=res.reason, turned_deg=res.turned_deg,
                        turned_at_stop=res.turned_at_stop, omega_at_stop=res.omega_at_stop,
                        t_cmd=res.t_cmd, t_onset=res.t_onset, t_stop_cmd=res.t_stop_cmd,
                        t_settled=res.t_settled)
@@ -459,32 +460,44 @@ def stage_camyaw(rig):
 
 
 def stage_rotfloor(rig):
+    """움직이자마자 끊었을 때 도는 각의 최대 = 그 강도의 회전 하한. 거친 강도(30)와 약한 강도(20) 둘 다 잰다."""
     why = rig.ready_to_move()
     if why:
         return {"skip": why}
     rig.recalibrate()
-    turned, rows = [], []
-    for k in range(ROT_FLOOR_N):
-        for sign in (+1, -1):
-            res = rig.rotate_until_onset(sign)
-            ok = res.done and res.reason == "predicted"
-            rig.log("  %s %d: %s %+.2f도 (출발 %.2fs, 끊을 때 %.1f도/s)"
-                    % ("좌" if sign > 0 else "우", k + 1, "ok" if ok else "!! " + res.reason, res.turned_deg,
-                       (res.t_onset - res.t_cmd) if res.t_onset else float("nan"), res.omega_at_stop))
-            rows.append({"sign": sign, "ok": ok, "turned_deg": res.turned_deg, "reason": res.reason})
-            if ok:
-                turned.append(res.turned_deg)
-    r = A.rot_floor(turned)
-    if r["rot_floor_deg"] is None:
+    out = {}
+    for fine, key, name in ((False, "ROT_FLOOR_DEG", "강도 %d" % C.ROTATE_JOYSTICK_DEFLECTION),
+                            (True, "ROT_FLOOR_FINE_DEG", "약한 강도 %d" % C.ROTATE_FINE_JOYSTICK_DEFLECTION)):
+        turned, rows = [], []
+        for k in range(ROT_FLOOR_N):
+            for sign in (+1, -1):
+                res = rig.rotate_until_onset(sign, fine)
+                ok = res.done and res.reason == "predicted"
+                rig.log("  [%s] %s %d: %s %+.2f도 (출발 %.2fs, 끊을 때 %.1f도/s)"
+                        % (name, "좌" if sign > 0 else "우", k + 1, "ok" if ok else "!! " + res.reason, res.turned_deg,
+                           (res.t_onset - res.t_cmd) if res.t_onset else float("nan"), res.omega_at_stop))
+                rows.append({"sign": sign, "ok": ok, "turned_deg": res.turned_deg, "reason": res.reason})
+                if ok:
+                    turned.append(res.turned_deg)
+        r = A.rot_floor(turned)
+        r["rows"] = rows
+        out[key] = r
+        if r["rot_floor_deg"] is None:
+            rig.log("  !! [%s] 성공한 시행이 없다" % name)
+            continue
+        rig.results["config"][key] = r["rot_floor_deg"]
+        if fine:
+            rig.learner.rot_floor_fine_deg = r["rot_floor_deg"]
+        else:
+            rig.learner.rot_floor_deg = r["rot_floor_deg"]
+        rig.log("  [%s] 회전 하한 = 최대 %.2f도 (중앙 %.2f, sd %s, n %d) → %s (지금 config %s)"
+                % (name, r["rot_floor_deg"], r["median_deg"], "%.2f" % r["sd_deg"] if r["sd_deg"] is not None else "-", r["n"],
+                   key, getattr(C, key)))
+    rig.driver.set_rotate_strength(False)                # 다음 단계(rotcenter)는 거친 강도로 돈다
+    if not any(k in rig.results["config"] for k in ("ROT_FLOOR_DEG", "ROT_FLOOR_FINE_DEG")):
         raise RuntimeError("성공한 시행이 없다")
-    rig.results["config"]["ROT_FLOOR_DEG"] = r["rot_floor_deg"]
-    rig.learner.rot_floor_deg = r["rot_floor_deg"]
-    rig.log("  회전 하한 = 최대 %.2f도 (중앙 %.2f, sd %s, n %d) → ROT_FLOOR_DEG (지금 config %s. 씨앗 0.81 은 유도값)"
-            % (r["rot_floor_deg"], r["median_deg"], "%.2f" % r["sd_deg"] if r["sd_deg"] is not None else "-", r["n"],
-               C.ROT_FLOOR_DEG))
-    r["rows"] = rows
-    rig.rec.event("rotfloor_summary", **_json_safe(r))
-    return r
+    rig.rec.event("rotfloor_summary", **_json_safe(out))
+    return out
 
 
 def _stop_row(st, direction, psi_rel):
@@ -590,7 +603,7 @@ STAGES = {
     "device": (stage_device, "장비", "가속도계·자이로·카메라·CAN 을 보고 intrinsics 를 참고값과 대조한다", "", False),
     "camyaw": (stage_camyaw, "카메라 어긋난 각", "법선 위에 차체를 평행하게 세운 채 %.0f초 heading 중앙값 = CAM_YAW_OFFSET_DEG" % C.SIGMA_STILL_S,
                "차체 양옆 같은 지점에서 태그 벽까지 줄자 거리가 같게 (차체 ∥ 법선), 카메라는 태그 정면. 차는 정지", False),
-    "rotfloor": (stage_rotfloor, "회전 하한", "움직이자마자 끊기를 좌·우 %d회씩 → 최대각 = ROT_FLOOR_DEG" % ROT_FLOOR_N,
+    "rotfloor": (stage_rotfloor, "회전 하한", "움직이자마자 끊기를 좌·우 %d회씩, 강도 둘(30·20) → 최대각 = ROT_FLOOR_DEG · ROT_FLOOR_FINE_DEG" % ROT_FLOOR_N,
                  "제자리에서 조금씩 돈다. 사람은 제동 위치", True),
     "rotcenter": (stage_rotcenter, "회전중심 (동심원)", "5도씩 ±%.0f도 스윙, 점마다 정지 자세 → 원 맞춤 = CAM_TO_ROT_CENTER_M 등 3개" % SWING_MAX_DEG,
                   "카메라가 반지름 ~1.5 m 원을 그린다 — 양옆 2 m 를 비워라. 태그 3.5~4 m 정면에서", True),
@@ -664,7 +677,8 @@ def config_lines(values, run_name):
         v = values.get(k)
         if v is None:
             continue
-        fmt = "%.2f" if k in ("CAM_YAW_OFFSET_DEG", "ROT_FLOOR_DEG") else ("%.1f" if k == "ROT_CENTER_RMS_MM" else "%.3f")
+        fmt = ("%.2f" if k in ("CAM_YAW_OFFSET_DEG", "ROT_FLOOR_DEG", "ROT_FLOOR_FINE_DEG")
+               else "%.1f" if k == "ROT_CENTER_RMS_MM" else "%.3f")
         out.append((k, fmt % v))
     return out
 
