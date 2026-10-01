@@ -6,6 +6,7 @@
     python tools/run.py --video               화면에 그린 그대로 영상으로 (960x540 · 15 fps · video.jsonl 곁줄)
     python tools/run.py --out /Volumes/EXT    기록 루트 (외장 등)
     python tools/run.py --dry-run             CAN 안 보냄. 위와 조합 가능
+    python tools/run.py --reuse-sigma         직전 주행이 잰 σ 기준선·태그 기울기를 그대로 (60초 생략). 조명·태그가 바뀌었으면 쓰지 마라
 
 출발 전 게이트 (하나라도 걸리면 출발하지 않는다):
     ① 캘리브 값 (config)               CAM_YAW_OFFSET_DEG 가 None 이면 거부 — 정면의 기준. 회전중심(CAM_TO_ROT_CENTER_M)은 None 이면 회전 상한 5도로
@@ -158,6 +159,21 @@ def _intr_dict(intr):
          "distortion": [float(x) for x in (getattr(intr, "distortion", None) or ())]}
     d["half_fov_deg"] = limits.half_fov_deg(d)
     return d
+
+
+def _last_baseline(root, skip=None):
+    """가장 최근 runs/*/baseline.json (수정 시각 기준, skip 폴더 제외). (dict, path) — 없거나 깨졌으면 (None, None).
+    --reuse-sigma 가 쓴다. 언제 것까지 쓸지는 사람이 정한다 — 여기엔 나이 기준이 없다."""
+    cands = [c for c in (Path(root) / "runs").glob("*/baseline.json") if skip is None or c.parent != Path(skip)]
+    for c in sorted(cands, key=lambda x: x.stat().st_mtime, reverse=True):
+        try:
+            body = json.loads(c.read_text(encoding="utf-8"))
+            n = body.get("noise") or {}
+            if all(n.get(k) is not None for k in ("sigma_ref_distance_m", "sigma_drift_lateral_m", "sigma_drift_heading_deg")):
+                return body, c
+        except Exception:
+            continue
+    return None, None
 
 
 def _json_safe(v):
@@ -688,6 +704,27 @@ class Docking:
         조명·거리의 값이라 더 맞다. 재는 동안 차가 움직였으면(자이로) 한 번 더. 그래도 안 되면 정지·사람. 끝나면 시간 상한이 다시 돈다."""
         L = self.log
         self._set_state("BASELINE")
+        if self.args.reuse_sigma:
+            saved, path = _last_baseline(self.root, skip=self.dir)
+            if saved is not None:
+                noise = E.Noise(**{k: saved["noise"].get(k) for k in E.Noise.__dataclass_fields__})
+                roll = saved.get("tag_roll_deg")
+                with self._lock:
+                    self.est.set_noise(noise)
+                    if roll is not None:
+                        self.est.set_tag_roll(roll)
+                    else:
+                        self.est.reset()
+                L("       σ 기준선 재사용 (--reuse-sigma): %s 에 잰 것 — 기준 거리 %.2f m · 밀림 좌우 %.1f mm · 방향 %.3f도 · 태그 기울기 %s"
+                  % (saved.get("date") or "?", noise.sigma_ref_distance_m, noise.sigma_drift_lateral_m * 1e3,
+                     noise.sigma_drift_heading_deg, ("%.2f도" % roll) if roll is not None else "-"))
+                L("       (%s. 조명·태그가 바뀌었으면 스위치 없이 다시 돌려라)" % path)
+                self._save_baseline(dict(saved, reused_from=str(path)))
+                if self.rec is not None and not self._stop_written:
+                    self.rec.event("sigma_baseline", reused=True, source=str(path), date=saved.get("date"),
+                                   **_json_safe({"noise": noise.__dict__, "tag_roll_deg": roll}))
+                return
+            L("       --reuse-sigma 인데 지난 기준선(runs/*/baseline.json)이 없다 — 지금 잰다")
         sec = C.SIGMA_STILL_S
         b = rows = None
         moved = 0.0
@@ -740,9 +777,21 @@ class Docking:
              ("%.2f도" % b.tag_roll_deg) if b.tag_roll_deg is not None else "- (가속도계 없음)"))
         L("       (좌우 블록평균 sd %.1f mm · 떨림 %.1f mm. 9/21 실측은 밀림 31 mm — 많이 다르면 조명·태그 판을 의심)"
           % (b.lateral.block_sd * 1e3, b.lateral.resid_sd * 1e3))
+        self._save_baseline({"noise": n.__dict__, "tag_roll_deg": b.tag_roll_deg, "n": b.n, "n_clean": b.n_clean,
+                             "ambiguous_rate": b.ambiguous_rate, "seconds": sec, "reused_from": None,
+                             "date": datetime.now().isoformat(timespec="seconds")})
         self.t_start = clock.now()                               # 시간 상한은 여기서부터 — 기준선 재는 1분은 주행이 아니다
         if self.rec is not None and not self._stop_written:
             self.rec.event("start", t=self.t_start, wall=time.time(), mode=self.mode, after="baseline")
+
+    def _save_baseline(self, body):
+        """기준선을 이 주행 폴더에 baseline.json 으로 — 다음 주행의 --reuse-sigma 가 읽는다. 기록을 껐으면 안 남는다."""
+        if self.dir is None:
+            return
+        try:
+            (self.dir / "baseline.json").write_text(json.dumps(_json_safe(body), ensure_ascii=False, indent=1))
+        except Exception as e:
+            self._warn("baseline_save", "baseline.json 저장 실패: %s" % e)
 
     def _limits(self):
         """루프마다. 시간·걸음·자이로·CAN·카메라."""
@@ -1045,6 +1094,8 @@ def main():
     ap.add_argument("--video", action="store_true", help="화면에 그린 그대로 영상으로 (960x540 · 15 fps)")
     ap.add_argument("--out", default=None, help="기록 루트 (외장 등). 기본 work_dirs/ (KRRI_WORK_ROOT)")
     ap.add_argument("--dry-run", action="store_true", help="CAN 안 보냄")
+    ap.add_argument("--reuse-sigma", action="store_true",
+                    help="직전 주행이 잰 σ 기준선·태그 기울기를 그대로 쓴다 (60초 생략). 조명·태그가 바뀌었으면 쓰지 마라")
     args = ap.parse_args()
 
     root = work_root(args.out)

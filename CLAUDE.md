@@ -66,10 +66,10 @@
 - 직진 = 카메라 폐루프 예측정지 `남은거리 ≤ 속도×(검출지연 + τ + 주기/2) + 잔여`. 출발을 본 뒤에만 예측. 한 걸음 상한 1.5 m(계산값이 보통 더 짧다).
 - 학습: 관성 τ·출발지연·정속·잔여는 **동작마다 갱신해 파일로 누적**(광운대는 세션 끝나면 버림) — run·calibrate 가 끝나면 `seeds.json`, 다음 run 이 `learn.last_seeds` 로 읽는다(2026-10-02). 속도·검출지연·판정주기는 매 프레임 **실측**(학습 아님). 계수 0.50(광운대).
 - 판단: 계산은 늘(정지·직진 중), **회전 실행만 정지 후**. 회전 중 카메라 자세 불신(자이로만, β 는 씀).
-- **σ = √(밀림² + 떨림²)**: 밀림 = **출발 뒤 그 자리에서** 60초 정지(`SIGMA_STILL_S`, run.py `_baseline`)로 잰 기준선(거리 비례; 2026-10-02 부터 매 주행, before_run 없음), 떨림 = 지금 창 잔차/√n. 두 해 헷갈리는 프레임은 한 장씩 제외. σ 없으면 `no_sigma` 로 안 움직인다. σ 는 ①고칠까 ②얼마나 갈까 ④들어갈까 에 쓰이고, 모르면 큰 쪽.
+- **σ = √(밀림² + 떨림²)**: 밀림 = **출발 뒤 그 자리에서** 60초 정지(`SIGMA_STILL_S`, run.py `_baseline`)로 잰 기준선(거리 비례; 2026-10-02 부터 매 주행, before_run 없음. 연달아 돌릴 땐 `run.py --reuse-sigma` 로 직전 주행의 `baseline.json` 재사용 — 사람이 판단), 떨림 = 지금 창 잔차/√n. 두 해 헷갈리는 프레임은 한 장씩 제외. σ 없으면 `no_sigma` 로 안 움직인다. σ 는 ①고칠까 ②얼마나 갈까 ④들어갈까 에 쓰이고, 모르면 큰 쪽.
 - 마지막 단계 상한: 보정 5회 / 120 s(같은 구간을 횟수·시간으로 이중). 실패 7종 → 정지 + 사람 호출. 기록은 주행을 절대 막지 않는다.
 **상수 원칙**: 근거 없이 찍은 값 금지. 출처 분류(실물치수/광운대/우리 실측/규격·수학/식/사람이 정함/아직 찍힌 값)는 plan.md 14절. 새 숫자를 넣으면 거기 등재. 캘리브 값은 `tools/calibrate.py` 가 재서 config 에 적는다(`CAM_YAW_OFFSET_DEG` None 이면 출발 거부, 회전중심 None 이면 회전 상한 5°).
-**코드 구조(v4)**: `tools/run.py`(본체: 메인=표시·키 / 제어 스레드=검출·계획·명령 / SDK 콜백=자이로) · `tools/calibrate.py`(한 번 재서 config 에 적는 값: 회전중심·카메라 어긋난 각·회전 하한 — 카메라 재장착 때만; 기록 `work_dirs/calibrate/<시각>/`, `--write` 면 config 자동 갱신) ·
+**코드 구조(v4)**: `tools/run.py`(본체: 메인=표시·키 / 제어 스레드=검출·계획·명령 / SDK 콜백=자이로) · `tools/calibrate.py`(한 번 재서 config 에 적는 값: 회전중심·카메라 어긋난 각(60초 중앙값)·회전 하한 — 카메라 재장착 때만; 기록 `work_dirs/calibrate/<시각>/`, `--write` 면 config 자동 갱신) ·
 `src/models/detection/{image,tag,pose,estimate}` · `src/models/control/{driver,frames,rotate,forward,sidestep,learn}` · `src/models/planning/plan` · `src/utils/{clock,gyro,record,hud}` · `src/limits.py` · `src/models/kwu/`(광운대 `calib/control.py` 원본).
 시계는 전부 `clock.now()`(monotonic). 카메라 스탬프는 `CameraClock.see()` 로 변환 — 그냥 빼면 −17억 초(2026-09-21 로그 확인). 실차에서 `--dry-run`(CAN 안 보냄)으로 카메라·자이로·게이트 확인 후 실주행. **가짜 리그는 없앴다** — 가짜 데이터로 판단하지 않는다.
 **미확정·다음 실차**: 줄자 6개(태그 높이·카메라 높이·포크 끝·태그 좌우 오프셋·탑재부 길이·뒤 공간)는 **config 에 직접** → `calibrate.py`(회전중심·카메라 어긋난 각·회전 하한, 한 번) → `run.py` 가 출발 뒤 스스로(σ 정지 60초·태그 기울기). 회전 응답·직진/후진 속도는 주행 중 학습(seeds.json 누적).

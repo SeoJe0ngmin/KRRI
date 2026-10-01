@@ -2079,6 +2079,7 @@ run.py --no-record    기록 x               기록이 의심될 때만
 run.py --video        화면에 그린 그대로 영상으로 (12-0-1)
 run.py --out <경로>   기록 루트 지정 (외장 하드 등)
 run.py --dry-run      CAN 안 보냄          위와 조합 가능
+run.py --reuse-sigma  직전 주행의 σ 기준선·태그 기울기 재사용 (60초 생략). 조명·태그가 바뀌었으면 쓰지 않는다
 ```
 
 **출발 전 게이트** (하나라도 걸리면 출발하지 않는다 — 결정 12):
@@ -2155,7 +2156,8 @@ export KRRI_WORK_ROOT=...          기본 루트를 환경변수로
 ```
 한 번 (tools/calibrate.py → config/control.py)        카메라를 다시 달거나 차가 바뀔 때만
     device      장비 확인 + intrinsics 를 D435I_COLOR_REF 와 대조                          자동
-    camyaw      법선 위에 차체를 평행하게 세우고 heading 을 읽는다      → CAM_YAW_OFFSET_DEG   줄자로 자세 잡기
+    camyaw      법선 위에 차체를 평행하게 세우고 **60초** heading 중앙값  → CAM_YAW_OFFSET_DEG   줄자로 자세 잡기
+                (1초만 읽으면 방향 밀림 0.46도가 그대로 박힌다 — 눈 감는 1.3 m 에서 10 mm. 블록평균 sd 도 같이 찍는다)
     rotfloor    움직이자마자 정지 × 양방향 5회 → 최대각 (4-5)           → ROT_FLOOR_DEG        약 3분
     rotcenter   5도씩 ±40도 동심원 (4-7)                               → CAM_TO_ROT_CENTER_M · ROT_CENTER_LATERAL_M · ROT_CENTER_RMS_MM   약 2분
     (여기서 돈 회전들이 각속도·τ 도 가르친다 → seeds.json)
@@ -2164,6 +2166,8 @@ export KRRI_WORK_ROOT=...          기본 루트를 환경변수로
     σ 기준선    정지 SIGMA_STILL_S(60)초 → 0.5초 창 평균의 흔들림(밀림) (3-6)  → Estimator.set_noise
     태그 기울기  같은 창의 가속도계 중앙값 (5-3)                              → Estimator.set_tag_roll
     (자이로가 0.3도 넘게 돌았으면 차가 움직인 것 — 한 번 더. 끝나면 TIME_LIMIT 가 다시 돈다)
+    잰 값은 runs/<시각>/baseline.json 에 남는다. `run.py --reuse-sigma` 면 직전 주행 것을 그대로 쓴다(60초 생략) —
+    연달아 돌릴 때용. 나이 기준은 코드에 없다: 조명·태그가 바뀌었는지는 사람이 판단한다
 
 학습 (src/models/control/learn.py)                      광운대 씨앗 KWU_SEED 에서 출발, 주행마다 갱신
     회전 τ·각속도·출발지연·잔여 · 직진 속도·출발·τ·잔여      run/calibrate 가 끝나면 seeds.json → 다음 run 이 learn.last_seeds 로

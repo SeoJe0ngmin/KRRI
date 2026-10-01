@@ -10,7 +10,7 @@
 학습이 쌓는다 — 여기서 도는 회전들도 learner 가 배워 seeds.json 으로 넘긴다 (learn.last_seeds).
 
     device     장비: 가속도계·자이로·카메라·CAN. intrinsics 를 참고값(D435I_COLOR_REF)과 대조
-    camyaw     법선 위에 차체를 평행하게 세운 채 heading 을 읽는다            = CAM_YAW_OFFSET_DEG
+    camyaw     법선 위에 차체를 평행하게 세운 채 60초 heading 중앙값          = CAM_YAW_OFFSET_DEG
     rotfloor   움직이자마자 끊기를 좌·우 5회씩 → 최대각                        = ROT_FLOOR_DEG
     rotcenter  5도씩 ±40도 스윙, 점마다 정지 자세 → 원 맞춤 (plan 4-7)         = CAM_TO_ROT_CENTER_M · ROT_CENTER_LATERAL_M · ROT_CENTER_RMS_MM
 
@@ -56,6 +56,7 @@ from src.utils.record import Recorder                                # noqa: E40
 STILL_S = 2 * E.WINDOW_S      # 정지 확인 창. 추정 창의 두 배라야 창 하나가 통째로 새 프레임이다
 ROT_FLOOR_N = 5               # 방향당 횟수 (plan 4-5 "양방향 5회")
 SWING_MAX_DEG = 40.0          # 동심원 스윙 반폭. 중심이 앞이면 ±40, 뒤면 절반 (plan 4-7 ③)
+STILL_TOL_DEG = 0.3           # 가만히 재는 동안 자이로가 이보다 돌았으면 차가 움직인 것 (plan 5-6 "0.3도 넘게 돌았으면 버린다". run 의 기준선과 같은 값)
 FRAME_KEYS = ("lateral", "vertical", "forward", "heading_deg", "distance", "beta_deg", "edge_px", "top_px", "tag_px",
               "row_px", "angle_ok", "reproj_px", "tilt_deg", "tag_roll_deg", "gyro_deg", "err_ratio")
 ANGLE_KEYS = E.Estimator.ANGLE_KEYS
@@ -415,16 +416,34 @@ def stage_device(rig):
 
 
 def stage_camyaw(rig):
-    st = rig.measure_still(STILL_S, "camyaw")
-    if not st["ok"]:
-        raise RuntimeError("태그가 안 보인다")
-    raw = st["heading_deg"]                                    # 추정기가 cam_yaw 0 으로 열려 있어 날것이다
+    # 방향값은 가만히 있어도 수십 초에 걸쳐 천천히 출렁인다(9/21: 0.5초 블록평균 sd 0.46도). 1초만 읽으면 그 오차가 그대로
+    # config 에 박혀 매 주행 같은 쪽으로 샌다 — run 의 σ 기준선과 같은 시간(SIGMA_STILL_S) 동안 본다 (2026-10-02)
+    sec = C.SIGMA_STILL_S
+    rig.log("  %.0f초 동안 가만히 (차·사람 모두. 카메라 앞을 지나가지 마라)" % sec)
+    g0 = rig.gyro.angle_deg if rig.gyro is not None else None
+    rows = rig.collect(sec, "camyaw")
+    moved = abs(rig.gyro.angle_deg - g0) if g0 is not None else None
+    clean = [r for r in rows if r["angle_ok"] and r.get("heading_deg") is not None and math.isfinite(r["heading_deg"])]
+    if len(clean) < 2 * E.MIN_N:
+        raise RuntimeError("깨끗한 프레임이 모자란다 (%d / %d 장) — 태그가 안 보이거나 두 해가 헷갈린다" % (len(clean), len(rows)))
+    if moved is not None and moved > STILL_TOL_DEG:
+        raise RuntimeError("재는 동안 자이로가 %.2f도 돌았다 — 차가 움직였다. 다시 재라" % moved)
+    heads = [r["heading_deg"] for r in clean]
+    raw = S.median(heads)                                      # 추정기가 cam_yaw 0 으로 열려 있어 날것이다
+    b = E.drift_baseline([r["t"] for r in clean], heads)       # 0.5초 블록평균의 흔들림 = 짧게 읽었을 때 틀리는 크기
+    lat = S.median([r["lateral"] for r in clean])
+    betas = [r["beta_deg"] for r in rows if r.get("beta_deg") is not None and math.isfinite(r["beta_deg"])]
+    beta = S.median(betas) if betas else float("nan")
     rig.results["config"]["CAM_YAW_OFFSET_DEG"] = raw
-    rig.log("  법선 위 heading %+.2f도 (1초 sd %.2f, n %d) → CAM_YAW_OFFSET_DEG (지금 config %s). 좌우 %+.3f m (0 이어야) · β %+.2f도"
-            % (raw, st["heading_deg_sd"] or 0.0, st["n_clean"], C.CAM_YAW_OFFSET_DEG, st["lateral"], st["beta_deg"]))
-    rig.log("  (방향 밀림 σ 급(9/21: 0.46도)이 이 값에 그대로 들어 있다 — 5-4 의 쏠림·정답자세와 같이 본다. 차체 ∥ 법선이 전제)")
-    out = {"cam_yaw_offset_deg": raw, "lateral_m": st["lateral"], "beta_deg": st["beta_deg"], "n": st["n_clean"],
-           "heading_sd": st["heading_deg_sd"]}
+    rig.log("  법선 위 heading 중앙값 %+.2f도 (%.0f초, 깨끗한 %d / %d 장) → CAM_YAW_OFFSET_DEG (지금 config %s)"
+            % (raw, sec, len(clean), len(rows), C.CAM_YAW_OFFSET_DEG))
+    if b is not None:
+        rig.log("  출렁임: 한 장 sd %.2f도 · 0.5초 블록평균 sd %.2f도 (= 1초만 읽었다면 틀렸을 크기) · 블록 %d 개"
+                % (S.pstdev(heads), b.block_sd, b.n_blocks))
+    rig.log("  좌우 %+.3f m (0 이어야 — 카메라가 태그 정면) · β %+.2f도. 차체 ∥ 법선이 전제다 — 그 자세 오차는 여기서 못 본다" % (lat, beta))
+    out = {"cam_yaw_offset_deg": raw, "seconds": sec, "n": len(rows), "n_clean": len(clean),
+           "frame_sd_deg": S.pstdev(heads), "block_sd_deg": b.block_sd if b else None, "drift_deg": b.drift if b else None,
+           "lateral_m": lat, "beta_deg": beta, "moved_deg": moved}
     rig.rec.event("camyaw", **_json_safe(out))
     return out
 
@@ -544,7 +563,7 @@ def stage_rotcenter(rig):
 #: 이름 → (함수, 제목, 무엇을 하나, 안전 안내, 움직이나)
 STAGES = {
     "device": (stage_device, "장비", "가속도계·자이로·카메라·CAN 을 보고 intrinsics 를 참고값과 대조한다", "", False),
-    "camyaw": (stage_camyaw, "카메라 어긋난 각", "법선 위에 차체를 평행하게 세운 채 heading 을 읽는다 = CAM_YAW_OFFSET_DEG",
+    "camyaw": (stage_camyaw, "카메라 어긋난 각", "법선 위에 차체를 평행하게 세운 채 %.0f초 heading 중앙값 = CAM_YAW_OFFSET_DEG" % C.SIGMA_STILL_S,
                "차체 양옆 같은 지점에서 태그 벽까지 줄자 거리가 같게 (차체 ∥ 법선), 카메라는 태그 정면. 차는 정지", False),
     "rotfloor": (stage_rotfloor, "회전 하한", "움직이자마자 끊기를 좌·우 %d회씩 → 최대각 = ROT_FLOOR_DEG" % ROT_FLOOR_N,
                  "제자리에서 조금씩 돈다. 사람은 제동 위치", True),
