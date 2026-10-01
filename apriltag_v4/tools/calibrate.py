@@ -37,9 +37,11 @@ from src.bootstrap import ROOT, check_writable, setup, work_root     # noqa: E40
 setup()
 sys.path.insert(0, str(ROOT / "tools"))
 import analyze_calibrate as A                                        # noqa: E402  현장 계산 = 사후 재계산
+from analyze_calibrate import to_vehicle_frame                       # noqa: E402
 
 from config import control as C                                      # noqa: E402
 from config import detection as D                                    # noqa: E402
+from config import imu as I                                          # noqa: E402
 from src import limits                                               # noqa: E402
 from src.models.control import learn as LN                           # noqa: E402
 from src.models.control import rotate as R                           # noqa: E402
@@ -49,14 +51,13 @@ from src.models.detection import estimate as E                       # noqa: E40
 from src.models.detection import tag as T                            # noqa: E402
 from src.models.detection.image import intrinsics_from_ref           # noqa: E402
 from src.utils import clock                                          # noqa: E402
-from src.utils.gyro import Gyro, Rotation, RotationResult            # noqa: E402
+from src.utils.gyro import Gyro, Rotation, RotationResult, max_rate_dps   # noqa: E402
 from src.utils.record import Recorder                                # noqa: E402
 
 # ── 구현 세부 (config 에 올리지 않는다 — plan 12-4) ─────────────────────
 STILL_S = 2 * E.WINDOW_S      # 정지 확인 창. 추정 창의 두 배라야 창 하나가 통째로 새 프레임이다
 ROT_FLOOR_N = 5               # 방향당 횟수 (plan 4-5 "양방향 5회")
 SWING_MAX_DEG = 40.0          # 동심원 스윙 반폭. 중심이 앞이면 ±40, 뒤면 절반 (plan 4-7 ③)
-STILL_TOL_DEG = 0.3           # 가만히 재는 동안 자이로가 이보다 돌았으면 차가 움직인 것 (plan 5-6 "0.3도 넘게 돌았으면 버린다". run 의 기준선과 같은 값)
 FRAME_KEYS = ("lateral", "vertical", "forward", "heading_deg", "distance", "beta_deg", "edge_px", "top_px", "tag_px",
               "row_px", "angle_ok", "reproj_px", "tilt_deg", "tag_roll_deg", "gyro_deg", "err_ratio")
 ANGLE_KEYS = E.Estimator.ANGLE_KEYS
@@ -420,14 +421,17 @@ def stage_camyaw(rig):
     # config 에 박혀 매 주행 같은 쪽으로 샌다 — run 의 σ 기준선과 같은 시간(SIGMA_STILL_S) 동안 본다 (2026-10-02)
     sec = C.SIGMA_STILL_S
     rig.log("  %.0f초 동안 가만히 (차·사람 모두. 카메라 앞을 지나가지 마라)" % sec)
-    g0 = rig.gyro.angle_deg if rig.gyro is not None else None
     rows = rig.collect(sec, "camyaw")
-    moved = abs(rig.gyro.angle_deg - g0) if g0 is not None else None
+    # 움직였나는 **각속도**로 본다 (보정과 같은 기준 IMU_MOVING_DPS). 적분 각도 차는 드리프트라 못 쓴다
+    gy = [r.get("gyro_deg") for r in rows]
+    rate = max_rate_dps([r["t"] for r in rows], gy, E.WINDOW_S) if rig.gyro is not None else None
+    gy = [x for x in gy if x is not None]
+    drifted = (gy[-1] - gy[0]) if gy else None
     clean = [r for r in rows if r["angle_ok"] and r.get("heading_deg") is not None and math.isfinite(r["heading_deg"])]
     if len(clean) < 2 * E.MIN_N:
         raise RuntimeError("깨끗한 프레임이 모자란다 (%d / %d 장) — 태그가 안 보이거나 두 해가 헷갈린다" % (len(clean), len(rows)))
-    if moved is not None and moved > STILL_TOL_DEG:
-        raise RuntimeError("재는 동안 자이로가 %.2f도 돌았다 — 차가 움직였다. 다시 재라" % moved)
+    if rate is not None and rate > I.IMU_MOVING_DPS:
+        raise RuntimeError("재는 동안 %.2f 도/s 로 움직였다 (기준 %.1f) — 차가 흔들렸다. 다시 재라" % (rate, I.IMU_MOVING_DPS))
     heads = [r["heading_deg"] for r in clean]
     raw = S.median(heads)                                      # 추정기가 cam_yaw 0 으로 열려 있어 날것이다
     b = E.drift_baseline([r["t"] for r in clean], heads)       # 0.5초 블록평균의 흔들림 = 짧게 읽었을 때 틀리는 크기
@@ -441,9 +445,14 @@ def stage_camyaw(rig):
         rig.log("  출렁임: 한 장 sd %.2f도 · 0.5초 블록평균 sd %.2f도 (= 1초만 읽었다면 틀렸을 크기) · 블록 %d 개"
                 % (S.pstdev(heads), b.block_sd, b.n_blocks))
     rig.log("  좌우 %+.3f m (0 이어야 — 카메라가 태그 정면) · β %+.2f도. 차체 ∥ 법선이 전제다 — 그 자세 오차는 여기서 못 본다" % (lat, beta))
+    bb = E.drift_baseline([r["t"] for r in rows if r.get("beta_deg") is not None], betas)
+    rig.log("  정지 확인: 가장 빠른 0.5초 %s 도/s (기준 %.1f) · 자이로 흐름 %s도 (드리프트 — 판정엔 안 쓴다) · β 블록평균 sd %s도 (화면 속 태그가 움직인 정도)"
+            % ("%.3f" % rate if rate is not None else "-", I.IMU_MOVING_DPS,
+               "%+.2f" % drifted if drifted is not None else "-", "%.4f" % bb.block_sd if bb else "-"))
     out = {"cam_yaw_offset_deg": raw, "seconds": sec, "n": len(rows), "n_clean": len(clean),
            "frame_sd_deg": S.pstdev(heads), "block_sd_deg": b.block_sd if b else None, "drift_deg": b.drift if b else None,
-           "lateral_m": lat, "beta_deg": beta, "moved_deg": moved}
+           "lateral_m": lat, "beta_deg": beta, "max_rate_dps": rate, "gyro_drift_deg": drifted,
+           "beta_block_sd_deg": bb.block_sd if bb else None}
     rig.rec.event("camyaw", **_json_safe(out))
     return out
 
@@ -540,8 +549,13 @@ def stage_rotcenter(rig):
     if fit.get("why"):
         raise RuntimeError("정지점 %d 개 — 적합 불가" % fit["n"])
     cfg = rig.results["config"]
-    cfg["CAM_TO_ROT_CENTER_M"] = fit["cam_to_rot_center_m"]
-    cfg["ROT_CENTER_LATERAL_M"] = fit["rot_center_lateral_m"]
+    # 적합은 날것 heading(카메라 축)에서 나온다. 계획기는 cam_yaw 를 뺀 차체 heading 을 쓰니 그 각만큼 돌려 적는다
+    yaw = cfg.get("CAM_YAW_OFFSET_DEG", C.CAM_YAW_OFFSET_DEG)      # 이번에 잰 값 먼저, 없으면 config
+    ctr_a, ctr_b = fit["cam_to_rot_center_m"], fit["rot_center_lateral_m"]      # (A 는 이 파일에서 analyze_calibrate 모듈이다)
+    if yaw is not None:
+        ctr_a, ctr_b = to_vehicle_frame(ctr_a, ctr_b, yaw)
+    cfg["CAM_TO_ROT_CENTER_M"] = ctr_a
+    cfg["ROT_CENTER_LATERAL_M"] = ctr_b
     cfg["ROT_CENTER_RMS_MM"] = fit["circle_rms_mm"]
     rig.log("  회전중심 (위치+방향, n %d, 스윙 %.0f도): 앞뒤 %+.3f m (음수 = 카메라 앞) · 좌우 %+.3f m · 잔차 %.0f mm  (지금 config %s / %s)"
             % (fit["n"], fit["swing_deg"], fit["cam_to_rot_center_m"], fit["rot_center_lateral_m"], fit["ls_rms_mm"],
@@ -552,10 +566,16 @@ def stage_rotcenter(rig):
                "%.2f m" % fit["pairs_spread_m"] if fit["pairs_spread_m"] is not None else "-"))
     for side, v in fit["sides"].items():
         rig.log("     %s 스텝만: %+.3f m (n %d, rms %.0f mm)" % (side, v["cam_to_rot_center_m"], v["n"], v["rms_mm"]))
+    if yaw is not None:
+        rig.log("  차체 축으로 (cam_yaw %+.2f도 만큼 돌림): 앞뒤 %+.3f m · 좌우 %+.3f m  ← config 에 적는 값" % (yaw, ctr_a, ctr_b))
+    else:
+        rig.log("  !! cam_yaw 를 모른다(이번에 안 쟀고 config 도 None) — 위 값은 **카메라 축** 그대로다. camyaw 를 잰 뒤 "
+                "analyze_calibrate.to_vehicle_frame 으로 돌리거나 rotcenter 를 다시 하라 (|A|·sin(yaw) 만큼 옆으로 틀린다)")
     if not (-1.8 <= fit["cam_to_rot_center_m"] <= -0.4):
         rig.log("  !! 예상 범위(카메라 앞 0.4~1.8 m) 밖이다 — 측정을 다시 본다 (plan 4-7 검증 기준)")
     out = {k: fit.get(k) for k in ("n", "swing_deg", "cam_to_rot_center_m", "rot_center_lateral_m", "circle_rms_mm",
                                    "ls_rms_mm", "circle_radius_m", "gain", "pairs_n", "pairs_spread_m", "sides")}
+    out.update(cam_yaw_used_deg=yaw, config_cam_to_rot_center_m=ctr_a, config_rot_center_lateral_m=ctr_b)
     rig.rec.event("rotcenter", stops=stops, **_json_safe(out))
     return out
 

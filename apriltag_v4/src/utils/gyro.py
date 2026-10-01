@@ -5,6 +5,7 @@
 그러면 부모 코드가 그 안에서 돈다 (imu_yaw.py 는 v3 원본 그대로 둬서 diff 가 되게 한다).
 정지 판정을 **콜백 안에서** 하는 이유: 메인 루프가 밀려도 제때 멈추려고 (plan 4-2-1).
 """
+import math
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -48,6 +49,22 @@ class RotationResult:
         """제대로 끝난 회전. 배우는 것도 다음 걸음도 이것만 믿는다."""
         return self.done and self.reason == "predicted"
 
+
+def max_rate_dps(ts, angles, window_s):
+    """(시각, 적분 각도) 열에서 window_s 블록마다 |각도 변화| ÷ 시간 의 최대 [도/s] — 긴 정지 창에서 "차가 움직였나" 를 본다.
+    IMU_MOVING_DPS(보정 때와 같은 기준)와 견준다. 적분 각도의 **차**로 보면 안 된다: 드리프트가 쌓인다
+    (2026-10-02 실측 — 60초에 0.59도 흘렀고 그동안 화면 속 태그는 0.004도도 안 움직였다)."""
+    pts = [(float(t), float(a)) for t, a in zip(ts, angles) if a is not None and math.isfinite(a)]
+    best, i = 0.0, 0
+    while i < len(pts):
+        j = i
+        while j + 1 < len(pts) and pts[j + 1][0] - pts[i][0] <= window_s:
+            j += 1
+        dt = pts[j][0] - pts[i][0]
+        if dt >= window_s / 2:                       # 프레임 두어 장짜리 꼬투리 블록은 잡음이 크다 — 뺀다
+            best = max(best, abs(pts[j][1] - pts[i][1]) / dt)
+        i = j + 1
+    return best
 
 class Gyro(GyroYaw):
     # 판정 문턱. apriltag_v3/src/models/control/rot_control.py 의 실측 근거 값들
@@ -170,6 +187,9 @@ class Gyro(GyroYaw):
         xs = sorted(self.intervals)
         st = self.stats()
         p99 = xs[int(0.99 * (len(xs) - 1))] if xs else None
+        if xs:
+            # 수신율은 **우리 시계**로 — 장치 스탬프는 global time 이 켜지는 순간 기준이 바뀌어(17억 초 점프) 첫·끝을 못 뺀다
+            st["hz"] = 1000.0 * len(xs) / sum(xs) if sum(xs) > 0 else 0.0
         st["process_interval_ms"] = {          # 5 ms 를 크게 넘으면 GIL 대기다
             "median": round(statistics.median(xs), 2) if xs else None,
             "p99": round(p99, 2) if p99 else None,

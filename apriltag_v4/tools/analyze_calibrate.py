@@ -159,6 +159,14 @@ def rot_center_fit(stops):
     return out
 
 
+def to_vehicle_frame(cam_to_rot_center_m, rot_center_lateral_m, cam_yaw_offset_deg):
+    """적합은 카메라가 낸 **날것** heading 축에서 나온다(calibrate 는 cam_yaw 0 으로 연다). 계획기는 cam_yaw 를 뺀 차체
+    heading 을 쓰므로 중심 오프셋을 그 각만큼 돌려야 같은 점이 된다: R(ψ_날것) = R(ψ_차체)·R(yaw) → o_차체 = R(yaw)·o_카메라.
+    (A = −o_fwd, b = o_lat.) 안 돌리면 중심이 |A|·sin(yaw) 만큼 옆으로 틀린다 — 1.5 m · 1.14도 = 30 mm."""
+    o = _rot2(math.radians(cam_yaw_offset_deg)) @ np.array([-cam_to_rot_center_m, rot_center_lateral_m])
+    return -float(o[0]), float(o[1])
+
+
 # ── 회전 하한 (plan 4-5) ──────────────────────────────────────────────
 def rot_floor(turned_deg):
     """움직이자마자 끊은 회전들의 |각| → 최대가 하한. 평균이 아니라 최대 — 지나치는 쪽이 비싸다."""
@@ -198,8 +206,12 @@ def reanalyze(run_dir):
     stops = [e for e in ev if e.get("event") == "rotcenter_stop"]
     if stops:
         f = rot_center_fit(stops)
-        out["CAM_TO_ROT_CENTER_M"] = f.get("cam_to_rot_center_m")
-        out["ROT_CENTER_LATERAL_M"] = f.get("rot_center_lateral_m")
+        A, b = f.get("cam_to_rot_center_m"), f.get("rot_center_lateral_m")
+        rc = [e for e in ev if e.get("event") == "rotcenter"]
+        yaw = rc[-1].get("cam_yaw_used_deg") if rc else None
+        if A is not None and yaw is not None:
+            A, b = to_vehicle_frame(A, b, yaw)                  # calibrate 가 쓴 것과 같은 각으로 차체 축에
+        out["CAM_TO_ROT_CENTER_M"], out["ROT_CENTER_LATERAL_M"] = A, b
         out["ROT_CENTER_RMS_MM"] = f.get("circle_rms_mm")
     floors = [e.get("turned_deg") for e in ev if e.get("event") == "rotfloor" and e.get("ok")]
     if floors:
@@ -265,6 +277,19 @@ def _selftest():
     check(f["circle_rms_mm"] < 60 and abs(f["gain"] - 0.63) < 0.05, "RMS 가 잡음 급이고 gain 이 맞는다")
     check("L" in f["sides"] and "R" in f["sides"], "좌·우 따로도 나온다")
     check(rot_center_fit(stops[:2]).get("why") == "few", "점이 모자라면 few")
+    # 카메라가 차체와 2도 어긋나 있으면 날것 heading 이 전부 +2도 — 적합은 카메라 축 값을 내고, 돌려 주면 차체 축 참값이 된다
+    yaw = 2.0
+    clean = []
+    psi = 0.0
+    for d, _ in [(0, 0)] + seq:
+        psi += d * 5.0
+        p = c - _rot2(math.radians(psi)) @ np.array([o_f, o_l])
+        clean.append({"lateral": p[1], "forward": -p[0], "heading_deg": psi + yaw, "beta_deg": 0.0, "psi_rel_deg": psi, "dir": d})
+    fr = rot_center_fit(clean)
+    Av, bv = to_vehicle_frame(fr["cam_to_rot_center_m"], fr["rot_center_lateral_m"], yaw)
+    check(abs(fr["rot_center_lateral_m"] - o_l) > 0.04 and abs(Av + o_f) < 1e-6 and abs(bv - o_l) < 1e-6,
+          "cam_yaw %.0f도: 카메라 축 좌우 %+.3f (틀림) → 차체 축 %+.3f · 앞뒤 %+.3f (참 %+.3f · %+.3f)"
+          % (yaw, fr["rot_center_lateral_m"], bv, Av, o_l, -o_f))
     # 2) 회전 하한 = 최대각
     check(rot_floor([0.9, -1.2, 0.7])["rot_floor_deg"] == 1.2, "하한 = 최대각")
     # 3) reanalyze 가 event 이름을 제대로 읽는다 (임시 폴더)

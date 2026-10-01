@@ -62,7 +62,7 @@ from src.models.detection import estimate as E                       # noqa: E40
 from src.models.detection import tag as T                            # noqa: E402
 from src.models.planning import plan as PL                           # noqa: E402
 from src.utils import clock, hud                                     # noqa: E402
-from src.utils.gyro import Gyro                                      # noqa: E402
+from src.utils.gyro import Gyro, max_rate_dps                        # noqa: E402
 from src.utils.record import STOP_REASONS, Recorder                  # noqa: E402
 
 # ── 구현 세부 (config 에 올리지 않는다 — plan 12-4) ─────────────────────
@@ -78,7 +78,6 @@ DISPLAY_SIZE = (960, 540)         # 화면·영상은 축소해서 (plan 12-0-1)
 DISPLAY_FPS = 15.0
 DEADMAN_ABORT_S = -1.0            # 비상정지 때 lease 를 과거로 — rotate/forward 의 대기 루프가 "lease" 로 즉시 빠져나온다
 CONTROL_JOIN_S = 15.0             # 제어 스레드가 동작을 접고 나올 때까지 (SETTLE_S 2 + STILL_S 1 + 여유)
-BASELINE_STILL_TOL_DEG = 0.3      # σ 기준선 재는 동안 자이로가 이보다 돌았으면 차가 움직인 것 → 다시 (plan 5-6 "0.3도 넘게 돌았으면 버린다")
 FRAME_KEYS = ("lateral", "vertical", "forward", "heading_deg", "distance", "beta_deg", "edge_px", "top_px", "tag_px",
               "row_px", "angle_ok", "reproj_px", "tilt_deg", "tag_roll_deg", "gyro_deg", "err_ratio")
 STATE_LEVEL = {"BOOT": "warn", "GATE": "warn", "WAIT": "warn", "SEARCH": "warn", "BASELINE": "warn", "DECIDE": "txt", "ROTATE": "ok",
@@ -424,7 +423,7 @@ class Docking:
                         self.n_seen += 1
                         self.last_seen_t, self.last_beta = t_cap, st.get("beta_deg")
                         if self._collect is not None:
-                            self._collect.append(dict(st, t=t_cap))
+                            self._collect.append(dict(st, t=t_cap, gyro_deg=(self.gyro.angle_deg if self.gyro is not None else None)))
                     fix = self.est.fix(moving=moving)
                 if last_t is not None:
                     self.loop_ms = (t_arr - last_t) * 1000.0
@@ -701,7 +700,7 @@ class Docking:
     def _baseline(self):
         """⑥ σ 기준선 — 출발 뒤 태그가 보이는 자리에서 SIGMA_STILL_S 초 가만히. 0.5초 창 평균의 흔들림(밀림)이 추정기의 σ 가 되고
         (plan 3-6 · 결정 8), 가속도계로 본 태그 기울기도 같이 넣는다. 2026-10-02 부터 before_run 대신 매 주행 여기서 — 그 자리·
-        조명·거리의 값이라 더 맞다. 재는 동안 차가 움직였으면(자이로) 한 번 더. 그래도 안 되면 정지·사람. 끝나면 시간 상한이 다시 돈다."""
+        조명·거리의 값이라 더 맞다. 재는 동안 차가 움직였으면(자이로 각속도 > IMU_MOVING_DPS) 한 번 더. 그래도 안 되면 정지·사람. 끝나면 시간 상한이 다시 돈다."""
         L = self.log
         self._set_state("BASELINE")
         if self.args.reuse_sigma:
@@ -731,7 +730,6 @@ class Docking:
         for attempt in range(2):
             L("       σ 기준선 — %.0f초 가만히 (차·사람 모두. 카메라 앞을 지나가지 마라)%s" % (sec, " (다시)" if attempt else ""))
             self.driver.stop("baseline")
-            g0 = self.gyro.angle_deg
             with self._lock:
                 self.est.reset()
                 self._collect = []
@@ -744,11 +742,12 @@ class Docking:
                 time.sleep(0.1)
             with self._lock:
                 rows, self._collect = self._collect, None
-            moved = abs(self.gyro.angle_deg - g0)
+            # 움직였나는 각속도로 (보정과 같은 기준 IMU_MOVING_DPS). 적분 각도 차는 드리프트(실측 0.6도/분)라 60초 창엔 못 쓴다
+            moved = max_rate_dps([r["t"] for r in rows], [r.get("gyro_deg") for r in rows], E.WINDOW_S)
             b = E.baseline_from_rows(rows)
             if self.rec is not None and not self._stop_written:
                 try:
-                    self.rec.event("sigma_baseline", attempt=attempt, n=len(rows), moved_deg=moved, ok=b is not None,
+                    self.rec.event("sigma_baseline", attempt=attempt, n=len(rows), max_rate_dps=moved, ok=b is not None,
                                    **(_json_safe({"noise": b.noise.__dict__, "lateral": b.lateral._asdict(),
                                                   "heading": b.heading._asdict(),
                                                   "distance": b.distance._asdict() if b.distance else None,
@@ -758,12 +757,12 @@ class Docking:
                     self._warn("baseline_rec", "기준선 기록 실패: %s" % e)
             if b is None:
                 raise _Fail("no_converge", "σ 기준선을 못 냈다 — %.0f초에 프레임 %d 장 (태그가 안 보였거나 두 해가 헷갈렸다)" % (sec, len(rows)))
-            if moved > BASELINE_STILL_TOL_DEG:
-                L("       !! 재는 동안 %.2f도 돌았다 — 차가 움직였다. 다시" % moved)
+            if moved > I.IMU_MOVING_DPS:
+                L("       !! 재는 동안 %.2f 도/s 로 움직였다 (기준 %.1f) — 차가 흔들렸다. 다시" % (moved, I.IMU_MOVING_DPS))
                 continue
             break
         else:
-            raise _Fail("no_converge", "σ 기준선 — 두 번 다 차가 움직였다 (자이로 %.2f도)" % moved)
+            raise _Fail("no_converge", "σ 기준선 — 두 번 다 차가 움직였다 (%.2f 도/s)" % moved)
         with self._lock:
             self.est.set_noise(b.noise)
             if b.tag_roll_deg is not None:
