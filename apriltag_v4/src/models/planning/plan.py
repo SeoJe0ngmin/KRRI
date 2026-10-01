@@ -81,6 +81,8 @@ class Decision:
     margin_m: float | None = None       # 진입 여유 (태그컷에서만 뜻이 있다)
     predicted_m: float | None = None    # 이대로 곧장 태그컷까지 가서 정면을 보면 서게 될 좌우 (진단)
     route: tuple = ()                   # 빔서치가 그린 경로 ((turn, drive), ...). 실행은 첫 걸음만
+    waypoints: tuple = ()               # route 의 걸음마다 **카메라가 서게 될 자리** ((좌우, 앞, 방향), ...) — 겨냥하는 법선 기준.
+                                        # 기록·화면용. 다음 판단의 fix 와 견주면 "계획한 점 vs 실제로 간 점" 이 된다
     complete: bool = False              # route 가 σ 까지 넣고 진입 조건에 닿았나 (False 면 기하만)
     sidestep: object = None             # SidestepPlan (kind == sidestep)
     backup: object = None               # BackupPlan (kind == backup)
@@ -222,6 +224,7 @@ class Planner:
             if sp.ok:
                 return replace(d, kind="sidestep", sidestep=sp, turn_deg=sp.turn1_deg,
                                drive_m=sp.drive_m, movement=sp.movement,
+                               waypoints=self._waypoints(Lc, Fc, h, ((sp.turn1_deg, sp.drive_m), (sp.turn2_deg, 0.0))),
                                why="통로 밖 |%.2f| > %.2f m" % (lat, d.corridor_half_m))
             # 등지고 있고 뒤로도 못 간다 — 빔서치가 여러 걸음으로 풀어 보고, 안 되면 stop
 
@@ -264,7 +267,8 @@ class Planner:
                 why += " (통로 밖)"
             return replace(d, kind="step", turn_deg=turn, drive_m=drive, movement="forward",
                            fwd_target_m=fwd_after, to_cut=fwd_after <= geo.cut + geo.arrive_tol,
-                           route=best.path, complete=full is not None, correction=d.at_cut, why=why)
+                           route=best.path, waypoints=self._waypoints(Lc, Fc, h, best.path),
+                           complete=full is not None, correction=d.at_cut, why=why)
 
         # ④ 태그컷 — 방향이 진짜 틀렸으면 정면부터 (plan 3-9 의 첫 보정). 비스듬한 채 잰 좌우는 회전중심 오차를
         #    A·sin h 로 안고 있어(plan 4-7 ±0.07 m) 그걸로 후진량을 정하면 틀린다. 정면에서 다시 재면 그 항이 없다
@@ -273,6 +277,7 @@ class Planner:
             turn = max(-cap, min(cap, sidestep.normalize_deg(-h)))
             return replace(d, kind="step", turn_deg=turn, drive_m=0.0, movement="forward",
                            fwd_target_m=geo.camera(Lc, Fc, h + turn)[1], route=((turn, 0.0),),
+                           waypoints=self._waypoints(Lc, Fc, h, ((turn, 0.0),)),
                            correction=True, why="정면부터 — 방향 %+.2f도, 여유 %+.0f mm" % (h, d.margin_m * 1e3))
         # ④ 태그컷인데 회전으로는 안 된다 → 후진 한 번 → 그래도 안 되면 stop
         if d.at_cut:
@@ -283,6 +288,7 @@ class Planner:
             if b.ok:
                 return replace(d, kind="backup", backup=b, drive_m=b.distance_m, movement="backward",
                                fwd_target_m=fwd + b.distance_m, correction=True,
+                               waypoints=self._waypoints(Lc, Fc, h, ((0.0, -b.distance_m),)),
                                why="후진 %.2f m (남은 좌우 %+.0f mm · 필요 %.2f · 최소걸음 %.2f · 뒤공간 %.2f)"
                                    % (b.distance_m, rem * 1e3, b.need_m, b.floor_m, b.space_m))
             if b.why == "uncertain":
@@ -313,6 +319,18 @@ class Planner:
             p.backed_up = True
         if p.fine_since is not None and decision.kind in ("step", "backup"):
             p.corrections += 1
+
+    def _waypoints(self, Lc, Fc, h, path):
+        """(회전, 직진) 걸음들을 차례로 밟았을 때 카메라가 서는 자리 ((좌우, 앞, 방향), ...). _expand 와 같은 기하 —
+        회전은 회전중심 둘레로, 직진은 그 방향으로(음수면 후진). 좌우는 겨냥하는 법선(TAG_LATERAL_OFFSET 반영) 기준."""
+        geo, out = self.geo, []
+        for turn, drive in path:
+            h = sidestep.normalize_deg(h + turn)
+            r = math.radians(h)
+            Lc, Fc = Lc + drive * math.sin(r), Fc - drive * math.cos(r)
+            lat, fwd = geo.camera(Lc, Fc, h)
+            out.append((round(lat, 3), round(fwd, 3), round(h, 2)))
+        return tuple(out)
 
     def relax(self):
         """plan 3-6 ③ — "모르겠다" 가 안 풀리면 문턱을 낮춘다. 한 번만 내려간다."""
@@ -616,6 +634,12 @@ if __name__ == "__main__":
         print("%-28s %-10s %s  [%.0f ms]" % (name, dcs.kind, dcs.summary(), ms))
     d = got["8 m · 좌우 1.0"]
     assert d.kind == "step" and d.turn_deg < 0 and d.drive_m > 0, d                     # 왼쪽에 있으니 오른쪽으로 돌아 대각선
+    assert len(d.waypoints) == len(d.route) and abs(d.waypoints[0][1] - d.fwd_target_m) < 1e-3, d.waypoints
+    wl, wf, wh = d.waypoints[-1]                                                        # 끝까지 그린 경로의 마지막 점 = 태그컷 · 법선 위 · 정면
+    assert abs(wf - ref) <= C.FWD_TOL_M + 1e-6 and abs(wl) < C.SIDE_GAP_M and abs(wh) < 1.0, d.waypoints
+    print("   경로점(좌우, 앞, 방향): " + " → ".join("(%+.2f, %.2f, %+.0f)" % w for w in d.waypoints))
+    ws = got["8 m · 좌우 3.0 (첫 판단)"].waypoints                                       # 사이드스텝: 옆으로 절반 → 정면
+    assert len(ws) == 2 and abs(ws[1][0] - 1.5) < 0.05 and abs(ws[1][2]) < 1e-6, ws
     assert d.route and d.complete, d
     d = got["5 m · 좌우 0.5"]
     assert d.kind == "step" and d.turn_deg < 0 and d.drive_m > 0, d

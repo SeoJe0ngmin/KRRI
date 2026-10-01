@@ -819,13 +819,15 @@ class Docking:
                     f.forward_m, d.cut_m, "" if d.cut_from == "live" else "?", f.beta_deg, f.n, (" amb %d" % f.ambiguous) if f.ambiguous else "", d.summary(),
                     (" [보정 %d/%d · %.0fs/%.0f]" % (p.corrections, C.MAX_CORRECTIONS, self.planner.fine_elapsed_s(),
                                                     C.FINE_TIME_LIMIT_S)) if p.fine_since is not None else ""))
+        if d.waypoints:                                              # 계획한 점들 — 다음 판단 줄의 좌우·거리·방향과 견주면 된다
+            self.log("            경로점(좌우 m, 거리 m, 방향 도): " + " → ".join("(%+.2f, %.2f, %+.0f)" % tuple(w) for w in d.waypoints))
         if self.rec is not None and not self._stop_written:
             try:
                 self.rec.event("decision", decision=d.kind, why=d.why, turn_deg=d.turn_deg, drive_m=d.drive_m,
                                movement=d.movement, fwd_target_m=d.fwd_target_m, at_cut=d.at_cut,
                                to_cut=d.to_cut, cut_m=d.cut_m, cut_from=d.cut_from,
                                corridor_half_m=d.corridor_half_m, inside=d.inside, margin_m=d.margin_m,
-                               predicted_m=d.predicted_m, route=_json_safe(d.route), complete=d.complete,
+                               predicted_m=d.predicted_m, route=_json_safe(d.route), waypoints=_json_safe(d.waypoints), complete=d.complete,
                                correction=d.correction, stop_reason=d.stop_reason, steps=p.steps,
                                corrections=p.corrections, k_sigma=p.k_sigma, t=clock.now(),
                                fix=_json_safe({k: getattr(f, k) for k in (
