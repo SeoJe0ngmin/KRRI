@@ -19,8 +19,7 @@ from ...utils import clock
 from ...utils.gyro import Rotation, RotationResult
 
 POLL_S = 0.01          # 기다리는 쪽의 확인 주기. 판정은 콜백이 하니 여긴 느슨해도 된다
-LEASE_S = 0.30         # 이 안에 명령이 안 갱신되면 CAN 스레드가 세운다.
-                       # 광운대 COARSE_COMMAND_LEASE_SEC
+LEASE_S = C.DEADMAN_S  # 이 안에 명령이 안 갱신되면 CAN 스레드가 세운다. 값은 config (플랫폼을 탄다 — VM 1.0 / 직결 0.30)
 ABORT_FACTOR = 2.0     # 목표의 이 배를 넘으면 무조건 끊는다. 측정값이 아니라 중단 규칙이다
 
 

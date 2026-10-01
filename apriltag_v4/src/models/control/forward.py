@@ -30,8 +30,7 @@ from config import control as C
 from ...utils import clock
 
 POLL_S = 0.005         # 측정을 확인하는 주기. 새 프레임이 없으면 그냥 지나간다
-LEASE_S = 0.30         # 이 안에 명령이 안 갱신되면 CAN 스레드가 세운다.
-                       # 광운대 COARSE_COMMAND_LEASE_SEC
+LEASE_S = C.DEADMAN_S  # 이 안에 명령이 안 갱신되면 CAN 스레드가 세운다. 값은 config (플랫폼을 탄다 — VM 1.0 / 직결 0.30)
 ABORT_FACTOR = 2.0     # 예상의 이 배를 넘으면 무조건 끊는다. 중단 규칙이지 측정값이 아니다
 FIT_WINDOW_S = 0.6     # 속도를 맞출 창. 0.29 m/s 면 174 mm 움직인다 (잡음 39 mm 보다 크다)
 FIT_MIN_N = 5
