@@ -342,12 +342,15 @@ class Planner:
         """마지막 직진 구간 (정렬선 ~ 태그컷, FINAL_STRAIGHT_M). **PnP 의 방향·좌우를 안 쓴다** — 조준 빗나감(aim)만 본다:
         차 맨 앞 가운데가 목표에서 얼마나 벗어나게 가고 있나 = 거리 × sin(c − β) + 카메라·목표 오프셋.
 
-            빗나감을 모른다(직진 다리가 아직 없었다)     → 곧장 반 구간 가서 c 를 잰다
-            구간 안                                     → [고칠 만하면 약한 회전] + 곧장 반 구간(또는 태그컷까지)
-            태그컷 · 여유(3 cm − |빗나감| − σ) > 0        → 진입 (눈 감고 직진)
-            태그컷 · 여유 ≤ 0 · 고칠 만하다               → 약한 회전 한 번 (보정 횟수에 센다)
-            태그컷 · 더 못 고친다                        → 정지·사람
-        '고칠 만하다' = 필요한 회전이 약한 회전의 하한 이상이고, 빗나감이 kσ 를 넘는다. 회전각은 aim.turn_for (회전중심 둘레).
+        2026-10-01 결정: 구간을 **한 번에** 간다(반씩 끊지 않는다). 고치는 건 서 있는 두 곳 — 정렬선과 태그컷 — 에서만이고,
+        기준은 **빗나감이 한쪽 여유(SIDE_GAP_M 3 cm)를 넘을 때**. 돌고 나면 가지 않고 그 자리에서 다시 잰다(회전만 하는 걸음).
+
+            빗나감을 모른다(직진 다리가 아직 없었다)     → 태그컷까지 곧장 가며 c 를 잰다 (태그컷이면 정지·사람)
+            |빗나감| > 3 cm · 돌 수 있다                 → 약한 회전만 (보정 횟수에 센다) → 다시 판단
+            |빗나감| ≤ 3 cm · 구간 안                    → 태그컷까지 곧장
+            |빗나감| ≤ 3 cm · 태그컷                     → 진입 (눈 감고 직진)
+            |빗나감| > 3 cm 인데 못 돈다 · 태그컷         → 정지·사람
+        '돌 수 있다' = 필요한 회전이 약한 회전의 최소 요청각 이상 (rotate.min_turn_deg). 회전각은 aim.turn_for (회전중심 둘레).
         후진은 여기 없다 — 물러나면 같은 빗나감에 필요한 회전이 더 작아져 오히려 못 고친다.
         """
         geo, p = self.geo, self.progress
@@ -358,46 +361,44 @@ class Planner:
         at_cut = room <= geo.arrive_tol
         miss, sig = aim.miss(fix, geo.dz) if aim is not None else (None, None)
         d = replace(d, final=True, at_cut=at_cut, miss_m=miss, miss_sigma_m=sig, inside=True)
-        if p.corrections >= C.MAX_CORRECTIONS:
-            return replace(d, kind="stop", stop_reason=STOP_REASON,
-                           why="보정 %d회 다 씀 (빗나감 %s)" % (p.corrections, "-" if miss is None else "%+.0f mm" % (miss * 1e3)))
-        if now - p.fine_since >= C.FINE_TIME_LIMIT_S:
-            return replace(d, kind="stop", stop_reason=STOP_REASON, why="마지막 구간 %.0f s 넘김" % (now - p.fine_since))
-        sub = min(max(room, 0.0), geo.final_m / 2.0)             # 한 번에 구간의 절반까지 — 가운데서 한 번은 서서 다시 본다
-        if sub < geo.min_step:
-            sub = 0.0
+        drive = min(max(room, 0.0), C.STEP_FORWARD_HARD_MAX_M)   # 태그컷까지 한 번에 (forward 의 한 걸음 상한 안에서)
+        if drive < geo.min_step:
+            drive = 0.0
 
-        def go(turn, drive, why, correction=False):
-            ref = "cut" if (drive > 0 and room - drive <= geo.arrive_tol) else ""
-            return replace(d, kind="step", turn_deg=turn, drive_m=drive, movement="forward", fine=True,
-                           fwd_target_m=fwd - drive, to_ref=ref, ref_m=geo.tagcut, route=((turn, drive),),
+        def go(turn, dist, why, correction=False):
+            ref = "cut" if (dist > 0 and room - dist <= geo.arrive_tol) else ""
+            return replace(d, kind="step", turn_deg=turn, drive_m=dist, movement="forward", fine=True,
+                           fwd_target_m=fwd - dist, to_ref=ref, ref_m=geo.tagcut, route=((turn, dist),),
                            correction=correction, why=why)
 
+        def stop(why):
+            return replace(d, kind="stop", stop_reason=STOP_REASON, why=why)
+
         if miss is None:
-            if at_cut or sub <= 0:
-                return replace(d, kind="stop", stop_reason=STOP_REASON,
-                               why="조준각을 모른다 — 구간 안에서 직진 다리를 한 번도 못 봤다")
-            return go(0.0, sub, "조준각을 재려고 곧장 %.2f m" % sub)
-        d.margin_m = C.SIDE_GAP_M - abs(miss) - sig
-        x = fwd                                                  # 목표 평면까지 앞거리 (정면 근처라 법선거리와 같다고 본다)
-        need = turn_for(miss, x, geo.A)
+            if at_cut or drive <= 0:
+                return stop("조준각을 모른다 — 구간 안에서 직진 다리를 한 번도 못 봤다")
+            if now - p.fine_since >= C.FINE_TIME_LIMIT_S:
+                return stop("마지막 구간 %.0f s 넘김" % (now - p.fine_since))
+            return go(0.0, drive, "조준각을 재려고 곧장 %.2f m" % drive)
+        d.margin_m = C.SIDE_GAP_M - abs(miss) - sig              # 기록용 — σ 까지 뺀 여유. 판단은 |빗나감| 대 3 cm
+        tag = "빗나감 %+.0f±%.0f mm" % (miss * 1e3, sig * 1e3)
+        if abs(miss) <= C.SIDE_GAP_M:                            # 3 cm 안 — 안 고친다. 상한(횟수·시간)보다 먼저 본다
+            if at_cut:
+                return replace(d, kind="commit", drive_m=geo.blind(fwd), fwd_target_m=geo.fork_tip,
+                               why="진입 — %s" % tag)
+            if drive > 0 and now - p.fine_since < C.FINE_TIME_LIMIT_S:
+                return go(0.0, drive, "곧장 %.2f m — %s" % (drive, tag))
+        if p.corrections >= C.MAX_CORRECTIONS:
+            return stop("보정 %d회 다 씀 (%s)" % (p.corrections, tag))
+        if now - p.fine_since >= C.FINE_TIME_LIMIT_S:
+            return stop("마지막 구간 %.0f s 넘김 (%s)" % (now - p.fine_since, tag))
+        need = turn_for(miss, fwd, geo.A)                        # 목표 평면까지 앞거리는 정면 근처라 법선거리와 같다고 본다
         floor = min_turn_deg(self.learner, fine=True) or 0.0
         cap = limits.turn_cap_deg(geo.center_known, fwd, geo.A if geo.center_known else None, geo.intr)
-        fixable = abs(need) >= floor and abs(miss) > p.k_sigma * sig
-        turn = max(-cap, min(cap, need)) if fixable else 0.0
-        tag = "빗나감 %+.0f±%.0f mm" % (miss * 1e3, sig * 1e3)
-        if at_cut:
-            if d.margin_m > 0:
-                return replace(d, kind="commit", drive_m=geo.blind(fwd), fwd_target_m=geo.fork_tip,
-                               why="진입 — %s (여유 %+.0f mm)" % (tag, d.margin_m * 1e3))
-            if fixable:
-                return go(turn, 0.0, "조준 %+.2f도 — %s" % (turn, tag), correction=True)
-            return replace(d, kind="stop", stop_reason=STOP_REASON,
-                           why="더 못 고친다 — %s, 필요 회전 %+.2f도 (약한 회전 하한 %.2f도 · %.1fσ %.0f mm)"
-                               % (tag, need, floor, p.k_sigma, p.k_sigma * sig * 1e3))
-        if turn:
-            return go(turn, sub, "조준 %+.2f도 뒤 곧장 %.2f m — %s" % (turn, sub, tag), correction=True)
-        return go(0.0, sub, "곧장 %.2f m — %s" % (sub, tag))
+        if abs(miss) > C.SIDE_GAP_M and abs(need) >= floor:
+            turn = max(-cap, min(cap, need))                     # 상한에 잘려도 돌기만 하니 다음 판단에서 마저 돈다
+            return go(turn, 0.0, "조준 %+.2f도 (돌고 다시 잰다) — %s" % (turn, tag), correction=True)
+        return stop("더 못 고친다 — %s, 필요 회전 %+.2f도 < 약한 회전 최소 %.2f도" % (tag, need, floor))
 
     def _waypoints(self, Lc, Fc, h, path):
         """(회전, 직진) 걸음들을 차례로 밟았을 때 카메라가 서는 자리 ((좌우, 앞, 방향), ...). _expand 와 같은 기하 —
@@ -824,28 +825,32 @@ if __name__ == "__main__":
     f_in = fix_at(0.10, ref + FM, 3.0)                                               # 정렬선 위. PnP 는 좌우 10 cm · 방향 3도라 하지만 안 본다
     dcs = mk().decide(f_in, now=0.0, aim=FakeAim(None, None))
     print("  조준각 모름                 → %s" % dcs.summary())
-    assert dcs.kind == "step" and dcs.final and dcs.fine and dcs.turn_deg == 0 and abs(dcs.drive_m - FM / 2) < 1e-9 and not dcs.correction
+    assert dcs.kind == "step" and dcs.final and dcs.fine and dcs.turn_deg == 0 and abs(dcs.drive_m - FM) < 1e-9 and not dcs.correction
+    assert dcs.to_ref == "cut" and abs(dcs.ref_m - ref) < 1e-9                       # 구간을 한 번에 — 태그컷에서 끝난다
     dcs = mk().decide(f_in, now=0.0, aim=FakeAim(0.06, 0.005))
     print("  빗나감 +60±5 mm             → %s" % dcs.summary())
     assert dcs.kind == "step" and dcs.fine and dcs.correction and abs(dcs.turn_deg - turn_for(0.06, ref + FM, A0)) < 1e-9 and dcs.turn_deg > 0
-    assert abs(dcs.drive_m - FM / 2) < 1e-9 and dcs.to_ref == ""                     # 반 구간만 — 아직 태그컷이 아니다
-    dcs = mk().decide(f_in, now=0.0, aim=FakeAim(0.008, 0.005))                      # 2σ 안 → 안 돌고 간다
-    assert dcs.kind == "step" and dcs.turn_deg == 0 and dcs.drive_m > 0 and not dcs.correction
+    assert dcs.drive_m == 0.0 and dcs.to_ref == ""                                   # 돌기만 — 그 자리에서 다시 잰다
+    for m_in in (0.008, 0.025, -0.029):                                              # 3 cm 안 → 안 돌고 태그컷까지 한 번에
+        dcs = mk().decide(f_in, now=0.0, aim=FakeAim(m_in, 0.005))
+        assert dcs.kind == "step" and dcs.turn_deg == 0 and abs(dcs.drive_m - FM) < 1e-9 and not dcs.correction and dcs.to_ref == "cut", (m_in, dcs)
     dcs = mk().decide(fix_at(0.0, ref + FM / 2, 0.0), now=0.0, aim=FakeAim(0.0, 0.004))
-    assert dcs.to_ref == "cut" and abs(dcs.ref_m - ref) < 1e-9 and abs(dcs.drive_m - FM / 2) < 1e-9   # 둘째 다리는 태그컷에서 끝난다
+    assert dcs.to_ref == "cut" and abs(dcs.drive_m - FM / 2) < 1e-9                  # 구간 중간에 서 있으면 남은 만큼
     f_cut = fix_at(0.25, ref, -13.0)                                                 # 태그컷. PnP 가 뭐라 하든
     dcs = mk().decide(f_cut, now=0.0, aim=FakeAim(0.012, 0.004))
     print("  태그컷 · 빗나감 +12±4 mm    → %s" % dcs.summary())
     assert dcs.kind == "commit" and abs(dcs.drive_m - geo.blind(ref)) < 1e-9 and dcs.margin_m > 0
+    assert mk().decide(f_cut, now=0.0, aim=FakeAim(0.028, 0.041)).kind == "commit"    # σ 가 커도 3 cm 안이면 간다 (판단은 빗나감)
     dcs = mk().decide(f_cut, now=0.0, aim=FakeAim(0.05, 0.004))
     print("  태그컷 · 빗나감 +50±4 mm    → %s" % dcs.summary())
     assert dcs.kind == "step" and dcs.drive_m == 0 and dcs.fine and dcs.correction and dcs.turn_deg > 0
-    lrn.rot_floor_fine_deg = 5.0                                                     # 약한 회전도 5도 아래는 못 한다면 → 더 못 고친다
+    lrn.rot_floor_fine_deg = 5.0                                                     # 약한 회전 최소 요청각이 2.5도라면 → 더 못 고친다
     dcs = mk().decide(f_cut, now=0.0, aim=FakeAim(0.05, 0.004))
     print("  같은데 하한이 5도면          → %s" % dcs.summary())
     assert dcs.kind == "stop"
     lrn.rot_floor_fine_deg = floor_f
     assert mk(Progress(corrections=C.MAX_CORRECTIONS)).decide(f_cut, now=0.0, aim=FakeAim(0.05, 0.004)).kind == "stop"
+    assert mk(Progress(corrections=C.MAX_CORRECTIONS)).decide(f_cut, now=0.0, aim=FakeAim(0.004, 0.004)).kind == "commit"   # 다섯 번째 보정이 맞았으면 간다
     assert mk().decide(f_cut, now=0.0, aim=FakeAim(None, None)).kind == "stop"       # 태그컷인데 조준각을 모른다
     pl = mk()
     d1 = pl.decide(f_in, now=0.0, aim=FakeAim(0.008, 0.005))
@@ -854,23 +859,25 @@ if __name__ == "__main__":
     d2 = pl.decide(f_in, now=1.0, aim=FakeAim(0.06, 0.005))
     pl.executed(d2)
     assert pl.progress.corrections == 1
-    # 닫힌 고리: 정렬선에서 빗나감 m0 으로 출발. 회전은 요청보다 0.3도 더 돌고, 조준은 ±4 mm 로 흔들린다
+    # 닫힌 고리: 정렬선에서 빗나감 m0 으로 출발. 회전은 요청보다 0.3도 더 돌고, 조준은 ±2 mm 로 흔들린다
     import random as _r
     rg = _r.Random(11)
-    for m0 in (0.12, -0.07, 0.02):
+    for m0 in (0.12, -0.07, 0.02, 0.60):
         pl, fwd, m, hops = mk(), ref + FM, m0, []
         for step in range(12):
             dcs = pl.decide(fix_at(0.0, fwd, 0.0), now=float(step), aim=FakeAim(m + rg.gauss(0, 0.002), 0.004))
             hops.append("%s%+.2f/%.2f" % (dcs.kind[0], dcs.turn_deg, dcs.drive_m))
             if dcs.kind in ("commit", "stop"):
                 break
+            assert not (dcs.turn_deg and dcs.drive_m), dcs                           # 돌거나 가거나 — 한 걸음에 둘 다는 없다
             if dcs.turn_deg:
                 done = dcs.turn_deg + math.copysign(0.3, dcs.turn_deg)
                 m -= (fwd + A0) * math.sin(math.radians(done))                       # 진행선이 회전중심 둘레로 돈다
             fwd -= dcs.drive_m
             pl.executed(dcs)
         print("  빗나감 %+.0f mm 에서 출발 → %s: 끝 빗나감 %+.0f mm  %s" % (m0 * 1e3, dcs.kind, m * 1e3, " ".join(hops)))
-        assert dcs.kind == "commit" and abs(m) < C.SIDE_GAP_M, (m0, dcs)
+        assert dcs.kind == "commit" and abs(m) < C.SIDE_GAP_M + 0.006, (m0, dcs)
+        assert sum(1 for h in hops if h.startswith("s") and h.endswith("/%.2f" % FM)) == 1, hops   # 직진은 1.5 m 한 번
 
     # (5) 2차원 세계에서 닫힌 고리 — 세계의 회전중심이 계획기 가정과 0.06 m 다르고(plan 4-7 필요 정확도 ±0.07 안.
     #     0.1 m 면 9도 회전마다 1.6 cm 가 틀려 태그컷에서 2σ 안 잔여로 정지·사람이 난다 — 그게 결정 ⑥의 뜻이다),

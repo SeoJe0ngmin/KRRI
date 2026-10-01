@@ -29,8 +29,14 @@ def min_turn_deg(learner, fine=False):
     광운대의 2.5도(ROT_MIN_COMMANDABLE_ANGLE_DEG)는 우리 하한이 아니다 — 그쪽은 시간으로
     끊어 짧은 명령을 못 맞추고, 우리는 자이로를 보고 끊는다. 씨앗 0.81 은 유도값이고
     calibrate.py rotfloor 가 재서 config ROT_FLOOR_DEG 에 적는다. 못 쟀으면 None 이고 그때는 제한도 없다.
+
+    약한 회전(fine)은 **하한의 절반**까지 받는다 (2026-10-01): 하한은 "움직이자마자 끊어도 도는 각의 최대" 라, 필요각이
+    그 절반 이상이면 최대로 돌아도 |남는 오차| ≤ |지금 오차| 다. 마지막 구간은 돌고 나서 화면위치로 다시 재니 그걸로 충분하다.
+    (하한을 그대로 걸면 태그컷에서 빗나감 30~38 mm 가 '넘었는데 못 고치는' 띠가 된다 — 0.84도 × 2.6 m)
     """
-    return learner.rot_floor_fine_deg if fine else learner.rot_floor_deg
+    if fine:
+        return learner.rot_floor_fine_deg / 2.0 if learner.rot_floor_fine_deg else learner.rot_floor_fine_deg
+    return learner.rot_floor_deg
 
 
 def rotate(driver, gyro, learner, deg, rec=None, log=print, cap_deg=None, safety_s=None, fine=False):
@@ -288,7 +294,13 @@ if __name__ == "__main__":
         print("  (약) %+5.2f도 요청 -> %+6.2f도 (관성 %.2f도)" % (deg, r.turned_deg, r.coast_deg))
         assert abs(r.turned_deg - deg) < 0.6, (deg, r.turned_deg)
     assert lrn.rot_tau["L"].n == n_coarse and lrn.rot_tau["Lf"].n >= 1          # 거친 회전 학습을 안 건드린다
-    assert rotate(drv, gy, lrn, 0.1, log=lambda *_: None, fine=True).reason == "too_small"   # 약한 회전에도 하한(씨앗 0.20)
+    assert rotate(drv, gy, lrn, 0.05, log=lambda *_: None, fine=True).reason == "too_small"  # 약한 회전의 최소 요청 = 하한(씨앗 0.20)의 절반
+    assert rotate(drv, gy, lrn, 0.12, log=lambda *_: None, fine=True).reason != "too_small"
+    lrn.rot_floor_fine_deg, f0 = 0.2, lrn.rot_floor_fine_deg                    # 요청보다 더 돌아도 하한은 안 오른다 (주행 중 올리던 규칙 삭제)
+    for deg in (3.0, 6.5):
+        rotate(drv, gy, lrn, deg, log=lambda *_: None, fine=True)
+    assert lrn.rot_floor_fine_deg == 0.2
+    lrn.rot_floor_fine_deg = f0
     r = rotate(drv, gy, lrn, 5.0, log=lambda *_: None)                           # 다시 거친 회전 — 강도가 되돌아간다
     assert drv.fine is False
     # 4) 자이로 미보정이면 거부

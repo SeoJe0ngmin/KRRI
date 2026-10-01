@@ -48,7 +48,7 @@ FINE_SEED = {
     "rot_rate_dps": {"Lf": 8.47, "Rf": 8.47},
     "rot_tau_s": {"Lf": 0.168, "Rf": 0.168},
     # 하한 [도] — **유도값, 실측 아님**: 출발 문턱 0.15(gyro.ONSET_DEG) + 정지 유지 0.15 s 동안 가속 4.7 도/s² 로 도는 ½·4.7·0.15² = 0.05.
-    # 강도 30 의 유도값 0.81 은 실제 3~5 도였다 — 이것도 틀릴 수 있어 run 이 약한 회전 결과를 보고 올린다(Learner.rotation)
+    # calibrate rotfloor 실측(2026-10-01)은 최대 0.84 · 되튐 뒤 0.04~0.5도 — config ROT_FLOOR_FINE_DEG 가 있으면 그걸 쓴다
     "rot_floor_fine_deg": 0.20,
 }
 ROT_SIDES = ("L", "R", "Lf", "Rf")
@@ -157,7 +157,8 @@ class Learner:
         self.fwd_residual = self._ema(s.get("fwd_residual_m"), -0.2, 0.2)
         self.rate = SessionSlope()      # 각속도 배율. 광운대 것 그대로
         self.rot_floor_deg = s.get("rot_floor_deg")   # 배우지 않는다. 씨앗 또는 config ROT_FLOOR_DEG (calibrate 실측)
-        self.rot_floor_fine_deg = s.get("rot_floor_fine_deg")   # 약한 회전의 하한. 씨앗(유도값) → 결과를 보고 올린다
+        self.rot_floor_fine_deg = s.get("rot_floor_fine_deg")   # 약한 회전의 하한. 배우지 않는다 — 씨앗(유도값) 또는 config ROT_FLOOR_FINE_DEG
+        # (주행 중 "요청보다 더 돌면 하한을 그 각으로 올리던" 규칙은 뺐다: 2026-10-01 실주행에서 +6.51 → +7.18 한 번에 하한이 7.18도가 돼 이후 보정이 전부 막혔다)
         self.rejected = 0
 
     @staticmethod
@@ -174,9 +175,6 @@ class Learner:
         if not res or not res.done or res.reason != "predicted":
             self.rejected += 1
             return {}
-        if fine and abs(res.turned_deg) > abs(res.target_deg) and abs(res.turned_deg) > (self.rot_floor_fine_deg or 0.0):
-            # 요청보다 더 돌았다 = 이보다 작게는 못 돈다. 하한을 실제 값으로 올린다 (유도값 0.20 을 믿지 않는다)
-            self.rot_floor_fine_deg = abs(res.turned_deg)
         floor = self.rot_floor_fine_deg if fine else self.rot_floor_deg
         # 하한 아래 회전은 정지지연만큼 지나치는 게 정상이라, 배우면 잔여가 오염된다
         if floor and abs(res.target_deg) < floor:
