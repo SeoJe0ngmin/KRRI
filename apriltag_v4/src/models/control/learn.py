@@ -10,8 +10,63 @@
 import json
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..kwu.adaptive_slope import SessionSlope
+
+# ── 씨앗 — 광운대 실측(조향 강도 30). 우리가 배우기 전까지 쓸 **출발점**이다. 학습이 덮어쓰고, 끝나면 seeds.json 으로
+#    다음 주행에 넘긴다 (2026-10-02 부터 measured.json 없이 이렇게만). 강도를 30 으로 맞춘 이유가 이걸 물려받기 위해서다
+#    (2026-09-22 결정). 출처 project_backup_lean_20260921_174252/extracted/depth_cam/calib/fsm_v4/config.py
+KWU_DEFLECTION = 30
+KWU_SEED = {
+    # ROT_RESPONSE_STARTUP_DELAY_SEC = 1.082 (+-0.105). 우리 실측 1.0~1.32 와 겹친다
+    "rot_startup_s": {"L": 1.082, "R": 1.082},
+    # ROT_RESPONSE_MAX_RATE_DEG_S = 12.01. 우리 강도 20 실측 8.2~8.8 과 방향이 맞는다
+    "rot_rate_dps": {"L": 12.01, "R": 12.01},
+    # 끊고 더 도는 시간 [s]. 그쪽 프로파일에서 뽑았다:
+    #   유지 STOP_DELAY 0.352 s + 감속 12.01/(2*300) 0.020 s = 0.372 s
+    #   되튐 보정 COAST_HEURISTIC_REDUCTION 1.07도 / 12.01 = 0.089 s 를 뺀다
+    #   -> 0.283 s. (우리 강도 20 실측 순코스팅은 0.168 s 였다 — 강도를 타는 값이다)
+    "rot_tau_s": {"L": 0.283, "R": 0.283},
+    # 이보다 작은 각은 못 돈다 [도] — **유도값, 실측 아님**. 정지지연 동안 가속하며 도는 각
+    # ½ x 13.06 x 0.352² = 0.81 로 계산했다(그쪽 fallback 세트). config ROT_FLOOR_DEG(calibrate 실측)가 있으면 그걸로
+    "rot_floor_deg": 0.81,
+    # 직진(byte 67) — 그쪽이 고른 delayed_linear 적합 (motion_trajectory.selected.json, 10회)
+    #   거리 = 0.28973 x 유지시간 - 0.43394,  죽은시간 1.4977 s.  우리 9/7 실측 0.284 m/s 와 일치
+    #   사이드스텝(눈감고 시간으로 갈 때)과 직진 lead 의 출발점
+    # 후진(byte 187)은 **아무도 안 쟀다 — 직진과 같다고 가정**(2026-10-02 사용자 결정). 첫 후진에서 학습이 덮는다.
+    #   후진은 마지막 단계 최후의 보루 한 번뿐이고 짧다(수십 cm) — 틀려도 물러난 뒤 다시 재서 접근한다
+    "fwd_speed_mps": {"67": 0.28973, "187": 0.28973},
+    "fwd_startup_s": {"67": 1.4977, "187": 1.4977},
+}
+
+
+def seeds(learned=None):
+    """학습이 시작할 값 = 광운대 씨앗 위에 지난 주행이 남긴 seeds.json(있으면). 기하(회전중심·카메라 어긋난 각)는
+    여기 없다 — 차마다 달라서 남의 값을 쓰면 안 되고, config 에 calibrate 실측을 적는다."""
+    s = {k: dict(v) if isinstance(v, dict) else v for k, v in KWU_SEED.items()}
+    for k, v in (learned or {}).items():
+        if isinstance(v, dict):
+            for kk, vv in v.items():
+                if vv is not None:
+                    s.setdefault(k, {})[kk] = vv
+        elif v is not None and k in s:
+            s[k] = v
+    return s
+
+
+def last_seeds(work_root):
+    """가장 최근 seeds.json — runs/ · calibrate/ 어느 쪽이든 수정 시각이 늦은 것. (dict, path). 없으면 (None, None)."""
+    cands = []
+    for sub in ("runs", "calibrate"):
+        cands += list((Path(work_root) / sub).glob("*/seeds.json"))
+    if not cands:
+        return None, None
+    p = max(cands, key=lambda x: x.stat().st_mtime)
+    try:
+        return json.loads(p.read_text(encoding="utf-8")), p
+    except Exception:
+        return None, p
 
 
 @dataclass
@@ -83,7 +138,7 @@ class Learner:
                             for k in ("67", "187")}
         self.fwd_residual = self._ema(s.get("fwd_residual_m"), -0.2, 0.2)
         self.rate = SessionSlope()      # 각속도 배율. 광운대 것 그대로
-        self.rot_floor_deg = s.get("rot_floor_deg")   # 배우지 않는다. 씨앗 또는 before_run 실측
+        self.rot_floor_deg = s.get("rot_floor_deg")   # 배우지 않는다. 씨앗 또는 config ROT_FLOOR_DEG (calibrate 실측)
         self.rejected = 0
 
     @staticmethod

@@ -59,7 +59,7 @@ class BackupPlan:
     """
     need_m: float = 0.0             # 통로에 들 때까지 물러날 거리
     floor_m: float = 0.0            # 배운 최소걸음. 모르면 0
-    space_m: float = 0.0            # 뒤공간 (measured.back_space_m, 없으면 BACK_MAX_M)
+    space_m: float = 0.0            # 뒤공간 (config BACK_MAX_M)
     distance_m: float = 0.0         # 실제로 물러날 거리
     sigma_m: float = 0.0            # 그때 좌우 σ — 2σ 문턱의 근거
     why: str = ""                   # no_fix / uncertain / no_space → 정지·사람.  inside → 후진 불필요, 다시 계획
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     import math
     import time
     from dataclasses import dataclass as _dc
-    from config import measured as M
+    from src.models.control import learn as M
     from ...utils.gyro import Gyro
     from .learn import Ema, Learner
 

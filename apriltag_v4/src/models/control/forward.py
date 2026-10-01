@@ -433,7 +433,7 @@ if __name__ == "__main__":
     # 차 모델은 광운대 씨앗(죽은시간 1.498 s · 0.2897 m/s)에 정지지연 0.352 s(그쪽 실측)를 1차 지연으로.
     import math
     import random
-    from config import measured as M
+    from src.models.control import learn as M
     from .learn import Learner
 
     random.seed(1)
@@ -539,7 +539,11 @@ if __name__ == "__main__":
     assert forward(drv, lrn, cam.look, 0.0, log=quiet).reason == "zero"
     assert forward(drv, lrn, cam.look, -1.0, log=quiet).reason == "negative"
     assert forward(drv, lrn, cam.look, C.STEP_FORWARD_HARD_MAX_M + 0.1, log=quiet).reason == "too_big"
-    assert forward(drv, lrn, cam.look, 0.5, movement="backward", log=quiet).reason == "no_model"
+    # 후진 모델이 없으면 거부. 광운대 씨앗은 187 을 직진값으로 심어 두므로(2026-10-02 결정) 씨앗을 빼고 만든 학습기로 본다
+    lrn_nb = Learner(seeds={k: ({kk: vv for kk, vv in v.items() if kk != "187"} if isinstance(v, dict) else v)
+                            for k, v in M.seeds().items()})
+    assert forward(drv, lrn_nb, cam.look, 0.5, movement="backward", log=quiet).reason == "no_model"
+    assert lrn.fwd_speed_mps(187) and lrn.fwd_startup_s(187) is not None      # 씨앗이 있으면 후진도 모델이 있다
     assert forward(drv, lrn, Camera(truck, truck.pos + 1.0, lose_after_m=-1).look, 0.5,
                    log=quiet).reason == "no_tag"
 
@@ -566,7 +570,7 @@ if __name__ == "__main__":
     assert lrn.fwd_tau["67"].n == n_before                                  # 학습 없음
     print("  시간 직진 0.800 m -> 유지 %.2fs, 실제 %.3f m (모델 정지지연 만큼 더 간다)"
           % (r.hold_s, truck.pos - p0))
-    assert forward_timed(drv, lrn, 0.5, "backward", log=quiet).reason == "no_model"
+    assert forward_timed(drv, lrn_nb, 0.5, "backward", log=quiet).reason == "no_model"
     assert forward_timed(drv, lrn, 0.0, log=quiet).reason == "zero"
     assert forward_timed(drv, lrn, 10.0, log=quiet).reason == "too_long"
     print("forward 자체 시험 통과")

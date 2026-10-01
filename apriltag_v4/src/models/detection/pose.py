@@ -113,7 +113,7 @@ def state(T_camera_tag, detection=None, intrinsics=None, tag_size=None,
           cam_yaw_offset_deg=0.0, tag_roll_correction_deg=0.0, accel=None):
     """제어가 쓰는 값. lateral / forward / heading 셋이 핵심이다.
 
-    cam_yaw_offset_deg 는 measured.py 에서 온다 — 카메라가 차체 정면과 어긋나게 달린 각.
+    cam_yaw_offset_deg 는 config CAM_YAW_OFFSET_DEG (calibrate camyaw 실측) — 카메라가 차체 정면과 어긋나게 달린 각.
     tag_roll_correction_deg 는 태그 액자 기울기. 높이차가 좌우로 새는 걸 되돌린다.
     """
     T_tag_cam = invert_T(np.asarray(T_camera_tag))

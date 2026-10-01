@@ -184,7 +184,7 @@
 컬러 1920x1080 세로 화각 43도
      →  (1.10 + 0.15) × 1359 ÷ (571 − 60) = 3.32 m       계산과 실측이 일치
 ```
-태그컷은 계산값이라 config 에 없다(`limits.tag_cut_m`). before_run 이 실제로 안 보이게 되는 거리도 잰다(`tag_cut_m`, 대조용).
+태그컷은 계산값이라 config 에 없다(`limits.tag_cut_m`) — 그리고 실행은 아래처럼 프레임마다 다시 잰다.
 
 **태그컷은 실행 중 프레임마다 다시 잰다 (2026-10-01).** 위 3.32 m 는 "피치 0 · 높이차 고정" 의 명목값이다. 오르막·요철·카메라 처짐은
 자세가 준 카메라 높이(`Fix.vertical_m` — 위치라 피치와 무관)와 화면에서 실제로 본 윗변 행(`Fix.top_px`)의 차, 곧 카메라 피치로 드러난다:
@@ -194,8 +194,7 @@
 ```
 피치 0 이면 위 식과 같다. "도착" = 더 갈 거리(지금 거리 − 이 태그컷) ≤ 앞뒤 허용 — 곧 **윗변이 60 px 띠에 든 것**. 통로·걸음 길이·마지막
 다리의 정지 목표(`Decision.to_cut`, run `_look_step`)도 그 순간 값을 쓴다. 요철(짧은 덜컹)은 0.5 초 창이 삼키고 경사(긴 변화)는 창이 따라간다.
-before_run 의 `tag_cut_m` 은 실측 대조용이다 — `MUST_MEASURE` 에서 뺐고, tagcut 단계가 접근 다리의 프레임마다 이 식을 돌려 실측과 견준다
-(`analyze.tag_cut_live_check`). **눈 감은 1.3 m 안에서 바뀌는 경사는 어떤 식으로도 못 본다** (사용자 수용).
+실측 대조는 따로 안 한다(before_run 폐지, 2026-10-02) — run 로그의 `컷` 값과 태그를 잃는 순간의 거리를 사후에 견준다. **눈 감은 1.3 m 안에서 바뀌는 경사는 어떤 식으로도 못 본다** (사용자 수용).
 
 그 뒤로는 **눈을 감고** 가야 한다. **눈 감고 가는 거리는 1.78 m** 다:
 ```
@@ -378,7 +377,7 @@ config 의 `TAG_HEIGHT_M=1.35 / CAMERA_HEIGHT_M=0.25`(= 1.10 m)는 **어느 실�
      8 m  ←──── 거리 ────→  3.3 m
 ```
 K = 0.8 은 광운대 "lower envelope 의 80 %"(fsm_v4/config.py L31) 와 같은 안전계수다.
-상수는 K 하나. 나머지는 **카메라에서 읽은 intrinsics**(measured.intrinsics, 없으면 D435I_COLOR_REF)로 계산한다.
+상수는 K 하나. 나머지는 **카메라에서 읽은 intrinsics**(run 이 열자마자 읽음, 없으면 D435I_COLOR_REF)로 계산한다.
 
 #### 통로 밖이면 — 사이드스텝 한 번, 그 뒤엔 바로 중간점 계획 (결정 5)
 
@@ -400,7 +399,7 @@ K = 0.8 은 광운대 "lower envelope 의 80 %"(fsm_v4/config.py L31) 와 같은
   (8 m → 3.3 m 사이에 (1 − K) × tan 30도 × 4.7 m ≈ 0.5 m 만큼). 경로가 안 나오면 실패 ⑥(3-10) — 정지 · 사람.
 
 **여기서 후진은 하지 않는다** (결정 6). 후진은 마지막 단계(태그컷 도착 뒤)에서 딱 한 번 쓰는 **최후의 보루**다 — 3-9.
-중간점 계획의 후보에도 후진은 없다. 뒤공간(`measured.back_space_m`, 없으면 `BACK_MAX_M` 0.5)은 그때 쓴다.
+중간점 계획의 후보에도 후진은 없다. 뒤공간(config `BACK_MAX_M` 0.5)은 그때 쓴다.
 
 ### 3-3. 한 걸음을 얼마나 크게 잡을 수 있나
 
@@ -466,7 +465,7 @@ config 에는 **안전 상한 하나**만 둔다. 걸음 크기는 코드가 ①
 회전 중   →  카메라 자세는 안 믿는다. 자이로만. 화면 위치 β 는 쓴다 (모양이 아니라 위치라 왜곡이 없다)
 회전 실행 →  멈춘 뒤에만. 직진이 끝나고 조용해지면(1.0 s 전 값과 비교, 3-5) 건다
 ```
-before_run 이 σ 를 정지 60초·직진 60초 둘 다 잰다(3-6). 직진 σ 가 정지 σ 와 다르면 직진 중 계산엔 직진 σ 를 쓴다.
+run 이 출발 뒤 정지 60초로 σ 를 잰다(3-6, 2026-10-02). 직진 σ 는 지금 안 잰다 — 정지 것을 쓴다(Noise.sigma_drive_* 자리는 남겨 뒀다).
 
 ★한 줄 읽는 시간(31 µs)은 추정값이다. 실측 목록에 있다.
 
@@ -544,8 +543,8 @@ before_run 이 σ 를 정지 60초·직진 60초 둘 다 잰다(3-6). 직진 σ 
 ```
 σ = √( 밀림² + 떨림² )
 
-밀림   before_run 의 정지 60초에서 잰 "0.5초 창 평균의 흔들림"
-       → measured.sigma_drift_lateral_m · sigma_drift_heading_deg  (@ sigma_ref_distance_m)
+밀림   run 이 출발 뒤 그 자리에서 정지 60초(`SIGMA_STILL_S`)로 잰 "0.5초 창 평균의 흔들림"
+       → Noise.sigma_drift_lateral_m · sigma_drift_heading_deg  (@ sigma_ref_distance_m) — estimate.baseline_from_rows
        다른 거리에서는 비례로:  방향 σ ∝ 거리,  좌우 σ ∝ 거리²      (좌우 = 거리 × 방향, 방향 잡음 ∝ 거리)
 떨림   지금 창(0.5 s)의 직선 잔차 sd ÷ √n  (창 끝에서 읽는 지렛대 포함)
 ```
@@ -642,7 +641,7 @@ angle_ok=False 인 프레임  →  좌우·방향 트랙에서 제외.  화면 �
 얼마나  후진량 = clamp( max( 남은 좌우 ÷ (K × tan 경로각상한),  배운 최소걸음 ),  0,  뒤공간 )
           남은 좌우 ÷ (K × tan 30도) = 2.165 × 남은 좌우   ← 통로 반폭 식(3-2)을 거리로 푼 것. limits 가 계산, 상수로 안 박는다
           최소걸음 = 속도 × 관성시간 (learner 가 배운 fwd_speed · τ)   ← 이보다 짧은 걸음은 관성이 다 먹는다
-          뒤공간 = measured.back_space_m (before_run 이 묻는다).  없으면 config BACK_MAX_M 0.5
+          뒤공간 = config BACK_MAX_M 0.5 (현장 값, 묻지 않는다)
           필요량 > 뒤공간  →  정지 · 사람
 그 뒤    다시 중간점 계획 → 그래도 안 되면 정지 · 사람
 ```
@@ -936,7 +935,7 @@ TURN_HARD_MAX_DEG = 13.6676 × 2.5 − 17.0398 = 17.1도
 움직이기 시작한 걸 알아채자마자 끊어도 정지 명령이 먹기까지(광운대 실측 0.352 s) 가속하며 돈다:
 ```
 씨앗  rot_floor = ½ × 13.06도/s² × 0.352² = 0.81도       ← 유도값 (그쪽 ROT_RESPONSE_ACCEL · STOP_DELAY). 실측 아님
-실측  before_run: "움직이자마자 정지" × 양방향 5회 → 최대각     ← 이게 씨앗을 덮는다
+실측  calibrate rotfloor: "움직이자마자 정지" × 양방향 5회 → 최대각 → config ROT_FLOOR_DEG     ← 이게 씨앗을 덮는다
 ```
 하한 아래 요청은 **거부하고 학습에서도 뺀다** — 지나치는 게 정상이라 잔여를 오염시킨다. 그때는 회전 대신 비켜서기(3-9).
 
@@ -1052,7 +1051,7 @@ TURN_HARD_MAX_DEG = 13.6676 × 2.5 − 17.0398 = 17.1도
 RMS         :  약 5.6 mm   = "평균 이만큼 원에서 벗어난다"
 ```
 
-**기준선은 정지 창 평균의 σ(밀림, 3-6 — before_run 이 잰다)다.** 아래 5·15 mm 는 ±4 mm 시절 값(잡음의 약 1배·3배)이라
+**기준선은 정지 창 평균의 σ(밀림, 3-6 — run 이 출발 뒤 잰다)다.** 아래 5·15 mm 는 ±4 mm 시절 값(잡음의 약 1배·3배)이라
 ★σ 실측 후 같은 배수로 다시 정한다.
 
 | RMS | 뜻 | 조치 |
@@ -1100,7 +1099,7 @@ async def rotate_closed(self, deg, why="", lead_deg=0.0):
 
 ### 4-9. 최소 회전 — 하한 하나, 강도 하나
 
-최소 회전각은 4-5 의 **하한(rot_floor)** 이다. 씨앗 0.81도(유도), before_run 이 실측으로 덮는다.
+최소 회전각은 4-5 의 **하한(rot_floor)** 이다. 씨앗 0.81도(유도), config ROT_FLOOR_DEG(calibrate 실측)가 덮는다.
 
 **왜 0.5도 언저리가 중요한가.** 방향은 "재고 → 고치고 → 다시 재고" 로 맞춘다:
 ```
@@ -1118,7 +1117,7 @@ async def rotate_closed(self, deg, why="", lead_deg=0.0):
 ```
 강도 바꾸기·데드밴드 찾기(옛 4-9 의 10/15/20 표)는 **실차 한 판 뒤 하한 실측이 예산을 못 맞출 때만** 다시 꺼낸다.
 
-#### 하한 재는 법 (before_run)
+#### 하한 재는 법 (calibrate rotfloor)
 ```
 정지 상태, 태그를 보며, 강도 30
    "자이로가 움직였다고 하면 즉시 끊어라" 를 좌 5회 · 우 5회
@@ -1250,11 +1249,11 @@ CAN 송신 시각          monotonic_ns    광운대 control.py
 - **정지 중에만 유효**하다(움직이면 가속도가 섞임). 우리는 어차피 멈춰서 보므로 문제없다
 - 정밀도 **0.1도 이내**
 
-`before_run.py` 가 여러 거리에서 재서 저장하고, 주행 중에는 멈출 때마다 다시 재서
+run 이 출발 뒤 정지 60초 창의 중앙값으로 넣고(`Estimator.set_tag_roll`, 2026-10-02), 주행 중에는 멈출 때마다 다시 재서
 **달라졌으면 경고**한다. 거리에 따라 값이 변하면 태그가 휜 것이니 그것도 잡힌다.
 
 ⚠️ **가속도계가 살아 있어야 한다.** 9/21 에 자이로 열기에서 겪은 문제와 같은 스트림이라,
-`before_run.py` 첫 단계에서 **가속도계부터 확인**한다.
+`calibrate.py device` 가 **가속도계부터 확인**한다. run 도 출발 뒤 기준선 창에서 같은 값을 쓴다.
 
 ### 5-4. ③ 은 똑바로 가보면 알 수 있다
 
@@ -1270,7 +1269,7 @@ CAN 송신 시각          monotonic_ns    광운대 control.py
 ```
 
 **3.5 m 에서** 시작·끝을 정지 창 평균(9/21 30프레임 평균 sd 31 mm)으로 재면 한 번에 atan(√2 × 31 mm ÷ 3 m) ≈ 0.8도 급이다.
-3~5회 반복해 before_run 이 `veer_deg` 와 흩어짐을 기록한다. ★σ 실측 후 정밀도 확정.
+(2026-10-02: 실행이 veer 를 안 쓰므로 측정 단계는 없앴다 — 필요하면 run 기록의 직진 다리에서 사후 계산.) ★σ 실측 후 정밀도 확정.
 
 ### 5-5. 그래도 남는 것 — 벽이 진입축에 직각이 아닐 수 있다
 
@@ -1286,7 +1285,7 @@ CAN 송신 시각          monotonic_ns    광운대 control.py
 새것:  "지금 보이는 게 그때랑 같나?"        ← 틀어짐이 양쪽에 똑같이 들어가 상쇄
 ```
 
-**절차 (`before_run.py` 가 안내·기록):**
+**절차 (`calibrate.py camyaw` 가 안내·기록):**
 ```
 1. 지게차를 탑재부에 손으로 정확히 넣는다 (양옆 틈이 같도록)
 2. 자이로 영점을 잡고, 태그가 보일 때까지 후진해서 나온다
@@ -1373,7 +1372,7 @@ EMA 계수 0.50  →  수렴까지 2~4 표본
 **②가 제일 큰 수확이다.** 지금은 모든 값을 "매번 재야 하는 값" 으로 취급하고 있는데,
 세션이 5~10번 쌓이면 갈린다:
 ```
-회전 중심      안 변해야 정상  →  안 변하면 before_run 에서 빼도 된다 (2분 절약)
+회전 중심      안 변해야 정상  →  config 에 한 번 적은 값이 세션을 가로질러 맞는지 (calibrate 는 카메라 재장착 때만)
 카메라 틀어진 각 변해야 정상    →  얼마나? ±0.2도면 무시, ±2도면 매번 필수
 관성           변한다          →  얼마나? ±10%면 학습으로 충분
 ```
@@ -1400,7 +1399,7 @@ work_dirs/
 **B. 조건** — ★다르면 그 값을 못 쓴다
 ```jsonc
 "conditions": {
-  // 사람이 입력 (before_run 이 묻는다)
+  // 사람이 config 에 적는다 (2026-10-01 — 묻지 않는다)
   "camera_remounted":true, "tag_remounted":true, "tag_board":"포맥스 5mm",
   "surface":"실내 콘크리트 · 건조", "load":"무적재", "note":"오전에 배터리 충전",
   // 자동
@@ -1459,7 +1458,7 @@ work_dirs/
 
 `passed:false` 여도 **저장은 한다** — 왜 실패했는지 볼 때 필요하다. **초기값에서만 뺀다.**
 
-**E. 측정** (before_run 결과 = `measured.json`. 필드는 `config/measured.py` 의 `Measured` — 아래 숫자는 예시)
+**E. 측정** (옛 `measured.json` 의 예시 — **2026-10-02 폐지.** 지금은 config 의 calibrate 값 5개 · `seeds.json` · run 의 `sigma_baseline` 이벤트가 이 자리를 맡는다. 필드 뜻은 그대로라 남겨 둔다)
 ```jsonc
 "measured": {
   "rotate_deflection":30,                                   // 이 값들을 잰 강도. 지금 설정과 다르면 출발 거부
@@ -1477,13 +1476,13 @@ work_dirs/
   "sigma_ref_distance_m":3.7,                               // σ 기준선 (3-6): 정지 60초 · 직진 60초, 0.5초 창 평균의 흔들림
   "sigma_drift_lateral_m":0.031, "sigma_drift_heading_deg":0.45,
   "sigma_drive_lateral_m":null,  "sigma_drive_heading_deg":null,
-  // 사람이 줄자로 (before_run 이 묻는다)
+  // 사람이 줄자로 config 에 (2026-10-01 — 묻지 않는다)
   "tag_height_m":1.35, "camera_height_m":0.25, "fork_tip_m":1.52,
   "tag_lateral_offset_m":0.0, "dock_length_m":null, "back_space_m":0.8
 }
 ```
-`MUST_MEASURE` = 회전중심 둘 · cam_yaw_offset · σ 셋 — 없으면 `measured.require()` 가 출발을 막는다 (tag_cut 은 대조용, 2026-10-01).
-광운대 씨앗(강도 30)은 `ACTIVE_RUN=None` 일 때만 쓰고, 그때도 강도가 30 이 아니면 거부한다.
+출발 조건(2026-10-02): config `CAM_YAW_OFFSET_DEG` 가 있어야 하고(없으면 거부), σ 기준선은 출발 뒤 run 이 낸다(못 내면 정지·사람). 회전중심이 None 이면 회전 상한 5도.
+광운대 씨앗(강도 30)은 언제나 출발점이고(지난 seeds.json 이 수렴값으로 덮는다), 강도가 30 이 아니면 거부한다.
 평균만 적으면 ①(이상한가)에 답할 수 없다 — 흩어짐·표본수(`circle_rms_mm` 처럼)를 같이 남긴다.
 정답 자세(5-6)는 실증 단계에 필드를 더한다.
 
@@ -1809,14 +1808,14 @@ rotate_right_slow  byte1 = 107      (구 rotate_cw 와 같은 값)
 
 **강도는 광운대와 같게 — 회전 30 (byte1 157/97) · 전후진 60 (byte2 67/187).** (2026-09-30 결정 1·2)
 ```
-회전 30   →  그쪽 실측을 **씨앗**으로 물려받는다 (config/measured.KWU_SEED):
+회전 30   →  그쪽 실측을 **씨앗**으로 물려받는다 (src/models/control/learn.KWU_SEED):
              출발지연 1.082 s · 각속도 12.01도/s · τ 0.283 s(유도) · 하한 0.81도(유도)
 직진 67   →  그쪽 delayed-linear 적합(거리 = 0.2897 × 시간 − 0.434, 죽은시간 1.498 s, 10회)이 씨앗.
              우리 9/7 실측 0.284 m/s 와 맞는다
 97 (forward_slow)  →  안 쓴다. 그쪽 옛 FSM v3 의 잔재(`JOYSTICK_FORWARD_SLOW = 30  # FSM v3 visual-servo forward`,
              calib/control.py L79)라 아무도 속도를 안 쟀다
 ```
-강도가 30 이 아니면 **출발 거부**(`measured.load` 가 씨앗·측정본의 각인과 대조). 우리 9/7·9/21 회전 측정은 강도 20 이라
+강도가 30 이 아니면 **출발 거부**(run 이 config 강도를 `learn.KWU_DEFLECTION` 과 대조). 우리 9/7·9/21 회전 측정은 강도 20 이라
 씨앗으로 못 쓴다 — 기록으로만 남는다. `calib/control.py` 기본값이 20 이고 `fsm_v4/config.py` 가 30 으로 덮는 구조라,
 우리는 시작할 때 `configure_rotate_in_place(30)` 을 직접 써넣고 바이트로 확인한다(9절 동결 테이블).
 
@@ -1961,7 +1960,7 @@ byte4(포크축)        6종 모두 정확히 127           통과
 
 **장비**
 - 카메라: RealSense D435i, 컬러 1920x1080, 수평 장착, 높이 **0.25 m ★줄자로 재야 한다** (출처가 가짜 소스 프레임 — 14절 ①)
-- 태그: AprilTag 0.30 m, 딱딱한 평판에 붙여 **벽에 밀착**, 높이 1.35 m ★실측 아님 (before_run 이 묻는다)
+- 태그: AprilTag 0.30 m, 딱딱한 평판에 붙여 **벽에 밀착**, 높이 1.35 m ★실측 아님 (줄자로 재서 config TAG_HEIGHT_M 에)
 - 기준점: **접힌 포크 끝** (카메라에서 1.52 m 앞, 앞바퀴 부근)
 - 제어: CAN 0x1E3 — 직진·후진·제자리회전만. 회전 강도 **30** · 직진 byte **67** (8-0, 2026-09-30)
 
@@ -1999,7 +1998,7 @@ byte4(포크축)        6종 모두 정확히 127           통과
 | 우선 | 무엇 | 왜 | 시간 |
 |---|---|---|---|
 | ★★★ | **블라인드 직진성(쏠림)** | 눈 감고 갈 때 얼마나 휘나. **지금 제일 큰 병목.** 5.3 m 를 빈 공간에서 5~10회, 줄자로 도착 좌우 측정 | 15분 |
-| ★★★ | **σ 기준선** 정지 60초 + 직진 60초 (3.5~4 m) | 3-6 의 밀림. MUST_MEASURE — 없으면 출발 못 한다 | 3분 |
+| ★★★ | **σ 기준선** 정지 60초 — 출발 뒤 그 자리에서 run `_baseline` 이 (2026-10-02) | 3-6 의 밀림. 못 내면 정지·사람 | 1분 |
 | ★★ | 회전 하한 rot_floor | 움직이자마자 정지 × 양방향 5회 → 최대각 (4-5) | 3분 |
 | ★★ | **회전 중심** (4-7 동심원) | 회전이 좌우를 얼마나 움직이나. 부호도 모름 | 2분 |
 | ★★ | 카메라 틀어진 각 (5-4) | 블라인드 구간 좌우 오차 | 5분 |
@@ -2015,7 +2014,7 @@ byte4(포크축)        6종 모두 정확히 127           통과
 
 ### 11-2. 사람이 재서 알려줄 것
 
-**before_run 이 줄자값 여섯을 묻는다:** 태그 높이 · 카메라 높이 · 포크 끝 · 태그 좌우 위치 · 탑재부 길이 · **뒤공간**.
+**줄자값 여섯은 config 에 직접 적는다(2026-10-01 — 묻지 않는다):** 태그 높이 · 카메라 높이 · 포크 끝 · 태그 좌우 위치 · 탑재부 길이 · **뒤공간**.
 뒤공간이 없으면 후진 대체값 0.5 m 로 간다(3-9). 아래는 전부 **숫자만 바꾸면 되는 값**이라 코드를 막지 않는다.
 
 | 무엇 | 왜 | 언제 |
@@ -2044,8 +2043,8 @@ apriltag_v4/
 ├── config/                  우리가 정하는 값만
 │   ├── detection.py         태그·카메라·검출 게이트
 │   ├── control.py           허용치 · 걸음 상한 · 조이스틱 강도 · 통로 · 시간 제한
-│   ├── imu.py               자이로·가속도계
-│   └── measured.py          ACTIVE_RUN 한 줄 → before_run 결과. 광운대 씨앗(KWU_SEED)도 여기
+│   └── imu.py               자이로·가속도계
+│       (control.py 의 캘리브 절: calibrate.py 가 잰 회전중심·카메라 어긋난 각·회전 하한. 광운대 씨앗은 learn.py)
 │
 ├── src/
 │   ├── bootstrap.py         경로를 찾는 곳 (한 군데)
@@ -2058,7 +2057,8 @@ apriltag_v4/
 │   └── utils/               camera · gyro · imu_yaw · clock · record · drawing · hud
 │
 ├── tools/
-│   ├── before_run.py        출발 전 측정 → measured.json (--activate 로만 ACTIVE_RUN 갱신)
+│   ├── calibrate.py         한 번 재서 config 에 적는 값 (device · camyaw · rotfloor · rotcenter). --write 면 config 자동
+│   ├── analyze_calibrate.py calibrate 기록 재계산 (원 맞춤 · 하한)
 │   ├── run.py               실주행
 │   ├── history.py           세션을 가로질러 본다 (6-3)
 │   └── check/               device_check · live_pose · check_setup · check_imports · check_log
@@ -2067,7 +2067,7 @@ apriltag_v4/
     ├── runs/<세션>/          원시 로그 (frames · events · imu · can)
     ├── history/<세션>.json   세션 한 장 (6-3 의 A~H)
     ├── history/index.json    전 세션 한 줄씩
-    └── before_run/<세션>/    측정 결과
+    └── calibrate/<세션>/     results.json · seeds.json · 원시 기록
 ```
 
 ### 12-0. run.py 의 스위치
@@ -2083,8 +2083,8 @@ run.py --dry-run      CAN 안 보냄          위와 조합 가능
 
 **출발 전 게이트** (하나라도 걸리면 출발하지 않는다 — 결정 12):
 ```
-① measured.require(MUST_MEASURE)   회전중심 둘 · cam_yaw_offset · σ 셋 (태그컷은 프레임마다 다시 잰다)
-② 강도 30 확인                      config 와 measured.json(또는 씨앗)의 각인이 같나 (8-0)
+① 캘리브 값 (config)               CAM_YAW_OFFSET_DEG 가 None 이면 거부. 회전중심 None 이면 회전 상한 5도 (태그컷은 프레임마다 다시 잰다)
+② 강도 30 확인                      config 강도 = learn.KWU_DEFLECTION 인가 (8-0)
 ③ CAN 동결 테이블                   6개 프레임 8바이트 (9절)
 ④ 시계 검사 clock.check()           카메라 기준점이 잡혔나 (4-10)
 ⑤ 자이로 보정                       IMU_BIAS_SEC 10초 정지. 흔들리면 다시
@@ -2148,42 +2148,46 @@ export KRRI_WORK_ROOT=...          기본 루트를 환경변수로
 > 광운대에는 **주행 안 하고 보기만 하는 도구가 없다** — 화면이 주행 런타임 안에만 있다.
 > 우리 `live_pose.py` 는 현장에서 CAN 안 켜고 카메라·태그만 확인할 때 쓰므로 유지한다.
 
-### 12-1. before_run.py 가 하는 일 (2026-09-30 결정 11)
+### 12-1. 출발 전에 무엇을 재나 (2026-10-02 결정 — before_run.py · measured.json 폐지)
+
+하루 한 번 재던 20개 값을 셋으로 나눴다. **차 치수는 한 번만, 날마다 바뀌는 건 run 이 그 자리에서, 나머지는 학습.**
 
 ```
-①  intrinsics        카메라를 열자마자 읽는다 (fx fy cx cy w h). D435I_COLOR_REF 와의 차이를 표시    자동
-①-1 카메라 대조 3종   줄자 4.0 m 에 세우고 셋을 견준다 — 하나라도 크게 어긋나면 경고 (통로·태그컷 입력이 전부 흔들린다)
-                      (a) 태그 한 변 px    예측 fx × 0.30 ÷ 4.0 (참고값이면 102 px)           vs 실제
-                      (b) 자세가 낸 거리   예측 4.0 m                                         vs 실제
-                      (c) 태그 중심 행     예측 cy − fy × 높이차 ÷ 4.0 (높이차 1.10 m 면 198 행)  vs 실제
-②  장비 확인          가속도계·자이로·카메라·CAN 살아 있나  (5-3 의 전제)
-③  사람 입력          tag_height · camera_height · fork_tip · tag_lateral_offset · dock_length · back_space   줄자
-④  회전 중심 + RMS    동심원 (4-7)                                                       약 2분
-⑤  cam_yaw_offset    줄자로 법선 위에 세우고 heading 을 읽는다
-⑥  veer              3 m 직진 × 3~5회. 자이로로 휜 시행은 버린다 (5-4)                     약 5분
-⑦  tag_roll          중력 (5-3)                                                          자동
-⑧  tag_cut           안 보이게 되는 거리 실측 (문제 4) — 대조용. 실시간 식(tag_cut_live_m)을 프레임마다 돌려 실측과 견준다
-⑨  rot_floor         움직이자마자 정지 × 양방향 5회 → 최대각 (4-5)                          약 3분
-⑩  σ 기준선          정지 60초 + 직진 60초 (3.5~4 m) → 0.5초 창 평균의 흔들림 (3-6)          약 3분
-⑪  회전 응답 확인     강도 30 으로 12도 수회 → Learner 가 τ · 각속도 · 출발지연을 낸다         약 2분
-⑫  직진 속도(67) · 후진 속도(187)
-```
-결과는 `work_dirs/before_run/<시각>/measured.json`. **`ACTIVE_RUN` 갱신은 `--activate` 로만.**
-④⑪은 데이터가 겹친다 — 동심원의 회전이 각속도·τ 도 같이 내놓는다.
+한 번 (tools/calibrate.py → config/control.py)        카메라를 다시 달거나 차가 바뀔 때만
+    device      장비 확인 + intrinsics 를 D435I_COLOR_REF 와 대조                          자동
+    camyaw      법선 위에 차체를 평행하게 세우고 heading 을 읽는다      → CAM_YAW_OFFSET_DEG   줄자로 자세 잡기
+    rotfloor    움직이자마자 정지 × 양방향 5회 → 최대각 (4-5)           → ROT_FLOOR_DEG        약 3분
+    rotcenter   5도씩 ±40도 동심원 (4-7)                               → CAM_TO_ROT_CENTER_M · ROT_CENTER_LATERAL_M · ROT_CENTER_RMS_MM   약 2분
+    (여기서 돈 회전들이 각속도·τ 도 가르친다 → seeds.json)
 
-### 12-2. 측정값이 config 로 들어가는 길
+매 주행, 출발 뒤 (tools/run.py `_baseline`)              태그가 보이는 자리에서, 처음 한 번
+    σ 기준선    정지 SIGMA_STILL_S(60)초 → 0.5초 창 평균의 흔들림(밀림) (3-6)  → Estimator.set_noise
+    태그 기울기  같은 창의 가속도계 중앙값 (5-3)                              → Estimator.set_tag_roll
+    (자이로가 0.3도 넘게 돌았으면 차가 움직인 것 — 한 번 더. 끝나면 TIME_LIMIT 가 다시 돈다)
 
-```
-tools/before_run.py 실행
-    ↓
-work_dirs/before_run/20260928_1430/measured.json   ← 실행할 때마다 새 폴더. 덮어쓰지 않는다
-    ↓
-config/measured.py 의  ACTIVE_RUN = "20260928_1430"   ← 이 한 줄만 갱신
+학습 (src/models/control/learn.py)                      광운대 씨앗 KWU_SEED 에서 출발, 주행마다 갱신
+    회전 τ·각속도·출발지연·잔여 · 직진 속도·출발·τ·잔여      run/calibrate 가 끝나면 seeds.json → 다음 run 이 learn.last_seeds 로
+    후진(187) 씨앗 = 직진값 — 아무도 안 쟀고 **같다고 가정**(사용자 결정). 첫 후진에서 학습이 덮는다
+
+없앤 것                                                   왜
+    tag_cut · height_diff                                 프레임마다 live (tag_cut_live_m, 4절)
+    intrinsics 사본 · camera_check · veer · sigma_drive   대조·진단뿐, 실행이 안 썼다
+    rotresp · fwdspeed · backspeed                        학습이 같은 값을 낸다 (씨앗 + 누적)
+    줄자 6개 입력                                         config 에 직접 (10-01)
 ```
 
-- 옛 측정으로 되돌리려면 **그 한 줄만** 고친다
-- 파일이 없으면 **조용히 기본값을 쓰지 않고 시끄럽게 실패**한다
-- `measured.json` 에 **회전 강도가 같이 적힌다.** 지금 설정과 다르면 출발 거부
+### 12-2. 값이 들어가는 길
+
+```
+tools/calibrate.py            → work_dirs/calibrate/<시각>/results.json · seeds.json
+                                 끝나면 config 줄을 찍어 준다. --write 면 config/control.py 를 직접 고친다 ([calibrate <폴더>] 꼬리표)
+tools/run.py                  → config 의 calibrate 값 + 카메라 intrinsics 로 계획기 · 광운대 씨앗 + 최신 seeds.json 으로 학습기
+                                 출발 뒤 _baseline → 추정기.  끝나면 work_dirs/runs/<시각>/seeds.json
+```
+
+- `CAM_YAW_OFFSET_DEG` 가 None 이면 **출발 거부** — 정면의 기준이라 없으면 못 맞춘다. 회전중심 None 이면 회전 상한 5도로 간다
+- 조향 강도가 30 이 아니면 출발 거부 (씨앗이 30 짜리)
+- σ 기준선을 못 내면(태그가 안 보임·두 해 헷갈림·차가 움직임) 정지·사람 — 조용히 기본값을 쓰지 않는다
 
 ### 12-3. 경로 문제를 구조로 막는다
 
@@ -2200,7 +2204,7 @@ config/measured.py 의  ACTIVE_RUN = "20260928_1430"   ← 이 한 줄만 갱신
 
 ```
 config/             현장·차량이 바뀌면 사람이 고칠 값
-config/measured.py  before_run 이 잰 값 (자동)
+config/control.py 캘리브 절   calibrate.py 가 잰 값 (찍어 주는 줄을 붙여 넣거나 --write)
 코드 안 고정값       필터 창·타임아웃 같은 구현 세부 (한 줄 주석과 함께)
 아무 데도 안 둠      계산으로 나오는 값 (방향 허용치, 걸음 크기, 태그 컷 거리 …)
 ```
@@ -2218,17 +2222,18 @@ config/measured.py  before_run 이 잰 값 (자동)
 |---|---|---|
 | 1 | **조향 강도 30**(광운대와 동일). 그쪽 실측을 씨앗으로(`KWU_SEED`: 출발지연 1.082 · 각속도 12.01 · τ 0.283 유도 · 하한 0.81 유도 · 직진 0.2897 m/s / 1.498 s). 30 아니면 출발 거부 | 8-0 |
 | 2 | **직진 byte 67**(deflection 60). 97(forward_slow)은 아무도 안 잰 값이라 안 쓴다. `forward()` 기본 movement="forward" | 8-0 |
-| 3 | **회전** 상한 17.1(광운대 유지 2.5 s 한계에서 유도) · 하한 = `learner.rot_floor_deg`(씨앗 0.81, before_run 실측이 덮음). 하한 아래 요청은 거부 + 학습 제외. 약한 두 번째 강도 없음. 회전중심 미확정이면 5도 | 4-5 · 4-9 |
-| 4 | **통로** 반폭 = K(0.8) × tan(경로각 상한) × (거리 − 태그컷). 경로각 상한 = 반화각 − atan(태그/2 ÷ 태그컷) − 60 px. 전부 `limits.py` 계산. intrinsics 는 카메라에서 읽은 것(`measured.intrinsics`), `D435I_COLOR_REF` 는 폴백 | 3-2 |
+| 3 | **회전** 상한 17.1(광운대 유지 2.5 s 한계에서 유도) · 하한 = config `ROT_FLOOR_DEG`(calibrate 실측; None 이면 씨앗 0.81). 하한 아래 요청은 거부 + 학습 제외. 약한 두 번째 강도 없음. 회전중심 미확정이면 5도 | 4-5 · 4-9 |
+| 4 | **통로** 반폭 = K(0.8) × tan(경로각 상한) × (거리 − 태그컷). 경로각 상한 = 반화각 − atan(태그/2 ÷ 태그컷) − 60 px. 전부 `limits.py` 계산. intrinsics 는 카메라에서 읽은 것(run 이 `_intr_dict` 로 계획기에 넘김), `D435I_COLOR_REF` 는 폴백 | 3-2 |
 | 5 | **사이드스텝** 처음 한 번, 통로 밖일 때만: 좌우 읽기 → (±90도 − 지금방향) 회전(IMU 폐루프, 90도 허용, 안전망 30 s) → 좌우 × 0.5 를 시간 개루프(byte 67, 하드 상한 없음) → (0도 − 지금방향) → 재측정. 방향은 v1 `plan_lateral_clear`(회전이 작은 쪽. 뒤로는 다리 ≤ 뒤공간이고 back_speed 알 때만). 반복 없음. 끝나면 통로 안이든 밖이든 **바로 중간점 계획** — 여기서 후진 없음 | 3-2 |
-| 6 | **후진 = 최후의 보루, 마지막 단계에서 한 번만.** 태그컷에 도착했는데 진입 조건이 안 되면 → 후진 한 번 → 다시 중간점 계획 → 그래도 안 되면 정지·사람. 조건: 남은 좌우 > 2σ(그 안이면 바로 정지·사람). 후진량 = clamp(max(남은좌우 ÷ (K·tan 경로각상한) [= 2.165 × 남은좌우, `limits` 계산], 배운 최소걸음(속도 × 관성)), 0, 뒤공간). 뒤공간 = `measured.back_space_m`(before_run 이 묻는다), 없으면 `BACK_MAX_M` 0.5. 필요량 > 뒤공간 → 정지·사람. 중간점 후보에 후진 없음, 사이드스텝 직후에도 없음. 마지막 단계의 고치는 동작(방향 회전·비켜서기·후진) 합계 ≤ `MAX_CORRECTIONS`(5) 그리고 `FINE_TIME_LIMIT_S`(120) — 같은 구간을 이중으로, 먼저 걸리는 쪽에서 정지·사람 | 3-9 |
+| 6 | **후진 = 최후의 보루, 마지막 단계에서 한 번만.** 태그컷에 도착했는데 진입 조건이 안 되면 → 후진 한 번 → 다시 중간점 계획 → 그래도 안 되면 정지·사람. 조건: 남은 좌우 > 2σ(그 안이면 바로 정지·사람). 후진량 = clamp(max(남은좌우 ÷ (K·tan 경로각상한) [= 2.165 × 남은좌우, `limits` 계산], 배운 최소걸음(속도 × 관성)), 0, 뒤공간). 뒤공간 = config `BACK_MAX_M` 0.5(현장 값, 묻지 않는다). 필요량 > 뒤공간 → 정지·사람. 중간점 후보에 후진 없음, 사이드스텝 직후에도 없음. 마지막 단계의 고치는 동작(방향 회전·비켜서기·후진) 합계 ≤ `MAX_CORRECTIONS`(5) 그리고 `FINE_TIME_LIMIT_S`(120) — 같은 구간을 이중으로, 먼저 걸리는 쪽에서 정지·사람 | 3-9 |
 | 7 | **계산은 늘**(정지·직진 중), **회전 실행만 정지 후**. 회전 중엔 카메라 자세 불신, 자이로만(β 는 씀) | 3-4 |
-| 8 | **σ = √(밀림² + 떨림²)**. 밀림 = before_run 정지 60초의 0.5초 창 평균 흔들림(방향 ∝ 거리, 좌우 ∝ 거리²). 떨림 = 창 잔차 sd ÷ √n(지렛대 포함). 잔차 σ 는 진단. `SIGMA_FLOOR_*` · `AMBIG_FRAC` 삭제 → 모호 프레임은 한 장씩 좌우·방향에서 제외(β·거리는 넣음). 깨끗한 프레임 < MIN_N → few. 나이 < −1 ms → clock | 3-6 |
+| 8 | **σ = √(밀림² + 떨림²)**. 밀림 = 출발 뒤 그 자리에서 정지 60초(`SIGMA_STILL_S`, run `_baseline`)의 0.5초 창 평균 흔들림(방향 ∝ 거리, 좌우 ∝ 거리²). 떨림 = 창 잔차 sd ÷ √n(지렛대 포함). 잔차 σ 는 진단. `SIGMA_FLOOR_*` · `AMBIG_FRAC` 삭제 → 모호 프레임은 한 장씩 좌우·방향에서 제외(β·거리는 넣음). 깨끗한 프레임 < MIN_N → few. 나이 < −1 ms → clock | 3-6 |
 | 9 | **직진** `FIT_MIN_SPAN` = 3 × 거리잡음(Look.sigma_m) ÷ 정속(learner.fwd_speed). `SETTLE_SPAN_S` 1.0 유지. `forward_timed()` 추가(사이드스텝용, 학습 안 함) | 3-5 |
 | 10 | **시계** 카메라 스탬프는 `CameraClock.see()`, 내부는 `clock.now()`(monotonic), `driver.set` 도 같이. 기록엔 `wall_from` 으로 벽시계 병기 | 4-10 |
-| 11 | **before_run** 이 채우는 것: intrinsics(열자마자, `D435I_COLOR_REF` 와 차이 표시) · **카메라 대조 3종**(줄자 4.0 m: 태그 px · 자세 거리 · 태그 중심 행 — 하나라도 크게 어긋나면 경고) · 회전중심+RMS · cam_yaw_offset · veer · tag_roll · tag_cut · rot_floor · σ(정지·직진 60초) · 회전 응답(12도 수회) · 직진 67 · 후진 187 · 사람 입력 6개. `--activate` 로만 ACTIVE_RUN 갱신 | 12-1 |
-| 12 | **run.py** `--show / --no-record / --video / --out / --dry-run`. 게이트: `measured.require(MUST_MEASURE)` · 강도 30 · CAN 동결 · `clock.check` · 자이로 보정. SPACE 출발, Ctrl+C 즉시 정지 | 12-0 |
+| 11 | ~~before_run~~ → **2026-10-02 폐지.** 한 번 재는 셋(회전중심+RMS · cam_yaw_offset · rot_floor)은 `tools/calibrate.py` → config. σ 기준선·태그 기울기는 run 이 출발 뒤 그 자리에서. 나머지는 씨앗 + 학습(seeds.json). 결정 14 | 12-1 |
+| 12 | **run.py** `--show / --no-record / --video / --out / --dry-run`. 게이트: config `CAM_YAW_OFFSET_DEG` 있음 · 강도 30 · CAN 동결 · `clock.check` · 자이로 보정 → SPACE 출발 → (태그 보이면) σ 기준선 60초 → 계획. Ctrl+C 즉시 정지 | 12-0 |
 | 13 | **실패 7종 → 전부 정지 + 사람 호출.** 기록은 주행을 절대 막지 않는다 | 3-10 · 6-6 |
+| 14 | **(2026-10-02) measured.py · before_run.py 폐지.** 차 치수 셋만 `calibrate.py` → config(`CAM_TO_ROT_CENTER_M` · `ROT_CENTER_LATERAL_M` · `ROT_CENTER_RMS_MM` · `CAM_YAW_OFFSET_DEG` · `ROT_FLOOR_DEG`). σ 기준선은 **매 주행 출발 뒤 그 자리에서** 60초(`SIGMA_STILL_S`). **후진(187) 씨앗 = 직진값** — 안 쟀고 같다고 가정, 첫 후진에서 학습. 학습값은 `seeds.json` 으로 다음 주행에 | 12-1 |
 
 ## 14. 숫자 대장
 
@@ -2240,10 +2245,14 @@ config/measured.py  before_run 이 잰 값 (자동)
 |---|---|---|
 | `SIDE_GAP_M` | 0.030 | 실물. 탑재부 폭 = 지게차 폭 + 6 cm |
 | `TAG_SIZE_M` | 0.300 | 인쇄물 실측 |
-| `CAM_TO_FORK_TIP_M` | 1.52 | 9/7 실측. before_run 이 `fork_tip_m` 으로 재측정 |
-| `TAG_HEIGHT_M` | 1.35 | **★실측 아님.** before_run 이 묻는다 |
+| `CAM_TO_FORK_TIP_M` | 1.52 | 9/7 실측. 바뀌면 줄자로 재서 여기 |
+| `TAG_HEIGHT_M` | 1.35 | **★실측 아님.** 줄자로 재서 config 에 (폴백·문서용 — 실행은 live 높이차) |
 | `CAMERA_HEIGHT_M` | 0.25 | **★가짜 소스(fake_source) 프레임에서 나온 값.** 줄자로 잰다. 5-1 ⑤: 높이차 실측은 0.81~1.23 m 로 날마다 달랐다 |
-| `BACK_MAX_M` | 0.5 | 임시·현장값. `measured.back_space_m` 이 있으면 그게 우선 (3-2) |
+| `BACK_MAX_M` | 0.5 | 임시·현장값. config 에서만 (3-2) |
+| `CAM_TO_ROT_CENTER_M` · `ROT_CENTER_LATERAL_M` · `ROT_CENTER_RMS_MM` | None | **calibrate rotcenter 실측**(4-7). None 이면 회전 상한 5도·흩어짐 0 |
+| `CAM_YAW_OFFSET_DEG` | None | **calibrate camyaw 실측**(5-4). None 이면 출발 거부 |
+| `ROT_FLOOR_DEG` | None | **calibrate rotfloor 실측**(4-5). None 이면 씨앗 0.81(유도) |
+| `SIGMA_STILL_S` | 60 | 출발 뒤 σ 기준선 정지 시간. 2026-09-30 결정 8 "정지 60초" (0.5초 블록 120개) |
 | `STANDOFF_M` | 0.50 | 결정. 주행실험 전용(탑재부 없이 태그면 앞 정지 여유) |
 
 ### ② 광운대에서 물려받음 (조향 강도 30 기준)
@@ -2289,7 +2298,7 @@ config/measured.py  before_run 이 잰 값 (자동)
 | 이름 | 값 | |
 |---|---|---|
 | `COLOR_SIZE` | 1920×1080 | D435i 컬러 최대 |
-| `D435I_COLOR_REF` | fx 1359.2 · fy 1359.0 · cx 956.9 · cy 571.3 | **참고값.** 실주행은 카메라에서 읽는다(`measured.intrinsics`) |
+| `D435I_COLOR_REF` | fx 1359.2 · fy 1359.0 · cx 956.9 · cy 571.3 | **참고값.** 실주행은 카메라에서 읽는다(run `_intr_dict`) |
 | `IMU_GYRO_HZ` | 200 | BMI085 유효값 |
 | `COLOR_EXPOSURE_UNIT_US` | 100 | UVC 규격 |
 | `frames.NEUTRAL` | 127 | CAN 조이스틱 중립 |
@@ -2368,3 +2377,4 @@ config/measured.py  before_run 이 잰 값 (자동)
 - [ ] 실패했을 때 자동 복구를 붙일지 (지금은 전부 사람 호출 — 3-10)
 - [ ] 3-8 ①(태그 놓쳤을 때 직전 후진)이 결정 6(후진은 마지막 단계 한 번)의 예외인지 — 사용자 확인
 - [ ] 화면이 느리면 별도 **프로세스**로 뺄지 — 예비안
+- [ ] **후진 속도 = 직진 속도 가정**(결정 14) — 첫 후진이 배운 187 값을 보고 가정이 맞았는지 확인. 많이 다르면 씨앗을 고친다

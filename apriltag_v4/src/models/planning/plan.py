@@ -24,7 +24,7 @@
 회전중심 좌표 — 제자리 회전은 회전중심을 안 움직이므로 상태를 (중심 좌우 Lc, 중심 거리 Fc, 방향 h) 로 들고
 카메라는 거기서 계산한다. 부호 실수가 한 곳(_camera)에 모인다:
     카메라 좌우 = Lc + A·sin h − b·cos h      카메라 거리 = Fc − A·cos h − b·sin h
-    A = measured.cam_to_rot_center_m (음수 = 카메라 앞) · b = rot_center_lateral_m (+ 왼쪽) — analyze_before_run._ls_center 와 같은 틀
+    A = config CAM_TO_ROT_CENTER_M (음수 = 카메라 앞) · b = ROT_CENTER_LATERAL_M (+ 왼쪽) — analyze_calibrate._ls_center 와 같은 틀
     h=0 에서 +Δ 돌면 카메라 좌우가 A·sin Δ 만큼 는다: 중심이 앞(A<0)이면 왼쪽으로 돌 때 카메라는 **오른쪽**으로 (plan 4-6)
     그때 태그의 화면 위치는 Δ·(d+A)/d 만큼 움직인다 — limits.turn_cap_deg 의 배율과 같은 식 (자체 시험이 확인)
 
@@ -123,22 +123,19 @@ class _Node:
 class _Geo:
     """측정값에서 계획기가 쓰는 기하만 뽑는다. 없으면 config 폴백 (회전중심은 폴백 없음 → cap 5도)."""
 
-    def __init__(self, measured, learner):
-        g = lambda k: getattr(measured, k, None)              # noqa: E731 — Measured 가 None 이어도 된다
-        self.intr = g("intrinsics") or None                   # {} 도 폴백(D435I_COLOR_REF) — limits._intr
-        # 높이차·태그컷 **폴백** — ① sigma_still 에서 카메라가 잰 높이차 ② config 명목값. 실행 중엔 see() 가 프레임마다
-        # 다시 잰다 (limits.tag_cut_live_m: 자세의 vertical + 윗변 행 → 경사·요철·피치 포함, 2026-10-01).
-        # measured.tag_cut_m 은 이제 대조용이라 여기 안 들어온다
-        hd = g("height_diff_m")
-        self.dz0 = float(hd) if hd is not None else (D.TAG_HEIGHT_M - D.CAMERA_HEIGHT_M)
+    def __init__(self, learner, intr=None, A=None, b=None, rms_mm=None, height_diff_m=None):
+        """intr = 카메라에서 읽은 intrinsics(없으면 D435I_COLOR_REF 폴백). A·b·rms_mm = config 의 calibrate 실측
+        (CAM_TO_ROT_CENTER_M · ROT_CENTER_LATERAL_M · ROT_CENTER_RMS_MM). A 가 None 이면 회전중심 미확정 → cap 5도."""
+        self.intr = intr or None                              # {} 도 폴백(D435I_COLOR_REF) — limits._intr
+        # 높이차·태그컷 **폴백** — 없으면 config 명목값. 실행 중엔 see() 가 프레임마다 다시 잰다
+        # (limits.tag_cut_live_m: 자세의 vertical + 윗변 행 → 경사·요철·피치 포함, 2026-10-01)
+        self.dz0 = float(height_diff_m) if height_diff_m is not None else (D.TAG_HEIGHT_M - D.CAMERA_HEIGHT_M)
         self.cut0 = limits.tag_cut_m(self.intr, height_diff_m=self.dz0)
         self.dz, self.cut, self.cut_from = self.dz0, self.cut0, "fallback"
-        A = g("cam_to_rot_center_m")
         self.center_known = A is not None
         self.A = float(A) if A is not None else 0.0
-        self.b = float(g("rot_center_lateral_m") or 0.0)
-        rms = g("circle_rms_mm")
-        self.scatter_m = float(rms) / 1000.0 if rms else 0.0   # 회전중심 흩어짐 → 마지막 회전이 남기는 좌우 σ (plan 4-7)
+        self.b = float(b) if b is not None else 0.0
+        self.scatter_m = float(rms_mm) / 1000.0 if rms_mm else 0.0   # 회전중심 흩어짐 → 마지막 회전이 남기는 좌우 σ (plan 4-7)
         self.fork_tip = C.CAM_TO_FORK_TIP_M                   # 차 치수 — config 만 (2026-10-01)
         self.back_space = C.BACK_MAX_M                        # 현장 값 — config 만
         self.floor = min_turn_deg(learner) or 0.0             # 회전 하한. 모르면 0 (제한 없음)
@@ -191,10 +188,10 @@ class _Geo:
 class Planner:
     """한 번의 도킹 동안 하나. decide() 는 순수 계산이고, 이력은 executed() 로만 바뀐다 (fine_since 만 decide 가 찍는다)."""
 
-    def __init__(self, learner, measured=None, progress=None):
+    def __init__(self, learner, progress=None, **geo):
+        """geo = _Geo 의 인자 (intr · A · b · rms_mm · height_diff_m). run.py 가 config 와 카메라에서 채운다."""
         self.learner = learner
-        self.measured = measured
-        self.geo = _Geo(measured, learner)
+        self.geo = _Geo(learner, **geo)
         self.progress = progress or Progress()
 
     # ── 공개 ──
@@ -552,24 +549,24 @@ def _real(value, sigma, tol, k):
     return abs(value) > max(tol, k * sigma)
 
 
-def decide(fix, learner, measured=None, progress=None, now=None):
+def decide(fix, learner, progress=None, now=None, **geo):
     """한 번짜리. 이력이 필요 없을 때(도구·시험)."""
-    return Planner(learner, measured, progress).decide(fix, now)
+    return Planner(learner, progress, **geo).decide(fix, now)
 
 
 if __name__ == "__main__":
     # 자체 시험 — 하드웨어 없이. (1) 회전 기하가 limits 의 배율과 맞나 (2) 시작 위치 표 (3) 태그컷 분기
     # (4) 못 믿을 때 (5) 2차원 세계에서 닫힌 고리 — 첫 걸음만 실행하고 다시 재기를 반복해 진입하는지 (모델 오차 포함)
     import time
-    from config import measured as M
-    from ..control.learn import Learner
+    from ..control.learn import Learner, seeds
     from ..detection.estimate import Fix
 
     quiet = lambda *_: None                                     # noqa: E731
-    lrn = Learner(seeds=M.seeds())
-    meas = M.Measured(cam_to_rot_center_m=-1.5, rot_center_lateral_m=0.0, circle_rms_mm=5.0)   # plan 4-6 추정
+    lrn = Learner(seeds=seeds())
+    meas = dict(A=-1.5, b=0.0, rms_mm=5.0)                       # plan 4-6 추정 (config 의 calibrate 값 자리)
+    A0 = meas["A"]
     ref = limits.tag_cut_m()
-    print("태그컷 %.2f m · 회전 하한 %.2f도 · 회전중심 %.2f m · 최소걸음 %.3f m" % (ref, lrn.rot_floor_deg, meas.cam_to_rot_center_m,
+    print("태그컷 %.2f m · 회전 하한 %.2f도 · 회전중심 %.2f m · 최소걸음 %.3f m" % (ref, lrn.rot_floor_deg, A0,
                                                                      min_step_m(lrn, strength_of("forward")) or 0.0))
 
     def fix_at(lat, fwd, h=0.0, sl=None, sh=None, ok=True, why="ok", **kw):
@@ -585,17 +582,17 @@ if __name__ == "__main__":
                    lateral_sigma_m=sl, heading_sigma_deg=sh, **kw)
 
     # (1) 회전 기하 — h=0 에서 Δ 돌면 카메라 좌우 A·sinΔ, 태그 화면위치 변화 ≈ Δ·(d+A)/d (limits.turn_cap_deg 의 배율)
-    geo = _Geo(meas, lrn)
+    geo = _Geo(lrn, **meas)
     for d0 in (3.5, 8.0):
         Lc, Fc = geo.center(0.0, d0, 0.0)
         lat1, fwd1 = geo.camera(Lc, Fc, 5.0)
-        assert abs(lat1 - meas.cam_to_rot_center_m * math.sin(math.radians(5.0))) < 1e-9
+        assert abs(lat1 - A0 * math.sin(math.radians(5.0))) < 1e-9
         beta1 = 5.0 + math.degrees(math.atan2(lat1, fwd1))
-        gain = (d0 + meas.cam_to_rot_center_m) / d0
+        gain = (d0 + A0) / d0
         assert abs(beta1 / 5.0 - gain) < 0.01, (d0, beta1 / 5.0, gain)
         assert abs(geo.camera(*geo.center(0.3, d0, -7.0), -7.0)[0] - 0.3) < 1e-9        # 왕복이 맞다
     assert geo.camera(*geo.center(0.0, 5.0, 0.0), 10.0)[0] < 0                          # 앞 중심, 왼쪽 회전 → 카메라 오른쪽
-    g2 = _Geo(M.Measured(cam_to_rot_center_m=-1.5, rot_center_lateral_m=0.05), lrn)
+    g2 = _Geo(lrn, A=-1.5, b=0.05)
     assert abs(g2.camera(*g2.center(0.2, 5.0, 3.0), 3.0)[0] - 0.2) < 1e-9                # 좌우 오프셋 있어도 왕복
     print("회전 기하: 배율 (d+A)/d 일치, 왕복 일치")
 
@@ -613,7 +610,7 @@ if __name__ == "__main__":
     got = {}
     for name, f, pr in rows:
         t0 = time.perf_counter()
-        dcs = Planner(lrn, meas, pr).decide(f, now=1000.0)
+        dcs = Planner(lrn, pr, **meas).decide(f, now=1000.0)
         ms = (time.perf_counter() - t0) * 1e3
         got[name] = dcs
         print("%-28s %-10s %s  [%.0f ms]" % (name, dcs.kind, dcs.summary(), ms))
@@ -641,7 +638,7 @@ if __name__ == "__main__":
     cases = [
         ("정렬됨", fix_at(0.0, ref, 0.0, sl=0.008, sh=0.2), Progress(), "commit"),
         # 정면을 보면 카메라가 A·sin3 = 7.8 cm 움직인다 — 그만큼 반대쪽에 서 있어야 회전만으로 된다 (plan 4-6)
-        ("방향 +3도 · 좌우 −0.078", fix_at(meas.cam_to_rot_center_m * math.sin(math.radians(3.0)), ref, 3.0,
+        ("방향 +3도 · 좌우 −0.078", fix_at(A0 * math.sin(math.radians(3.0)), ref, 3.0,
                                         sl=0.008, sh=0.2), Progress(), "step"),
         ("방향 +3도 · 좌우 0", fix_at(0.0, ref, 3.0, sl=0.008, sh=0.2), Progress(), "step"),      # 정면부터
         ("방향 0 · 좌우 0.078", fix_at(0.078, ref, 0.0, sl=0.008, sh=0.2), Progress(), "backup"),  # 정면인데 남았다 → 후진
@@ -653,55 +650,55 @@ if __name__ == "__main__":
         ("120 s 소진", fix_at(0.15, ref, 0.0, sl=0.02, sh=0.2), Progress(fine_since=1000.0 - C.FINE_TIME_LIMIT_S), "stop"),
     ]
     for name, f, pr, want in cases:
-        dcs = Planner(lrn, meas, pr).decide(f, now=1000.0)
+        dcs = Planner(lrn, pr, **meas).decide(f, now=1000.0)
         print("  %-26s → %-8s %s" % (name, dcs.kind, dcs.summary()))
         assert dcs.kind == want, (name, dcs)
         assert dcs.at_cut and pr.fine_since is not None
-    dcs = Planner(lrn, meas).decide(fix_at(meas.cam_to_rot_center_m * math.sin(math.radians(3.0)), ref, 3.0,
+    dcs = Planner(lrn, **meas).decide(fix_at(A0 * math.sin(math.radians(3.0)), ref, 3.0,
                                            sl=0.008, sh=0.2), now=1000.0)
     assert abs(dcs.turn_deg + 3.0) < 0.5 and dcs.drive_m == 0.0 and dcs.correction, dcs
-    dcs = Planner(lrn, meas).decide(fix_at(0.0, ref, 3.0, sl=0.008, sh=0.2), now=1000.0)
+    dcs = Planner(lrn, **meas).decide(fix_at(0.0, ref, 3.0, sl=0.008, sh=0.2), now=1000.0)
     assert abs(dcs.turn_deg + 3.0) < 1e-9 and dcs.drive_m == 0.0 and dcs.correction, dcs   # 비스듬히 잰 좌우로 후진량을 안 정한다
-    dcs = Planner(lrn, meas).decide(fix_at(0.078, ref, 0.0, sl=0.008, sh=0.2), now=1000.0)
+    dcs = Planner(lrn, **meas).decide(fix_at(0.078, ref, 0.0, sl=0.008, sh=0.2), now=1000.0)
     assert dcs.kind == "backup" and abs(dcs.backup.need_m - limits.backup_needed_m(0.078, ref)) < 1e-9, dcs
     # 물러난 자리가 "태그컷 도착" 밖이어야 다음 걸음이 있다: 필요량 + 앞뒤 허용
     assert abs(dcs.drive_m - (max(dcs.backup.need_m, C.FWD_TOL_M) + C.FWD_TOL_M)) < 1e-9, dcs
-    dcs = Planner(lrn, meas).decide(fix_at(0.15, ref, 0.0, sl=0.02, sh=0.2), now=1000.0)
+    dcs = Planner(lrn, **meas).decide(fix_at(0.15, ref, 0.0, sl=0.02, sh=0.2), now=1000.0)
     assert dcs.movement == "backward" and dcs.correction and abs(dcs.fwd_target_m - (ref + dcs.drive_m)) < 1e-9
     assert abs(dcs.backup.need_m - limits.backup_needed_m(0.15, ref)) < 1e-9
     # 회전이 좌우를 옮기는 걸 계획기가 안다 — 좌우 0.14, 방향 −5도: 정면 보면 A·sin5 = 0.13 이 지워져 9 mm 남는다 → 회전 하나로 진입
-    dcs = Planner(lrn, meas).decide(fix_at(0.14, ref, -5.0, sl=0.008, sh=0.2), now=1000.0)
+    dcs = Planner(lrn, **meas).decide(fix_at(0.14, ref, -5.0, sl=0.008, sh=0.2), now=1000.0)
     print("  좌우 0.14 · 방향 −5도       → %-8s %s" % (dcs.kind, dcs.summary()))
     assert dcs.kind == "step" and dcs.turn_deg > 0 and dcs.complete, dcs
     # 상한 계수: 마지막 단계에서 step/backup 실행이 corrections 를 올린다
-    pl = Planner(lrn, meas)
-    dcs = pl.decide(fix_at(meas.cam_to_rot_center_m * math.sin(math.radians(3.0)), ref, 3.0, sl=0.008, sh=0.2), now=1000.0)
+    pl = Planner(lrn, **meas)
+    dcs = pl.decide(fix_at(A0 * math.sin(math.radians(3.0)), ref, 3.0, sl=0.008, sh=0.2), now=1000.0)
     pl.executed(dcs)
     assert dcs.kind == "step" and pl.progress.corrections == 1 and pl.progress.steps == 1
     pl.executed(Decision("backup"))
     assert pl.progress.corrections == 2 and pl.progress.backed_up
-    pl2 = Planner(lrn, meas)
+    pl2 = Planner(lrn, **meas)
     pl2.executed(pl2.decide(fix_at(1.0, 8.0), now=0.0))
     assert pl2.progress.corrections == 0 and pl2.progress.steps == 1                    # 태그컷 전엔 보정이 아니다
 
     # (4) 못 믿을 때 — few 는 β·거리로 곧장 가볼 수 있고, stale/clock/no_tag 는 더 본다
     f = fix_at(0.0, 6.0, ok=False, why="few")
-    dcs = Planner(lrn, meas).decide(f, now=1000.0)
+    dcs = Planner(lrn, **meas).decide(f, now=1000.0)
     print("\nfew (6 m, β 0)        → %s" % dcs.summary())
     assert dcs.kind == "uncertain" and 0 < dcs.drive_m <= C.STEP_FORWARD_HARD_MAX_M
     f = fix_at(2.0, 6.0, ok=False, why="few")                                           # β 18도 — 옆으로 잘리기 전까지만
-    dcs = Planner(lrn, meas).decide(f, now=1000.0)
+    dcs = Planner(lrn, **meas).decide(f, now=1000.0)
     print("few (6 m, β %.0f도)     → %s" % (f.beta_deg, dcs.summary()))
     assert dcs.kind == "uncertain" and dcs.drive_m < 6.0 - ref
     for why in ("stale", "clock", "no_tag", "no_sigma"):
-        dcs = Planner(lrn, meas).decide(fix_at(0.0, 6.0, ok=False, why=why), now=1000.0)
+        dcs = Planner(lrn, **meas).decide(fix_at(0.0, 6.0, ok=False, why=why), now=1000.0)
         assert dcs.kind == "uncertain" and dcs.drive_m == 0.0 and dcs.why.startswith(why)
-    assert Planner(lrn, meas).decide(fix_at(0.0, ref, ok=False, why="few"), now=1000.0).drive_m == 0.0
+    assert Planner(lrn, **meas).decide(fix_at(0.0, ref, ok=False, why="few"), now=1000.0).drive_m == 0.0
     # 회전중심을 모르면 한 걸음 회전이 5도 (결정 ③)
-    dcs = Planner(lrn, M.Measured()).decide(fix_at(1.0, 8.0), now=1000.0)
+    dcs = Planner(lrn).decide(fix_at(1.0, 8.0), now=1000.0)
     assert dcs.kind == "step" and abs(dcs.turn_deg) <= C.TURN_MAX_UNKNOWN_CENTER_DEG + 1e-9, dcs
     # 완화 (3-6 ③): 2σ 안이던 좌우가 1.5σ 로는 진짜가 된다
-    pl = Planner(lrn, meas)
+    pl = Planner(lrn, **meas)
     f = fix_at(0.09, 6.0, sl=0.05, sh=0.3)
     assert pl.decide(f, now=0.0).turn_deg == 0.0
     pl.relax()
@@ -714,9 +711,9 @@ if __name__ == "__main__":
     rng = random.Random(7)
     print("\n닫힌 고리:")
     for lat0, fwd0, h0, wA in ((1.0, 8.0, 0.0, -1.44), (-0.6, 6.0, 5.0, -1.56), (0.25, 5.0, -3.0, -1.5), (1.8, 8.0, 0.0, -1.44)):
-        world = _Geo(M.Measured(cam_to_rot_center_m=wA), lrn)
+        world = _Geo(lrn, A=wA)
         Lc, Fc, h = world.center(lat0, fwd0, h0)[0], world.center(lat0, fwd0, h0)[1], h0
-        pl, log, outcome = Planner(lrn, meas), [], None
+        pl, log, outcome = Planner(lrn, **meas), [], None
         for step in range(C.MAX_STEPS):
             lat, fwd = world.camera(Lc, Fc, h)
             f = fix_at(lat, fwd, h)

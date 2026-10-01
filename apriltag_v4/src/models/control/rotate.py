@@ -29,7 +29,7 @@ def min_turn_deg(learner):
 
     광운대의 2.5도(ROT_MIN_COMMANDABLE_ANGLE_DEG)는 우리 하한이 아니다 — 그쪽은 시간으로
     끊어 짧은 명령을 못 맞추고, 우리는 자이로를 보고 끊는다. 씨앗 0.81 은 유도값이고
-    before_run 이 실측으로 덮는다. 못 쟀으면 None 이고 그때는 제한도 없다.
+    calibrate.py rotfloor 가 재서 config ROT_FLOOR_DEG 에 적는다. 못 쟀으면 None 이고 그때는 제한도 없다.
     """
     return learner.rot_floor_deg
 
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     # 차 모델은 광운대 씨앗(출발 1.08 s · 12 도/s · 관성 0.283 s)을 1차 지연으로 흉내낸다.
     import math
     from collections import deque
-    from config import measured as M
+    from src.models.control import learn as M
     from ...utils.gyro import Gyro
     from .learn import Learner
 

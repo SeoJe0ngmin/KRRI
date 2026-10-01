@@ -34,5 +34,5 @@
 | `apriltag_v2/src/utils/tag_layout.py` | 태그 여러 장을 한 좌표계로 묶는 것. 지금 1장. **근거리 태그 2장 안이 살아나면 가져온다** |
 | `apriltag_v3/src/utils/run_log.py` | **동기 쓰기**라 디스크가 멈칫하면 루프가 같이 멈춘다. `record.py` 가 큐+스레드로 다시 썼다 (plan 6-6). 스키마(frame·imu·can·event·config)는 그대로 따랐다 |
 | `apriltag_v3/src/utils/event_log.py` | 위와 같음. `snapshot_config` 는 `record.snapshot()` 이 대신한다 |
-| `apriltag_v3/src/utils/calib.py` | 캘리브 파일 형식. `config/measured.py` 가 대신한다 |
+| `apriltag_v3/src/utils/calib.py` | 캘리브 파일 형식. 쓰지 않는다 (캘리브 값은 config/control.py, σ 기준선은 run 이 출발 전에 잰다) |
 | `apriltag_v3/src/utils/timing.py` | v3 전용 타이밍 계측층 |

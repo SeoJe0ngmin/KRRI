@@ -8,19 +8,20 @@
     python tools/run.py --dry-run             CAN 안 보냄. 위와 조합 가능
 
 출발 전 게이트 (하나라도 걸리면 출발하지 않는다):
-    ① measured.require(MUST_MEASURE)   회전중심 둘 · cam_yaw_offset · σ 셋 — before_run 이 잰 것 (태그컷은 프레임마다 다시 잰다)
-    ② 조향 강도 30                      config 와 measured.json(또는 광운대 씨앗)의 각인이 같나 (결정 1)
+    ① 캘리브 값 (config)               CAM_YAW_OFFSET_DEG 가 None 이면 거부 — 정면의 기준. 회전중심(CAM_TO_ROT_CENTER_M)은 None 이면 회전 상한 5도로
+    ② 조향 강도 30                      광운대 씨앗(learn.KWU_SEED)이 30 짜리다 (결정 1)
     ③ CAN 동결 테이블                   6개 프레임 8바이트 (Driver.open → frames.apply_and_verify)
     ④ 시계 검사 clock.check()           카메라 기준점이 잡혔나 (WARMUP_FRAMES)
     ⑤ 자이로 보정                       IMU_BIAS_SEC 정지. 흔들리면 다시
+    ⑥ σ 기준선 (출발 뒤, 태그가 보이면)  SIGMA_STILL_S 초 정지 → 밀림 기준선·태그 기울기. 이게 있어야 추정기가 ok 를 낸다 (2026-10-02: 매 주행, 그 자리에서)
 SPACE 로 출발 (터미널에서 직접 읽는다 — SSH 터미널도 된다). Ctrl+C · q · ESC 는 **즉시 정지**(먼저 CAN 정지, 그다음 기록).
 
 스레드 (plan 4-2-2): 메인 = 화면·키·감시 / 카메라 = 프레임→검출→추정기 / 제어 = 계획·명령·학습 / SDK 콜백 = 자이로 적분·회전 정지 판정
 / 기록 = 파일 쓰기(Recorder) / CANBusOwner = 송신(광운대 control.py). 제어가 죽으면 driver.stop + 알림.
 ★카메라를 제어에서 뺀 이유: forward() 가 look_fn 을 5 ms 마다 부르는 폐루프라 직진 중에도 누군가 프레임을 먹어야 한다
-(before_run 의 Rig 와 같은 구조). 회전 중엔 카메라 자세를 안 믿고(결정 7) 끝나면 추정기를 비운다.
+(calibrate 의 Rig 와 같은 구조). 회전 중엔 카메라 자세를 안 믿고(결정 7) 끝나면 추정기를 비운다.
 
-상태: SEARCH(태그 없으면 plan 3-8 50도 훑기) → DECIDE(plan.decide) → SIDESTEP / STEP(돌고 → 보며 직진) / BACKUP / COMMIT(눈 감고) / 끝.
+상태: SEARCH(태그 없으면 plan 3-8 50도 훑기) → BASELINE(σ 기준선, 처음 한 번) → DECIDE(plan.decide) → SIDESTEP / STEP(돌고 → 보며 직진) / BACKUP / COMMIT(눈 감고) / 끝.
 실패 7종은 전부 정지 + 사람 호출 (plan 3-10): timeout · tag_lost · no_converge(모르겠다·경로 없음·마지막 상한·걸음 초과) ·
 gyro_stale · exception(CAN·시계·카메라) · deadman. 기록은 주행을 절대 막지 않는다 (plan 6-6).
 """
@@ -49,13 +50,13 @@ sys.path.insert(0, str(ROOT / "tools"))
 from config import control as C                                      # noqa: E402
 from config import detection as D                                    # noqa: E402
 from config import imu as I                                          # noqa: E402
-from config import measured as M                                     # noqa: E402
 from src import limits                                               # noqa: E402
 from src.models.control import forward as F                          # noqa: E402
 from src.models.control import rotate as R                           # noqa: E402
 from src.models.control import sidestep as SS                        # noqa: E402
+from src.models.control import learn as LN                           # noqa: E402
 from src.models.control.driver import Driver                         # noqa: E402
-from src.models.control.learn import Ema, Learner                    # noqa: E402
+from src.models.control.learn import Learner                         # noqa: E402
 from src.models.detection import estimate as E                       # noqa: E402
 from src.models.detection import tag as T                            # noqa: E402
 from src.models.planning import plan as PL                           # noqa: E402
@@ -64,7 +65,7 @@ from src.utils.gyro import Gyro                                      # noqa: E40
 from src.utils.record import STOP_REASONS, Recorder                  # noqa: E402
 
 # ── 구현 세부 (config 에 올리지 않는다 — plan 12-4) ─────────────────────
-STILL_S = 2 * E.WINDOW_S          # 회전·사이드스텝 뒤 추정 창이 통째로 새 프레임으로 찰 때까지 (before_run STILL_S 와 같은 근거)
+STILL_S = 2 * E.WINDOW_S          # 회전·사이드스텝 뒤 추정 창이 통째로 새 프레임으로 찰 때까지 (calibrate STILL_S 와 같은 근거)
 LOST_S = 2 * E.WINDOW_S           # 태그를 이만큼 못 보면 잃은 것 → 탐색 (forward 의 BLIND_MAX_S 1.0 과 같은 크기)
 UNCERTAIN_S = 4 * E.WINDOW_S      # "모르겠다" 가 이만큼 이어지면 문턱을 낮추고(3-6 ③), 또 이어지면 사람(④). 밀림은 더 봐도 안 준다
 CLOCK_BAD_S = 2.0                 # stale/clock 이 이만큼 이어지면 카메라·시계 이상 → 정지 (MAX_AGE_S 0.3 의 여섯 배)
@@ -76,9 +77,10 @@ DISPLAY_SIZE = (960, 540)         # 화면·영상은 축소해서 (plan 12-0-1)
 DISPLAY_FPS = 15.0
 DEADMAN_ABORT_S = -1.0            # 비상정지 때 lease 를 과거로 — rotate/forward 의 대기 루프가 "lease" 로 즉시 빠져나온다
 CONTROL_JOIN_S = 15.0             # 제어 스레드가 동작을 접고 나올 때까지 (SETTLE_S 2 + STILL_S 1 + 여유)
+BASELINE_STILL_TOL_DEG = 0.3      # σ 기준선 재는 동안 자이로가 이보다 돌았으면 차가 움직인 것 → 다시 (plan 5-6 "0.3도 넘게 돌았으면 버린다")
 FRAME_KEYS = ("lateral", "vertical", "forward", "heading_deg", "distance", "beta_deg", "edge_px", "top_px", "tag_px",
               "row_px", "angle_ok", "reproj_px", "tilt_deg", "tag_roll_deg", "gyro_deg", "err_ratio")
-STATE_LEVEL = {"BOOT": "warn", "GATE": "warn", "WAIT": "warn", "SEARCH": "warn", "DECIDE": "txt", "ROTATE": "ok",
+STATE_LEVEL = {"BOOT": "warn", "GATE": "warn", "WAIT": "warn", "SEARCH": "warn", "BASELINE": "warn", "DECIDE": "txt", "ROTATE": "ok",
                "DRIVE": "ok", "SIDESTEP": "ok", "BACKUP": "warn", "COMMIT": "ok", "DONE": "ok", "FAIL": "bad",
                "STOP": "bad"}
 
@@ -150,37 +152,12 @@ class RealSource:
 
 
 def _intr_dict(intr):
-    """Measured.intrinsics — limits._intr 이 읽는 이름 (before_run._intr_dict 와 같다)."""
+    """계획기·기록용 intrinsics dict — limits._intr 이 읽는 이름 (calibrate._intr_dict 와 같다)."""
     d = {"fx": float(intr.fx), "fy": float(intr.fy), "cx": float(intr.cx), "cy": float(intr.cy),
          "w": int(intr.width), "h": int(intr.height),
          "distortion": [float(x) for x in (getattr(intr, "distortion", None) or ())]}
     d["half_fov_deg"] = limits.half_fov_deg(d)
     return d
-
-
-def _seeds_from(m):
-    """Learner 씨앗 = 광운대 씨앗 위에 measured 의 값 (before_run._load_measured 과 같은 규칙)."""
-    s = M.seeds()
-    for k in ("rot_tau_s", "rot_rate_dps", "rot_startup_s", "rot_residual_deg", "fwd_tau_s", "fwd_speed_mps", "fwd_startup_s"):
-        for kk, vv in (getattr(m, k, None) or {}).items():
-            if vv is not None:
-                s.setdefault(k, {})[kk] = vv
-    if getattr(m, "fwd_residual_m", None) is not None:
-        s["fwd_residual_m"] = m.fwd_residual_m
-    if getattr(m, "rot_floor_deg", None) is not None:
-        s["rot_floor_deg"] = m.rot_floor_deg
-    return s
-
-
-def _add_back_model(lrn, m):
-    """후진(187) 씨앗은 광운대에 없다 — before_run 이 잰 back_speed/back_startup 만 씨앗으로. 없으면 후진 모델 없음."""
-    k = str(F.strength_of("backward"))
-    for dct, (lo, hi) in ((lrn.fwd_speed, lrn.SPEED_FWD), (lrn.fwd_startup, lrn.STARTUP_FWD), (lrn.fwd_tau, lrn.TAU_FWD)):
-        dct.setdefault(k, Ema(lo=lo, hi=hi))
-    for e, v in ((lrn.fwd_speed[k], getattr(m, "back_speed_mps", None)),
-                 (lrn.fwd_startup[k], getattr(m, "back_startup_s", None))):
-        if v is not None and math.isfinite(v):
-            e.value, e.seed = float(v), float(v)
 
 
 def _json_safe(v):
@@ -253,7 +230,8 @@ class Docking:
         self._olock = threading.Lock()           # outcome 은 먼저 쓴 쪽이 이긴다
         self.outcome = None
         self._stop_written = False
-        self.measured = None
+        self.seeds_from = None                   # 물려받은 seeds.json 경로 (없으면 None)
+        self._collect = None                     # 켜져 있으면 카메라 스레드가 프레임 상태를 여기 모은다 (σ 기준선)
         self.driver = self.src = self.gyro = self.est = self.learner = self.planner = None
         self.intr = self.shape = None
         self.camclock = clock.CameraClock()
@@ -279,13 +257,15 @@ class Docking:
     # ── 열기 · 게이트 ──────────────────────────────────────────────────
     def open(self):
         L = self.log
-        # ① 측정값 — 없으면 시끄럽게 실패 (before_run 을 먼저 돌려야 한다)
-        self.measured = m = M.load(self.root, deflection_now=C.ROTATE_JOYSTICK_DEFLECTION)
-        m.require(*M.MUST_MEASURE)
-        L("  측정값: %s" % m.source)
-        # ② 조향 강도 30 (결정 1). M.load 가 measured.json 의 각인을 대조했고, 여기서 config 자체를 본다
-        if C.ROTATE_JOYSTICK_DEFLECTION != M.KWU_DEFLECTION:
-            raise SystemExit("!! 조향 강도가 %d 다 — 30 이 아니면 출발하지 않는다 (결정 1: 씨앗·측정이 30 짜리)"
+        # ① 캘리브 값 (config) — 카메라 어긋난 각은 정면의 기준이라 없으면 출발하지 않는다. 회전중심은 없으면 회전 상한 5도 (결정 ③)
+        if C.CAM_YAW_OFFSET_DEG is None:
+            raise SystemExit("!! config CAM_YAW_OFFSET_DEG 가 None — tools/calibrate.py camyaw 로 재서 config/control.py 에 적어라")
+        if C.CAM_TO_ROT_CENTER_M is None:
+            L("  !! 회전중심을 모른다 (config CAM_TO_ROT_CENTER_M=None) — 회전 상한 %.0f도로 간다. tools/calibrate.py rotcenter 로 재라"
+              % C.TURN_MAX_UNKNOWN_CENTER_DEG)
+        # ② 조향 강도 30 (결정 1) — 씨앗이 30 짜리다
+        if C.ROTATE_JOYSTICK_DEFLECTION != LN.KWU_DEFLECTION:
+            raise SystemExit("!! 조향 강도가 %d 다 — 30 이 아니면 출발하지 않는다 (결정 1: 씨앗이 30 짜리)"
                              % C.ROTATE_JOYSTICK_DEFLECTION)
         # ③ CAN 동결 테이블 → 버스. dry 면 안 보낸다
         self.driver = Driver(dry_run=self.dry, recorder=self.rec, log=L)
@@ -293,29 +273,28 @@ class Docking:
         # 장비 — 진짜만. 가짜 리그는 없다 (2026-10-01: 가짜 데이터로 판단하지 않는다)
         self.src = RealSource(L, raw=self.rec is not None)
         self.gyro, self.intr, self.shape = self.src.gyro, self.src.intr, self.src.shape
-        # intrinsics 는 카메라에서 읽은 것 (결정 4). before_run 때와 다르면 말한다 — 통로·태그컷 입력이 바뀐다
-        live = _intr_dict(self.intr)
-        old = m.intrinsics or {}
-        if old.get("fx"):
-            diff = max(abs(float(old.get(k, live[k])) - live[k]) for k in ("fx", "fy", "cx", "cy"))
-            if diff > 1.0:
-                L("  !! intrinsics 가 before_run 때와 %.1f px 다르다 — 해상도·카메라가 바뀌었나. 지금 카메라 값을 쓴다" % diff)
-        m.intrinsics = live
-        # 추정기 · 학습기 · 계획기
-        self.est = E.Estimator(self.intr, D.TAG_SIZE_M, cam_yaw_offset_deg=m.cam_yaw_offset_deg or 0.0,
-                               tag_roll_correction_deg=m.tag_roll_deg or 0.0, noise=m)
-        self.learner = Learner(mode=self.mode, seeds=_seeds_from(m))
-        _add_back_model(self.learner, m)
-        self.planner = PL.Planner(self.learner, m)
+        live = _intr_dict(self.intr)                             # intrinsics 는 카메라에서 읽은 것 (결정 4)
+        # 추정기 — σ 기준선·태그 기울기는 출발 뒤 _baseline() 이 그 자리에서 재서 넣는다. 그 전엔 fix 가 no_sigma 다
+        self.est = E.Estimator(self.intr, D.TAG_SIZE_M, cam_yaw_offset_deg=C.CAM_YAW_OFFSET_DEG,
+                               tag_roll_correction_deg=0.0, noise=None)
+        # 학습기 — 광운대 씨앗 위에 지난 주행(또는 calibrate)이 남긴 seeds.json. 회전 하한은 config 실측이 있으면 그걸로
+        learned, self.seeds_from = LN.last_seeds(self.root)
+        seeds = LN.seeds(learned)
+        if C.ROT_FLOOR_DEG is not None:
+            seeds["rot_floor_deg"] = C.ROT_FLOOR_DEG
+        self.learner = Learner(mode=self.mode, seeds=seeds)
+        # 계획기 — 기하는 config 의 calibrate 값 + 카메라 intrinsics
+        self.planner = PL.Planner(self.learner, intr=live, A=C.CAM_TO_ROT_CENTER_M, b=C.ROT_CENTER_LATERAL_M,
+                                  rms_mm=C.ROT_CENTER_RMS_MM)
         g = self.planner.geo
-        L("  태그컷 폴백 %.2f m (실행 중엔 프레임마다 다시 잰다) · 회전중심 %s · 회전 하한 %s · 최소걸음 %.3f m · 뒤공간 %.2f m · 후진 모델 %s"
-          % (g.cut0, ("앞 %.2f m" % -g.A) if g.center_known else "미확정(회전 5도)",
-             ("%.2f도" % g.floor) if g.floor else "없음", g.min_step, g.back_space,
-             "있음" if self.learner.fwd_speed_mps(F.strength_of("backward")) else "없음"))
+        L("  씨앗: 광운대 KWU_SEED%s" % ((" + %s" % self.seeds_from) if self.seeds_from else " (지난 seeds.json 없음)"))
+        L("  회전중심 %s · 회전 하한 %s · 최소걸음 %.3f m · 뒤공간 %.2f m · 태그컷 폴백 %.2f m (실행 중엔 프레임마다 다시 잰다)"
+          % (("앞 %.2f m (RMS %s mm)" % (-g.A, C.ROT_CENTER_RMS_MM)) if g.center_known else "미확정(회전 5도)",
+             ("%.2f도" % g.floor) if g.floor else "없음", g.min_step, g.back_space, g.cut0))
         if self.rec is not None:
-            self.rec.snapshot(sys.argv, extra={"tool": "run", "mode": self.mode,
-                                               "measured": _json_safe(m.__dict__), "intrinsics": live,
-                                               "seeds": _json_safe(self.learner.seeds())})
+            self.rec.snapshot(sys.argv, extra={"tool": "run", "mode": self.mode, "intrinsics": live,
+                                               "seeds": _json_safe(seeds),
+                                               "seeds_from": str(self.seeds_from) if self.seeds_from else None})
         self.cam = threading.Thread(target=self._cam_loop, name="Camera", daemon=True)
         self.cam.start()
         self.keys.start()
@@ -428,6 +407,8 @@ class Docking:
                     if st is not None:
                         self.n_seen += 1
                         self.last_seen_t, self.last_beta = t_cap, st.get("beta_deg")
+                        if self._collect is not None:
+                            self._collect.append(dict(st, t=t_cap))
                     fix = self.est.fix(moving=moving)
                 if last_t is not None:
                     self.loop_ms = (t_arr - last_t) * 1000.0
@@ -659,8 +640,11 @@ class Docking:
                 time.sleep(F.POLL_S)
                 continue
             bad_since = None
+            if not self.est.drift.ok:
+                self._baseline()                                  # ⑥ 출발 뒤 처음 한 번 — 그 자리에서 σ 기준선 (2026-10-02)
+                continue
             if f.why == "no_sigma":
-                raise _Fail("no_converge", "σ 기준선이 없다 — before_run 의 sigma_still 이 필요하다")
+                raise _Fail("no_converge", "σ 기준선이 없다 — 출발 전 기준선 측정이 안 됐다")
 
             self._set_state("DECIDE")
             d = self.planner.decide(f)
@@ -697,6 +681,68 @@ class Docking:
                 raise _Fail("exception", "모르는 결정 %s" % d.kind)
             self.planner.executed(d, ok)
         # 정지 요청으로 나왔다 (사람). outcome 은 emergency() 가 적었다
+
+    def _baseline(self):
+        """⑥ σ 기준선 — 출발 뒤 태그가 보이는 자리에서 SIGMA_STILL_S 초 가만히. 0.5초 창 평균의 흔들림(밀림)이 추정기의 σ 가 되고
+        (plan 3-6 · 결정 8), 가속도계로 본 태그 기울기도 같이 넣는다. 2026-10-02 부터 before_run 대신 매 주행 여기서 — 그 자리·
+        조명·거리의 값이라 더 맞다. 재는 동안 차가 움직였으면(자이로) 한 번 더. 그래도 안 되면 정지·사람. 끝나면 시간 상한이 다시 돈다."""
+        L = self.log
+        self._set_state("BASELINE")
+        sec = C.SIGMA_STILL_S
+        b = rows = None
+        moved = 0.0
+        for attempt in range(2):
+            L("       σ 기준선 — %.0f초 가만히 (차·사람 모두. 카메라 앞을 지나가지 마라)%s" % (sec, " (다시)" if attempt else ""))
+            self.driver.stop("baseline")
+            g0 = self.gyro.angle_deg
+            with self._lock:
+                self.est.reset()
+                self._collect = []
+            t0 = clock.now()
+            while clock.now() - t0 < sec:
+                if self.stop_req.is_set():
+                    with self._lock:
+                        self._collect = None
+                    return
+                time.sleep(0.1)
+            with self._lock:
+                rows, self._collect = self._collect, None
+            moved = abs(self.gyro.angle_deg - g0)
+            b = E.baseline_from_rows(rows)
+            if self.rec is not None and not self._stop_written:
+                try:
+                    self.rec.event("sigma_baseline", attempt=attempt, n=len(rows), moved_deg=moved, ok=b is not None,
+                                   **(_json_safe({"noise": b.noise.__dict__, "lateral": b.lateral._asdict(),
+                                                  "heading": b.heading._asdict(),
+                                                  "distance": b.distance._asdict() if b.distance else None,
+                                                  "n_clean": b.n_clean, "ambiguous_rate": b.ambiguous_rate,
+                                                  "tag_roll_deg": b.tag_roll_deg}) if b else {}))
+                except Exception as e:
+                    self._warn("baseline_rec", "기준선 기록 실패: %s" % e)
+            if b is None:
+                raise _Fail("no_converge", "σ 기준선을 못 냈다 — %.0f초에 프레임 %d 장 (태그가 안 보였거나 두 해가 헷갈렸다)" % (sec, len(rows)))
+            if moved > BASELINE_STILL_TOL_DEG:
+                L("       !! 재는 동안 %.2f도 돌았다 — 차가 움직였다. 다시" % moved)
+                continue
+            break
+        else:
+            raise _Fail("no_converge", "σ 기준선 — 두 번 다 차가 움직였다 (자이로 %.2f도)" % moved)
+        with self._lock:
+            self.est.set_noise(b.noise)
+            if b.tag_roll_deg is not None:
+                self.est.set_tag_roll(b.tag_roll_deg)              # reset 까지 한다
+            else:
+                self.est.reset()
+        n = b.noise
+        L("       %d 장 (헷갈린 장 %.0f %%) · 기준 거리 %.2f m · 밀림 좌우 %.1f mm · 방향 %.3f도 · 거리 %s · 태그 기울기 %s"
+          % (b.n, b.ambiguous_rate * 100, n.sigma_ref_distance_m, n.sigma_drift_lateral_m * 1e3, n.sigma_drift_heading_deg,
+             ("%.1f mm" % (n.sigma_drift_distance_m * 1e3)) if n.sigma_drift_distance_m is not None else "-",
+             ("%.2f도" % b.tag_roll_deg) if b.tag_roll_deg is not None else "- (가속도계 없음)"))
+        L("       (좌우 블록평균 sd %.1f mm · 떨림 %.1f mm. 9/21 실측은 밀림 31 mm — 많이 다르면 조명·태그 판을 의심)"
+          % (b.lateral.block_sd * 1e3, b.lateral.resid_sd * 1e3))
+        self.t_start = clock.now()                               # 시간 상한은 여기서부터 — 기준선 재는 1분은 주행이 아니다
+        if self.rec is not None and not self._stop_written:
+            self.rec.event("start", t=self.t_start, wall=time.time(), mode=self.mode, after="baseline")
 
     def _limits(self):
         """루프마다. 시간·걸음·자이로·CAN·카메라."""
@@ -862,7 +908,7 @@ class Docking:
             res = F.forward_timed(self.driver, self.learner, d.drive_m, "backward", self.rec, self.log)
             self._check_leg(res)
         if res.reason == "no_model":
-            raise _Fail("no_converge", "후진 속도를 모른다 — 후진 못 함, 정지·사람 (before_run backspeed)")
+            raise _Fail("no_converge", "후진 속도를 모른다 — 후진 못 함, 정지·사람 (learn.KWU_SEED 에 187 씨앗이 없다)")
         return res.done
 
     def _commit(self, d):
@@ -925,7 +971,7 @@ class Docking:
                     "gyro": self.gyro.quality() if self.gyro is not None else None,
                     "clock": self.camclock.report(),
                     "camera": (self.src.stats.summary() if getattr(self.src, "stats", None) else None),
-                    "measured_source": self.measured.source if self.measured else None,
+                    "seeds_from": str(self.seeds_from) if self.seeds_from else None,
                     "video_frames": self.video_k if self.video is not None else None})
         return _json_safe(out)
 
@@ -959,6 +1005,8 @@ class Docking:
         if self.rec is not None:
             try:
                 (self.dir / "learned.json").write_text(json.dumps(summary.get("learner"), ensure_ascii=False, indent=1))
+                # 다음 주행이 물려받는다 (learn.last_seeds — 수렴한 값만 들어 있다)
+                (self.dir / "seeds.json").write_text(json.dumps(summary.get("learned_seeds"), ensure_ascii=False, indent=1))
             except Exception:
                 pass
             rs = self.rec.close(outcome=summary)

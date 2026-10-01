@@ -3,7 +3,7 @@
 가정값을 두지 않는다. 판정에 필요한 흔들림·오차는 전부 **그때 잰 값**을 인자로 받는다.
 근거는 plan.md 1절 · 3-3 · 4-5 · 2026-09-30 결정 ④⑥(통로·후진).
 
-intr 는 어느 꼴이든 받는다 — (w,h,fx,fy,cx,cy) 튜플 · measured.intrinsics 같은 dict ·
+intr 는 어느 꼴이든 받는다 — (w,h,fx,fy,cx,cy) 튜플 · run 이 카메라에서 읽은 dict ·
 CameraIntrinsics 객체. **카메라에서 읽은 것**을 넘기는 게 원칙이고 D435I_COLOR_REF 는 폴백이다.
 """
 import math
@@ -47,7 +47,7 @@ def tag_cut_m(intr=None, height_diff_m=None):
     """태그 윗변이 화면 위로 나가는 거리. 높이차와 intrinsics 에서 나온다.
 
     height_diff_m 을 안 주면 config 의 **명목값**(TAG_HEIGHT_M − CAMERA_HEIGHT_M)이다 — 문서·자체시험용.
-    실행 경로는 before_run 이 잰 높이차(또는 잰 tag_cut_m)를 넘긴다. 실측·명목을 섞지 않는다.
+    실행 경로는 프레임마다 tag_cut_live_m 을 쓴다 — 이건 폴백·문서용. 실측·명목을 섞지 않는다.
     """
     _, _, _, fy, _, cy = _intr(intr)
     dz = (D.TAG_HEIGHT_M - D.CAMERA_HEIGHT_M) if height_diff_m is None else float(height_diff_m)
@@ -110,7 +110,7 @@ def corridor_half_m(distance_m, intr=None, cut_m=None):
     """이 거리에서 한 번의 대각 직진으로 태그를 안 놓치고 닿을 수 있는 좌우 반폭 [m].
 
     distance_m 은 태그면까지 법선 거리(Fix.forward_m). 밖이면 사이드스텝(sidestep.py).
-    cut_m 은 before_run 이 잰 태그컷(measured.tag_cut_m). 없으면 계산값.
+    cut_m 은 계획기가 그 순간 다시 잰 태그컷(_Geo.cut). 없으면 명목 계산값.
     """
     cut = tag_cut_m(intr) if cut_m is None else float(cut_m)
     return max(0.0, _corridor_slope(intr, cut) * (distance_m - cut))
@@ -221,7 +221,7 @@ if __name__ == "__main__":
         a, b, c = f(ref), f(as_dict), f(_Obj())
         assert abs(a - b) < 1e-9 and abs(a - c) < 1e-9, f.__name__
         assert f({}) == f(None) == a, f.__name__                 # 안 잰 intrinsics({}) 는 폴백
-    # measured.intrinsics 처럼 width/height 이름이어도, w·h 가 아예 없어도 같은 답
+    # run 의 intrinsics dict 처럼 width/height 이름이어도, w·h 가 아예 없어도 같은 답
     assert abs(tag_cut_m({"fx": ref[2], "fy": ref[3], "cx": ref[4], "cy": ref[5]}) - tag_cut_m(ref)) < 1e-9
     assert abs(half_fov_deg(dict(width=ref[0], height=ref[1], fx=ref[2], fy=ref[3], cx=ref[4], cy=ref[5]))
                - half_fov_deg(ref)) < 1e-9

@@ -12,11 +12,12 @@ v2 는 정지한 뒤 30 프레임 중앙값을 썼다. v4 는 가면서 계속 �
 그 자체로 과거값이라 틀린다. 기울기는 덤으로 나온다.
 
 σ = √(밀림² + 떨림²)  (2026-09-30 결정 8, plan 3-6)
-    밀림  before_run 이 정지 60초에서 잰 "0.5초 창 평균의 흔들림"(Measured.sigma_drift_*).
+    밀림  run.py 가 **출발 전 그 자리에서** 정지 SIGMA_STILL_S 초 동안 잰 "0.5초 창 평균의 흔들림"(Noise.sigma_drift_*,
+          2026-10-02 부터 매 주행. 그 전엔 before_run 이 하루 한 번).
           창 안에서 평균을 내도 안 줄어드는 느린 성분이다. 9/21 3.68 m 정지 1459 프레임:
           잡음의 60 % 가 자기상관 0.6 인 느린 성분이라 30장 평균 sd 가 30.9 mm 였다
           (독립이면 7.2 mm). 잔차만 보던 예전 Track 은 같은 자료에서 σ 를 3 배 작게 냈다
-          (plan 문제 5-1 ③). 기준선 계산식은 drift_baseline() — before_run 도 이걸 쓴다.
+          (plan 문제 5-1 ③). 기준선 계산식은 drift_baseline() — baseline_from_rows() 가 이걸 쓴다.
     떨림  지금 창의 직선 잔차 sd ÷ √n, 창 끝 지렛대 포함. 프레임마다 새로 나온다.
 밀림은 잰 거리에서 지금 거리로 옮긴다: 방향 ∝ 거리, 좌우 = 거리 × 방향 ∝ 거리² (plan 문제 1).
 직진 중(fix(moving=True))엔 직진 60초 기준선(sigma_drive_*)을 쓴다. 없으면 정지 것 (plan 3-4).
@@ -56,9 +57,8 @@ class Fix:
 
     *_sigma = √(밀림² + 떨림²). 두 조각(*_drift_sigma · *_fast_sigma)은 진단으로 따로 남긴다.
     모르는 σ 는 무한대다 — 0 이면 "확실하다" 로 읽혀 위험하다.
-    거리의 밀림 기준선(sigma_drift_distance_m)은 ★Measured 에 아직 없다. 그때까지 distance_sigma_m
-    은 떨림만이라 1초 사이의 변화도 3 배쯤 작게 본다 (9/21 정지: 떨림 1.3 mm, 1초 변화 sd 3.5 mm,
-    0.5초 블록 밀림 11.5 mm). 출발·멎음 문턱(forward.py)에 쓰려면 그 기준선이 있어야 한다.
+    거리의 밀림 기준선(sigma_drift_distance_m)도 출발 전 기준선에서 같이 나온다 (2026-10-02). 없으면 distance_sigma_m
+    은 한 장 떨림이라 1초 사이의 변화도 작게 본다 (9/21 정지: 떨림 1.3 mm, 1초 변화 sd 3.5 mm, 0.5초 블록 밀림 11.5 mm).
     """
     ok: bool = False
     why: str = "no_tag"                 # ok / few / stale / clock / no_sigma / no_tag
@@ -158,8 +158,19 @@ class Track:
         return keep if len(keep) >= MIN_N else pts
 
 
+@dataclass
+class Noise:
+    """σ 기준선. run.py 가 출발 전 정지 SIGMA_STILL_S 초에서 잰다 (baseline_from_rows). 자체시험은 손으로 만든다."""
+    sigma_ref_distance_m: float                    # 잰 자리의 3D 거리(Fix.distance_m 중앙값). 밀림을 거리로 옮기는 기준
+    sigma_drift_lateral_m: float                   # 밀림 — 창 평균에서 안 줄어드는 부분
+    sigma_drift_heading_deg: float
+    sigma_drift_distance_m: float | None = None    # 거리도. 없으면 한 장 떨림으로 대신
+    sigma_drive_lateral_m: float | None = None     # 직진 중 기준선 — 지금은 안 잰다 (정지 것으로 대신)
+    sigma_drive_heading_deg: float | None = None
+
+
 class Drift:
-    """밀림 기준선(before_run 이 잰 Measured 값) -> 지금 거리의 밀림 σ."""
+    """밀림 기준선(출발 전 잰 Noise) -> 지금 거리의 밀림 σ."""
 
     def __init__(self, noise):
         def g(k):
@@ -167,7 +178,7 @@ class Drift:
         self.ref_m = g("sigma_ref_distance_m")
         self.still = (g("sigma_drift_lateral_m"), g("sigma_drift_heading_deg"))
         self.drive = (g("sigma_drive_lateral_m"), g("sigma_drive_heading_deg"))   # 직진 60초. 없으면 정지 것
-        self.distance_m = g("sigma_drift_distance_m")   # ★Measured 에 아직 없다. 생기면 자동으로 쓴다
+        self.distance_m = g("sigma_drift_distance_m")   # 출발 전 기준선이 같이 준다. 없으면 한 장 떨림
 
     @property
     def ok(self):
@@ -195,8 +206,8 @@ class Estimator:
 
     def __init__(self, intrinsics, tag_size=None, cam_yaw_offset_deg=0.0,
                  tag_roll_correction_deg=0.0, noise=None, window_s=WINDOW_S):
-        """noise 는 config.measured.Measured (sigma_ref_distance_m · sigma_drift_* · sigma_drive_*).
-        None 이면 값은 내되 ok 가 안 된다(no_sigma). window_s 를 바꾸면 밀림 기준선도 같은 창으로 다시 재야 한다."""
+        """noise 는 Noise (sigma_ref_distance_m · sigma_drift_* · sigma_drive_*). 출발 전엔 None 이라 값은 내되 ok 가
+        안 된다(no_sigma) — run.py 가 기준선을 재서 set_noise() 로 넣는다. window_s 를 바꾸면 기준선도 같은 창으로."""
         self.intr = intrinsics
         self.tag_size = tag_size or D.TAG_SIZE_M
         self.cam_yaw_offset_deg = float(cam_yaw_offset_deg)
@@ -207,6 +218,15 @@ class Estimator:
         self.flags = deque()            # (t, 두해모호?, 가장자리px, tilt, roll)
         self.last_t = 0.0
         self.rejected = {}
+
+    def set_noise(self, noise):
+        """출발 전 기준선(Noise)을 넣는다. 그 뒤부터 fix() 가 ok 를 낼 수 있다."""
+        self.drift = Drift(noise)
+
+    def set_tag_roll(self, deg):
+        """태그 액자 기울기 보정 [도] — 출발 전 정지 창에서 가속도계로 잰 중앙값. 창을 비워야 옛 보정값이 안 섞인다."""
+        self.tag_roll_correction_deg = float(deg)
+        self.reset()
 
     def reset(self):
         """회전처럼 값이 뚝 끊기는 동작 **뒤에** 부른다. 옛 점이 섞이면 기울기가 거짓말한다."""
@@ -340,7 +360,7 @@ def worth_fixing(value, sigma, tol):
     return abs(value) > max(tol, C.UNCERTAIN_FACTOR * sigma)
 
 
-# ── 밀림 기준선 (before_run 이 쓴다) ────────────────────────────────────
+# ── 밀림 기준선 (run.py 출발 전 · 자체시험) ─────────────────────────────
 class Baseline(NamedTuple):
     """drift_baseline() 의 답. Measured 에 적는 건 drift 다. 나머지는 진단."""
     drift: float          # 밀림 σ — 블록 평균의 흔들림에서 떨림 몫을 뺀 것
@@ -351,7 +371,7 @@ class Baseline(NamedTuple):
 
 
 def drift_baseline(ts, xs, window_s=WINDOW_S):
-    """정지(또는 직진) 60초 기록 -> 밀림 기준선. before_run 이 좌우·방향(·거리)에 각각 돌린다.
+    """정지(또는 직진) 60초 기록 -> 밀림 기준선. baseline_from_rows 가 좌우·방향·거리에 각각 돌린다.
 
     기록을 window_s 블록으로 잘라 블록마다 직선을 맞춘다. 블록 평균의 분산에는 떨림 몫(잔차²/n)이
     섞여 있으니 빼야 밀림만 남는다 — 안 빼면 Estimator 가 떨림을 두 번 센다.
@@ -377,6 +397,41 @@ def drift_baseline(ts, xs, window_s=WINDOW_S):
     resid_var = sum(f.sigma_fast ** 2 * f.n for f in fits) / len(fits)
     return Baseline(math.sqrt(max(0.0, block_var - jitter)), math.sqrt(block_var),
                     math.sqrt(resid_var), len(fits), sum(f.n for f in fits) / len(fits))
+
+
+class Baselines(NamedTuple):
+    """baseline_from_rows() 의 답. noise 를 Estimator.set_noise 에 넣는다. 나머지는 진단·기록."""
+    noise: Noise
+    lateral: Baseline
+    heading: Baseline
+    distance: Baseline | None
+    n: int                  # 받은 프레임
+    n_clean: int            # 두 해가 안 헷갈린 프레임 (좌우·방향에 쓴 것)
+    ambiguous_rate: float
+    tag_roll_deg: float | None    # 가속도계로 본 태그 기울기 중앙값 — Estimator.set_tag_roll 에
+
+
+def baseline_from_rows(rows):
+    """출발 전 정지 기록(프레임 dict: t · lateral · heading_deg · distance · angle_ok · tag_roll_deg) -> Baselines.
+    run.py 가 SIGMA_STILL_S 초 모아서 부른다. 깨끗한 장이 2·MIN_N 미만이거나 블록이 둘 미만이면 None."""
+    clean = [r for r in rows if r.get("angle_ok") and r.get("lateral") is not None and r.get("heading_deg") is not None
+             and math.isfinite(r["lateral"]) and math.isfinite(r["heading_deg"])]
+    if len(clean) < 2 * MIN_N:
+        return None
+    ts = [r["t"] for r in clean]
+    lat = drift_baseline(ts, [r["lateral"] for r in clean])
+    head = drift_baseline(ts, [r["heading_deg"] for r in clean])
+    if lat is None or head is None:
+        return None
+    dist_rows = [r for r in rows if r.get("distance") is not None and math.isfinite(r["distance"])]
+    dist = drift_baseline([r["t"] for r in dist_rows], [r["distance"] for r in dist_rows]) if dist_rows else None
+    ds = sorted(r["distance"] for r in dist_rows)
+    ref = ds[len(ds) // 2] if ds else 0.0                # 3D 거리 — Fix.distance_m 과 같은 정의
+    rolls = sorted(r["tag_roll_deg"] for r in clean
+                   if r.get("tag_roll_deg") is not None and math.isfinite(r["tag_roll_deg"]))
+    noise = Noise(ref, lat.drift, head.drift, sigma_drift_distance_m=(dist.drift if dist else None))
+    return Baselines(noise, lat, head, dist, len(rows), len(clean), 1.0 - len(clean) / len(rows),
+                     rolls[len(rolls) // 2] if rolls else None)
 
 
 # ── 자체 시험 ────────────────────────────────────────────────────────
@@ -448,11 +503,25 @@ def _selftest():
     check(len(fixes) == n - MIN_N + 1 and all(f.drift_from == "still" for f in fixes),
           "세 장째부터 전부 ok (%d / %d 장), 정지 기준선(drift_from=still)" % (len(fixes), n - MIN_N + 1))
     b = drift_baseline(ts, lat)
-    print("     drift_baseline(before_run 식): 밀림 %.1f mm (넣은 값 %.1f) · 블록평균 sd %.1f · 잔차 %.1f mm (넣은 값 %.1f) · 블록 %d 개 x %.0f 장"
+    print("     drift_baseline(출발 전 기준선 식): 밀림 %.1f mm (넣은 값 %.1f) · 블록평균 sd %.1f · 잔차 %.1f mm (넣은 값 %.1f) · 블록 %d 개 x %.0f 장"
           % (b.drift * 1e3, LAT_SLOW * 1e3, b.block_sd * 1e3, b.resid_sd * 1e3, LAT_WHITE * 1e3, b.n_blocks, b.n_per_block))
     check(abs(b.drift / LAT_SLOW - 1) < 0.15 and abs(b.resid_sd / LAT_WHITE - 1) < 0.1,
           "drift_baseline 이 넣은 밀림·떨림을 되찾는다")
     check(drift_baseline(ts[:4], lat[:4]) is None, "블록이 둘이 안 되면 None")
+    rows = [{"t": ts[i], "lateral": lat[i], "heading_deg": head[i], "distance": dist[i], "angle_ok": i % 9 != 4,
+             "tag_roll_deg": 0.3 + 0.01 * (i % 5)} for i in range(n)]
+    bl = baseline_from_rows(rows)
+    check(bl is not None and abs(bl.noise.sigma_drift_lateral_m - b.drift) < 0.1 * b.drift
+          and abs(bl.noise.sigma_ref_distance_m - REF_M) < 0.01 and bl.noise.sigma_drift_distance_m is not None
+          and 0.1 < bl.ambiguous_rate < 0.12 and abs(bl.tag_roll_deg - 0.32) < 0.011,
+          "baseline_from_rows: 헷갈린 장 빼고 밀림 %.1f mm · 기준 %.2f m · 태그 기울기 %.2f도" % (bl.noise.sigma_drift_lateral_m * 1e3, bl.noise.sigma_ref_distance_m, bl.tag_roll_deg))
+    check(baseline_from_rows(rows[:4]) is None, "프레임이 모자라면 None")
+    est_b = Estimator(intrinsics=None, noise=None)
+    push_series(est_b, 3000.0, fps, lat[:15], head[:15], dist[:15])
+    check(est_b.fix(now=3000.0 + 14 / fps + 0.02).why == "no_sigma", "기준선 넣기 전엔 no_sigma")
+    est_b.set_noise(bl.noise)
+    push_series(est_b, 3001.0, fps, lat[:15], head[:15], dist[:15])
+    check(est_b.fix(now=3001.0 + 14 / fps + 0.02).ok, "set_noise 뒤엔 ok")
     dl8, dh8, _, _ = est.drift.at(8.0)
     print("     밀림을 8 m 로 옮기면 좌우 %.0f mm · 방향 %.2f° (9/7 실주행 7~10 m 좌우 60~145 mm)" % (dl8 * 1e3, dh8))
     check(0.10 < dl8 < 0.20, "거리² 비례가 9/7 관측 범위와 맞는다")
@@ -618,7 +687,7 @@ def _selftest():
           % (abs(f.vertical_m - truth["vertical"]) * 1e3))
     check(abs(live - fixed) < 0.03, "피치 없는 카메라면 실시간 태그컷 = 고정식 (모서리 잡음만큼 차이)")
     check(abs(f.heading_deg - truth["heading_deg"]) < 3 * f.heading_sigma_deg, "방향이 3σ 안")
-    # distance 는 3D 거리(높이차 포함)라 3.77 m — before_run 도 같은 정의(Fix.distance_m)로 기준 거리를 적어야 한다
+    # distance 는 3D 거리(높이차 포함)라 3.77 m — 기준선(baseline_from_rows)도 같은 정의(Fix.distance_m)로 기준 거리를 적는다
     check(abs(f.lateral_drift_sigma_m - LAT_SLOW * (f.distance_m / REF_M) ** 2) < 1e-6,
           "밀림이 (지금 3D 거리 / 기준 거리)² 로 옮겨진다")
     check(est.fix(now=t_last - 0.01).why == "clock", "나이가 음수면 clock")

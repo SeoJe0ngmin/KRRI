@@ -25,10 +25,20 @@ TAG_LATERAL_OFFSET_M = 0.0         # 탑재부 중앙이 태그 기준 좌우 �
                                    # 주행실험 0. 실증 땐 줄자로 재서 여기 적는다 — 계획이 이만큼 비켜 선 법선을 겨냥
 DOCK_LENGTH_M = None               # 탑재부 길이(진입 깊이) [m]. 2차(전체 진입)에서 방향 허용치의 근거. 미측정
 
+# ── 캘리브 값 — tools/calibrate.py 가 한 번 재서 여기 적는다 (2026-10-02 구조: measured.json 없음) ──────
+#    카메라를 다시 달거나 차가 바뀌면 다시 잰다. None = 아직 안 쟀다. 날마다 바뀌는 σ 기준선·태그 기울기는 run.py 가
+#    출발 뒤 그 자리에서 스스로 잰다 (SIGMA_STILL_S). 회전 응답·직진 속도는 주행 중 학습 (learn.KWU_SEED 출발점)
+CAM_TO_ROT_CENTER_M = None         # 회전중심 앞뒤 [m], 음수 = 카메라 앞. None 이면 계획기가 회전 상한 TURN_MAX_UNKNOWN_CENTER_DEG 로 (calibrate rotcenter)
+ROT_CENTER_LATERAL_M = None        # 회전중심 좌우 [m], + 왼쪽. 같이 나온다
+ROT_CENTER_RMS_MM = None           # 동심원 잔차 [mm] — 마지막 회전이 남기는 좌우 σ 로 쓴다 (plan 4-7). None 이면 0
+CAM_YAW_OFFSET_DEG = None          # 카메라가 차체 정면과 어긋난 각 [도]. **None 이면 출발 거부** — 정면의 기준이라 없으면 못 맞춘다 (calibrate camyaw)
+ROT_FLOOR_DEG = None               # 회전 하한 [도] — 이보다 작은 각은 못 돈다. None 이면 광운대 유도값 0.81 (calibrate rotfloor)
+SIGMA_STILL_S = 60.0               # 출발 뒤 σ 기준선을 재는 정지 시간 [s]. 2026-09-30 결정 8 "정지 60초" (0.5초 블록 120개)
+
 # ── 한 걸음 ────────────────────────────────────────────────────────
 STEP_FORWARD_HARD_MAX_M = 1.5      # 광운대가 실제 운용한 최대 다리(FWD_ALIGNED_MAX_DISTANCE_M).
                                    # 실제 걸음은 좌우예산·화각·남은거리로 계산돼 보통 이보다 짧다
-BACK_MAX_M = 0.5                   # 후진 상한 = 뒤 공간 [m]. **현장 값, 여기서만 정한다** (before_run 이 안 묻는다).
+BACK_MAX_M = 0.5                   # 후진 상한 = 뒤 공간 [m]. **현장 값, 여기서만 정한다** (묻지 않는다).
                                    # 광운대 BACK_MAX_DISTANCE_M 과 같은 값으로 시작. 넉넉하면 올려라
 TURN_HARD_MAX_DEG = 17.1           # 광운대가 실제로 낼 수 있는 한 번 회전의 최대.
                                    # 그쪽 맞춘 모델 13.6676 x 유지 2.50 s - 17.0398 = 17.13도.
@@ -50,7 +60,7 @@ ROTATE_JOYSTICK_DEFLECTION = 30        # byte1 = 157/97. **광운대와 같은 �
                                        # (2026-09-22 결정) — 그래야 그쪽 실측 회전 응답을
                                        # 씨앗으로 물려받는다. 우리 9/7·9/21 회전 측정은
                                        # 강도 20 이라 씨앗으로 못 쓴다. 회전 하한은
-                                       # measured.rot_floor_deg (씨앗 0.81 유도, before_run 실측)
+                                       # config ROT_FLOOR_DEG (calibrate 실측, 없으면 씨앗 0.81 유도)
 FORWARD_JOYSTICK_DEFLECTION = 60       # byte2 = 67
 BACKWARD_JOYSTICK_DEFLECTION = 60      # byte2 = 187
 FORWARD_SLOW_JOYSTICK_DEFLECTION = 30  # byte2 = 97. 데드밴드 바로 위
