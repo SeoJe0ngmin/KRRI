@@ -138,7 +138,8 @@ class Gyro(GyroYaw):
         if res.t_stop_cmd == 0.0:
             remaining = abs(rot.target_deg) - abs(turned)
             lead = abs(self.rate_dps) * (rot.tau_s + rot.period_s / 2) + rot.residual_deg
-            lead = min(lead, abs(rot.target_deg) / 2)   # 작은 각에서 시작하자마자 끊는 걸 막는다
+            # (lead 를 목표의 절반으로 누르던 줄은 뺐다. 2026-10-02 실차 5도 스텝: 2.5도에서 끊고 관성 3.5도 → 매번 6.1~6.4도.
+            #  관성이 목표의 절반보다 크면 더 일찍 끊어야 맞다. 너무 작은 각은 rotate() 가 하한으로 거부한다)
             if remaining <= lead:
                 self._cut(now, "predicted", turned)
             elif turned * rot.target_deg < 0 and abs(turned) >= self.WRONG_WAY_DEG:

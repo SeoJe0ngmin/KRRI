@@ -19,7 +19,7 @@ BLIND_M = 1.78                     # 1차 목표(포크 끝이 입구)까지 눈
 FWD_TOL_M = 0.10                   # 앞뒤 허용. 탑재부 길이가 흡수한다
 
 # ── 어디에 서나 ────────────────────────────────────────────────────
-CAM_TO_FORK_TIP_M = 1.52           # 카메라 → 접힌 포크 끝. 2026-09-07 실측 (광운대 1.18 — 재측정 후 여기 고침)
+CAM_TO_FORK_TIP_M = 1.50           # 카메라 → 지게차 앞쪽 끝(접힌 포크). 줄자 2026-10-02 (9/7 실측은 1.52, 광운대 차 1.18)
 STANDOFF_M = 0.50                  # 주행실험 전용 — 탑재부 없이 태그면 앞에서 멈출 여유
 TAG_LATERAL_OFFSET_M = 0.0         # 탑재부 중앙이 태그 기준 좌우 어디 [m]. **pose lateral 과 같은 부호(+ 오른쪽)**.
                                    # 주행실험 0. 실증 땐 줄자로 재서 여기 적는다 — 계획이 이만큼 비켜 선 법선을 겨냥
@@ -28,10 +28,14 @@ DOCK_LENGTH_M = None               # 탑재부 길이(진입 깊이) [m]. 2차(�
 # ── 캘리브 값 — tools/calibrate.py 가 한 번 재서 여기 적는다 (2026-10-02 구조: measured.json 없음) ──────
 #    카메라를 다시 달거나 차가 바뀌면 다시 잰다. None = 아직 안 쟀다. 날마다 바뀌는 σ 기준선·태그 기울기는 run.py 가
 #    출발 뒤 그 자리에서 스스로 잰다 (SIGMA_STILL_S). 회전 응답·직진 속도는 주행 중 학습 (learn.KWU_SEED 출발점)
-CAM_TO_ROT_CENTER_M = None         # 회전중심 앞뒤 [m], 음수 = 카메라 앞. None 이면 계획기가 회전 상한 TURN_MAX_UNKNOWN_CENTER_DEG 로 (calibrate rotcenter)
-ROT_CENTER_LATERAL_M = None        # 회전중심 좌우 [m], + 왼쪽. 같이 나온다
-ROT_CENTER_RMS_MM = None           # 동심원 잔차 [mm] — 마지막 회전이 남기는 좌우 σ 로 쓴다 (plan 4-7). None 이면 0
-CAM_YAW_OFFSET_DEG = None          # 카메라가 차체 정면과 어긋난 각 [도]. **None 이면 출발 거부** — 정면의 기준이라 없으면 못 맞춘다 (calibrate camyaw)
+CAM_TO_ROT_CENTER_M = -0.465       # 회전중심 앞뒤 [m], 음수 = 카메라 앞. None 이면 계획기가 회전 상한 TURN_MAX_UNKNOWN_CENTER_DEG 로 (calibrate rotcenter)
+                                   # [calibrate 20261001_141357: 4.2 m ±30도 스윙 18점, 거리+화면위치 원 맞춤 → 카메라 축 −0.463 ±0.17(잭나이프),
+                                   #  cam_yaw 1.14도 만큼 돌려 차체 축. **불확실도가 크다** — 스윙 중 USB 멈춤 2번. 다시 재면 갱신. v2 의 1.46 은 틀렸다]
+ROT_CENTER_LATERAL_M = -0.112      # 회전중심 좌우 [m], + 왼쪽. 같이 나온다 [같은 측정: 카메라 축 −0.121 ±0.03 → 중심이 카메라 오른쪽 12 cm]
+ROT_CENTER_RMS_MM = 29.3           # 동심원 잔차 [mm] — 마지막 회전이 남기는 좌우 σ 로 쓴다 (plan 4-7). None 이면 0 [같은 측정]
+CAM_YAW_OFFSET_DEG = 1.14          # 카메라가 차체 정면과 어긋난 각 [도]. **None 이면 출발 거부** — 정면의 기준이라 없으면 못 맞춘다 (calibrate camyaw)
+                                   # [calibrate 20261001_140811: 4.1 m 정지 60초 980장 중앙값. 0.5초 블록평균 sd 0.29도.
+                                   #  ★절대 정확도는 모른다 — 같은 날 스윙에서 PnP 방향이 자세마다 ±3~4도 치우쳤다. 차체 ∥ 법선도 손으로 맞춘 것]
 ROT_FLOOR_DEG = None               # 회전 하한 [도] — 이보다 작은 각은 못 돈다. None 이면 광운대 유도값 0.81 (calibrate rotfloor)
 SIGMA_STILL_S = 60.0               # 출발 뒤 σ 기준선을 재는 정지 시간 [s]. 2026-09-30 결정 8 "정지 60초" (0.5초 블록 120개)
 

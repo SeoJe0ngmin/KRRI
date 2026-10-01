@@ -545,37 +545,41 @@ def stage_rotcenter(rig):
         pass
     while stops[-1]["psi_rel_deg"] < -step / 2 and can_step(+1) and do_step(+1):
         pass
-    fit = A.rot_center_fit(stops)
+    # 주 적합 = 거리 + 화면위치(β) 원 맞춤. PnP 방향·좌우는 이 거리에서 자세마다 몇 도씩 치우쳐서 못 쓴다 (analyze 의 설명)
+    dz = -s0["vertical"] if s0.get("vertical") is not None else (D.TAG_HEIGHT_M - D.CAMERA_HEIGHT_M)
+    fit = A.rot_center_from_bearing(stops, dz)
     if fit.get("why"):
         raise RuntimeError("정지점 %d 개 — 적합 불가" % fit["n"])
     cfg = rig.results["config"]
-    # 적합은 날것 heading(카메라 축)에서 나온다. 계획기는 cam_yaw 를 뺀 차체 heading 을 쓰니 그 각만큼 돌려 적는다
     yaw = cfg.get("CAM_YAW_OFFSET_DEG", C.CAM_YAW_OFFSET_DEG)      # 이번에 잰 값 먼저, 없으면 config
-    ctr_a, ctr_b = fit["cam_to_rot_center_m"], fit["rot_center_lateral_m"]      # (A 는 이 파일에서 analyze_calibrate 모듈이다)
+    ctr_a, ctr_b = fit["cam_to_rot_center_m"], fit["rot_center_lateral_m"]      # 카메라 축 (A 는 이 파일에서 analyze_calibrate 모듈이다)
+    rig.log("  회전중심 (거리+화면위치 원 맞춤, n %d, β 폭 %.0f도, 높이차 %.2f m): 앞뒤 %+.3f ±%s m (음수 = 카메라 앞) · 좌우 %+.3f ±%s m · RMS %.1f mm"
+            % (fit["n"], fit["beta_span_deg"], dz, ctr_a, "%.3f" % fit["se_forward_m"] if fit["se_forward_m"] is not None else "-",
+               ctr_b, "%.3f" % fit["se_lateral_m"] if fit["se_lateral_m"] is not None else "-", fit["circle_rms_mm"]))
     if yaw is not None:
         ctr_a, ctr_b = to_vehicle_frame(ctr_a, ctr_b, yaw)
-    cfg["CAM_TO_ROT_CENTER_M"] = ctr_a
-    cfg["ROT_CENTER_LATERAL_M"] = ctr_b
-    cfg["ROT_CENTER_RMS_MM"] = fit["circle_rms_mm"]
-    rig.log("  회전중심 (위치+방향, n %d, 스윙 %.0f도): 앞뒤 %+.3f m (음수 = 카메라 앞) · 좌우 %+.3f m · 잔차 %.0f mm  (지금 config %s / %s)"
-            % (fit["n"], fit["swing_deg"], fit["cam_to_rot_center_m"], fit["rot_center_lateral_m"], fit["ls_rms_mm"],
-               C.CAM_TO_ROT_CENTER_M, C.ROT_CENTER_LATERAL_M))
-    rig.log("  검산 (위치만 동심원): 반지름 %.3f m · RMS %.1f mm · 연속 쌍 %d개 중앙 %s 흩어짐 %s"
-            % (fit["circle_radius_m"], fit["circle_rms_mm"], fit["pairs_n"],
-               "%+.2f" % fit["pairs_cam_to_rot_center_m"] if fit["pairs_cam_to_rot_center_m"] is not None else "-",
-               "%.2f m" % fit["pairs_spread_m"] if fit["pairs_spread_m"] is not None else "-"))
-    for side, v in fit["sides"].items():
-        rig.log("     %s 스텝만: %+.3f m (n %d, rms %.0f mm)" % (side, v["cam_to_rot_center_m"], v["n"], v["rms_mm"]))
-    if yaw is not None:
-        rig.log("  차체 축으로 (cam_yaw %+.2f도 만큼 돌림): 앞뒤 %+.3f m · 좌우 %+.3f m  ← config 에 적는 값" % (yaw, ctr_a, ctr_b))
+        rig.log("  차체 축으로 (cam_yaw %+.2f도 만큼 돌림): 앞뒤 %+.3f m · 좌우 %+.3f m  ← config 에 적는 값 (지금 config %s / %s)"
+                % (yaw, ctr_a, ctr_b, C.CAM_TO_ROT_CENTER_M, C.ROT_CENTER_LATERAL_M))
     else:
         rig.log("  !! cam_yaw 를 모른다(이번에 안 쟀고 config 도 None) — 위 값은 **카메라 축** 그대로다. camyaw 를 잰 뒤 "
                 "analyze_calibrate.to_vehicle_frame 으로 돌리거나 rotcenter 를 다시 하라 (|A|·sin(yaw) 만큼 옆으로 틀린다)")
-    if not (-1.8 <= fit["cam_to_rot_center_m"] <= -0.4):
-        rig.log("  !! 예상 범위(카메라 앞 0.4~1.8 m) 밖이다 — 측정을 다시 본다 (plan 4-7 검증 기준)")
-    out = {k: fit.get(k) for k in ("n", "swing_deg", "cam_to_rot_center_m", "rot_center_lateral_m", "circle_rms_mm",
-                                   "ls_rms_mm", "circle_radius_m", "gain", "pairs_n", "pairs_spread_m", "sides")}
-    out.update(cam_yaw_used_deg=yaw, config_cam_to_rot_center_m=ctr_a, config_rot_center_lateral_m=ctr_b)
+    cfg["CAM_TO_ROT_CENTER_M"] = ctr_a
+    cfg["ROT_CENTER_LATERAL_M"] = ctr_b
+    cfg["ROT_CENTER_RMS_MM"] = fit["circle_rms_mm"]
+    if not (-1.8 <= ctr_a <= -0.2):
+        rig.log("  !! 예상 범위(카메라 앞 0.2~1.8 m) 밖이다 — 측정을 다시 본다 (첫 실측 0.46 m, 광운대 차 0.68 m)")
+    # 진단: PnP 위치+방향 적합 (옛 방식). 크게 다르면 PnP 방향이 이 스윙에서 얼마나 치우쳤는지 보여 준다
+    old = A.rot_center_fit(stops)
+    if not old.get("why"):
+        rig.log("  (진단 — PnP 위치+방향 적합: 앞뒤 %+.3f · 좌우 %+.3f · 잔차 %.0f mm · 연속 쌍 흩어짐 %s. 주 적합과 다르면 PnP 방향이 치우친 것)"
+                % (old["cam_to_rot_center_m"], old["rot_center_lateral_m"], old["ls_rms_mm"],
+                   "%.2f m" % old["pairs_spread_m"] if old["pairs_spread_m"] is not None else "-"))
+        dh = [s["heading_deg"] - s0["heading_deg"] - s["psi_rel_deg"] for s in stops]
+        rig.log("  (진단 — PnP 방향 − (시작 방향 + 자이로): %+.1f ~ %+.1f도. 0 근처여야 PnP 방향을 믿을 수 있다)" % (min(dh), max(dh)))
+    out = {k: fit.get(k) for k in ("n", "cam_to_rot_center_m", "rot_center_lateral_m", "circle_rms_mm", "circle_radius_m",
+                                   "se_forward_m", "se_lateral_m", "beta_span_deg", "height_diff_m")}
+    out.update(gain=A.gain_of(stops), cam_yaw_used_deg=yaw, config_cam_to_rot_center_m=ctr_a, config_rot_center_lateral_m=ctr_b,
+               pnp_fit={k: old.get(k) for k in ("cam_to_rot_center_m", "rot_center_lateral_m", "ls_rms_mm", "pairs_spread_m")})
     rig.rec.event("rotcenter", stops=stops, **_json_safe(out))
     return out
 

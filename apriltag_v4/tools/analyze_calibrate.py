@@ -159,6 +159,42 @@ def rot_center_fit(stops):
     return out
 
 
+def rot_center_from_bearing(stops, height_diff_m):
+    """정지점들의 **거리와 화면위치(β)만**으로 회전중심 (2026-10-02 실차 스윙을 보고 이쪽을 주로 쓴다).
+
+    차가 제자리에서 돌면, 카메라 좌표계에서 본 태그는 회전중심 둘레로 원을 그린다:
+        q_i = ρ_i · (cos β_i, −sin β_i)      (앞, 왼쪽)      ρ = √(3D 거리² − 높이차²)
+    원의 중심 = 카메라 좌표계의 회전중심 → A = −중심_앞 · b = 중심_왼쪽.  PnP 의 방향·좌우가 안 들어간다.
+    4.2 m ±30도 스윙(calibrate 20261001_141357)에서 PnP 방향은 자세마다 +4 ~ −3도(좌우 ±0.2~0.3 m)씩 틀렸고,
+    같은 자리를 갈 때·올 때 같은 쪽으로 틀렸다(잡음이 아니라 치우침) — 그걸로 맞춘 원은 잔차 162 mm 였다.
+    불확실도(se_*)는 한 점씩 빼고 다시 맞춘 값의 흩어짐(잭나이프). 높이차는 ±0.1 m 틀려도 2 mm 만 바뀐다.
+    """
+    pts = [s for s in stops if s.get("distance") is not None and s.get("beta_deg") is not None]
+    n = len(pts)
+    out = {"n": n}
+    if n < FIT_MIN_STOPS:
+        out["why"] = "few"
+        return out
+    q = []
+    for s in pts:
+        rho = math.sqrt(max(0.0, s["distance"] ** 2 - height_diff_m ** 2))
+        b = math.radians(s["beta_deg"])
+        q.append((rho * math.cos(b), -rho * math.sin(b)))
+    q = np.array(q)
+    cx, cy, r, rms = circle_fit(q[:, 0], q[:, 1])
+    se_f = se_l = None
+    if n > FIT_MIN_STOPS:
+        loo = np.array([circle_fit(np.delete(q[:, 0], i), np.delete(q[:, 1], i))[:2] for i in range(n)])
+        k = math.sqrt((n - 1) / n)
+        se_f = k * float(np.sqrt(((loo[:, 0] - loo[:, 0].mean()) ** 2).sum()))
+        se_l = k * float(np.sqrt(((loo[:, 1] - loo[:, 1].mean()) ** 2).sum()))
+    betas = [s["beta_deg"] for s in pts]
+    out.update({"cam_to_rot_center_m": -cx, "rot_center_lateral_m": cy, "circle_radius_m": r, "circle_rms_mm": rms * 1e3,
+                "se_forward_m": se_f, "se_lateral_m": se_l, "beta_span_deg": max(betas) - min(betas),
+                "height_diff_m": height_diff_m})
+    return out
+
+
 def to_vehicle_frame(cam_to_rot_center_m, rot_center_lateral_m, cam_yaw_offset_deg):
     """적합은 카메라가 낸 **날것** heading 축에서 나온다(calibrate 는 cam_yaw 0 으로 연다). 계획기는 cam_yaw 를 뺀 차체
     heading 을 쓰므로 중심 오프셋을 그 각만큼 돌려야 같은 점이 된다: R(ψ_날것) = R(ψ_차체)·R(yaw) → o_차체 = R(yaw)·o_카메라.
@@ -205,10 +241,12 @@ def reanalyze(run_dir):
         out["CAM_YAW_OFFSET_DEG"] = cy[-1].get("cam_yaw_offset_deg")
     stops = [e for e in ev if e.get("event") == "rotcenter_stop"]
     if stops:
-        f = rot_center_fit(stops)
-        A, b = f.get("cam_to_rot_center_m"), f.get("rot_center_lateral_m")
         rc = [e for e in ev if e.get("event") == "rotcenter"]
         yaw = rc[-1].get("cam_yaw_used_deg") if rc else None
+        dz = rc[-1].get("height_diff_m") if rc else None
+        # 거리+화면위치 원 맞춤이 주 (높이차가 기록에 있을 때). 옛 기록이면 PnP 위치+방향 적합
+        f = rot_center_from_bearing(stops, dz) if dz is not None else rot_center_fit(stops)
+        A, b = f.get("cam_to_rot_center_m"), f.get("rot_center_lateral_m")
         if A is not None and yaw is not None:
             A, b = to_vehicle_frame(A, b, yaw)                  # calibrate 가 쓴 것과 같은 각으로 차체 축에
         out["CAM_TO_ROT_CENTER_M"], out["ROT_CENTER_LATERAL_M"] = A, b
@@ -290,6 +328,22 @@ def _selftest():
     check(abs(fr["rot_center_lateral_m"] - o_l) > 0.04 and abs(Av + o_f) < 1e-6 and abs(bv - o_l) < 1e-6,
           "cam_yaw %.0f도: 카메라 축 좌우 %+.3f (틀림) → 차체 축 %+.3f · 앞뒤 %+.3f (참 %+.3f · %+.3f)"
           % (yaw, fr["rot_center_lateral_m"], bv, Av, o_l, -o_f))
+    # 1-b) 거리+화면위치 원 맞춤: 같은 스윙을 (3D 거리, β) 로 만들어 넣으면 중심이 나온다. PnP 방향을 +4도 틀리게 줘도 그대로다
+    dz0 = 0.96
+    bs = []
+    psi = 0.0
+    for d, _ in [(0, 0)] + seq:
+        psi += d * 5.0
+        p = c - _rot2(math.radians(psi)) @ np.array([o_f, o_l])              # 카메라 위치 (태그가 원점)
+        theta = math.degrees(math.atan2(-p[1], -p[0]))                        # 카메라에서 태그를 보는 세계 방향
+        bs.append({"distance": math.sqrt(p @ p + dz0 * dz0) + rng.gauss(0, 0.02), "beta_deg": psi - theta,
+                   "heading_deg": psi + 4.0, "lateral": p[1] + 0.3, "forward": -p[0]})
+    fb = rot_center_from_bearing(bs, dz0)
+    print("     거리+화면위치: 앞뒤 %.3f (참 %.3f) ±%.3f · 좌우 %+.3f (참 %+.3f) ±%.3f · RMS %.0f mm"
+          % (fb["cam_to_rot_center_m"], -o_f, fb["se_forward_m"], fb["rot_center_lateral_m"], o_l, fb["se_lateral_m"], fb["circle_rms_mm"]))
+    check(abs(fb["cam_to_rot_center_m"] + o_f) < 3 * fb["se_forward_m"] and abs(fb["rot_center_lateral_m"] - o_l) < 3 * fb["se_lateral_m"],
+          "거리+화면위치 원 맞춤이 참값을 3·se 안에서 맞춘다 (PnP 방향이 틀려도)")
+    check(rot_center_from_bearing(bs[:3], dz0).get("why") == "few", "점이 모자라면 few")
     # 2) 회전 하한 = 최대각
     check(rot_floor([0.9, -1.2, 0.7])["rot_floor_deg"] == 1.2, "하한 = 최대각")
     # 3) reanalyze 가 event 이름을 제대로 읽는다 (임시 폴더)
