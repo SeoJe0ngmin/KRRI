@@ -520,7 +520,7 @@ class Planner:
         blind = geo.blind(fix.forward_m)
         rem = limits.arrival_lateral_m(Lc - geo.b, residual, blind)
         sig = math.hypot(fix.lateral_sigma_m, abs(geo.A) * math.radians(fix.heading_sigma_deg),
-                         limits.lateral_leak_m(blind, fix.heading_sigma_deg) if residual else 0.0)
+                         limits.lateral_leak_m(limits.tip_lever_m(blind), fix.heading_sigma_deg) if residual else 0.0)
         return rem, sig
 
     def _backup(self, fix, Lc, Fc, h):

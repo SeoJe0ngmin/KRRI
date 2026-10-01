@@ -128,10 +128,20 @@ def backup_needed_m(lateral_m, distance_m, intr=None, cut_m=None):
 
 
 # ── 눈을 감아도 되나 ────────────────────────────────────────────────
-def arrival_lateral_m(lateral_m, heading_deg, blind_m=None):
-    """지금 이대로 눈 감고 가면 도착했을 때 좌우가 얼마일까."""
+def tip_lever_m(blind_m=None):
+    """방향이 좌우로 새는 **지렛대** [m] = 눈 감고 갈 거리 + 카메라→차 맨 앞(CAM_TO_FORK_TIP_M).
+
+    입구에 닿는 건 카메라가 아니라 1.5 m 앞의 차 맨 앞이다. 재는 좌우는 카메라 것이니, 맨 앞이 입구에 닿았을 때의
+    좌우는 카메라 좌우 + (눈 감는 거리 + 1.5) × sin(방향). 예전엔 눈 감는 거리만 곱해 방향의 영향을 절반 넘게
+    적게 셌다 — 2026-10-02 실주행 끝(좌우 +0.24 · 방향 −13.7도)에서 "여유 +11 mm" 가 나왔는데 맨 앞은 0.37 m 어긋나 있었다.
+    """
     blind = C.BLIND_M if blind_m is None else blind_m
-    return lateral_m + lateral_leak_m(blind, heading_deg)
+    return blind + C.CAM_TO_FORK_TIP_M
+
+
+def arrival_lateral_m(lateral_m, heading_deg, blind_m=None):
+    """지금 이대로 눈 감고 가면 **차 맨 앞이** 입구에 닿았을 때 좌우가 얼마일까. lateral_m 은 카메라가 잰 좌우."""
+    return lateral_m + lateral_leak_m(tip_lever_m(blind_m), heading_deg)
 
 
 def commit_margin_m(lateral_m, heading_deg, lateral_sigma_m, heading_sigma_deg,
@@ -147,10 +157,9 @@ def commit_margin_m(lateral_m, heading_deg, lateral_sigma_m, heading_sigma_deg,
     MAX_CORRECTIONS · FINE_TIME_LIMIT_S · MAX_STEPS (plan 3-10).
     상한에 걸리면 "수렴 못 함" 으로 멈추고 기록한다. 무한 반복은 없어야 한다.
     """
-    blind = C.BLIND_M if blind_m is None else blind_m
-    worst = (abs(arrival_lateral_m(lateral_m, heading_deg, blind))
+    worst = (abs(arrival_lateral_m(lateral_m, heading_deg, blind_m))
              + abs(lateral_sigma_m)
-             + abs(lateral_leak_m(blind, heading_sigma_deg)))
+             + abs(lateral_leak_m(tip_lever_m(blind_m), heading_sigma_deg)))      # 방향 흔들림도 같은 지렛대로 샌다
     return C.SIDE_GAP_M - worst
 
 
@@ -159,8 +168,7 @@ def offset_target_m(heading_deg, blind_m=None):
 
     비뚤어진 만큼 반대쪽에서 출발하면 도착했을 때 상쇄된다. 추가 동작은 없다.
     """
-    blind = C.BLIND_M if blind_m is None else blind_m
-    return -lateral_leak_m(blind, heading_deg)
+    return -lateral_leak_m(tip_lever_m(blind_m), heading_deg)
 
 
 # ── 한 걸음 상한 ────────────────────────────────────────────────────
@@ -205,9 +213,8 @@ def heading_tol_deg(lateral_budget_m, blind_m=None):
     운용 판정에는 쓰지 않는다(commit_margin_m 이 한다). 인자로 받는 이유는
     "무엇을 가정한 값인지" 가 부르는 쪽에 드러나게 하려는 것이다.
     """
-    blind = C.BLIND_M if blind_m is None else blind_m
     room = C.SIDE_GAP_M - abs(lateral_budget_m)
-    return 0.0 if room <= 0 else math.degrees(math.asin(min(1.0, room / blind)))
+    return 0.0 if room <= 0 else math.degrees(math.asin(min(1.0, room / tip_lever_m(blind_m))))
 
 
 if __name__ == "__main__":
@@ -252,6 +259,11 @@ if __name__ == "__main__":
     assert backup_needed_m(0.1, 8.0) == 0.0                                  # 이미 안이면 0
     # 측정 태그컷을 넘기면 그걸 쓴다
     assert corridor_half_m(6.0, cut_m=3.0) > corridor_half_m(6.0, cut_m=3.5)
+    # 진입 판정은 **차 맨 앞** 기준 — 2026-10-02 실주행 끝(좌우 +0.239 · 방향 −13.67도 · 눈 감는 거리 1.07 m):
+    # 카메라는 법선 근처로 오지만 맨 앞은 0.37 m 어긋난다. 옛 식은 여기서 여유 +11 mm 를 냈다
+    assert abs(arrival_lateral_m(0.239, -13.67, 1.07) + 0.368) < 0.01
+    assert commit_margin_m(0.239, -13.67, 0.003, 0.06, 1.07) < -0.3
+    assert commit_margin_m(0.0, 0.0, 0.003, 0.06, 1.07) > 0.02 and commit_margin_m(0.0, 0.8, 0.003, 0.06, 1.07) < 0
     # 회전 상한은 경로각 상한을 넘지 않는다 (같은 여유 식)
     assert turn_cap_deg(True, tag_range_m=3.5, center_m=-1.5) <= C.TURN_HARD_MAX_DEG
     assert turn_cap_deg(False) == C.TURN_MAX_UNKNOWN_CENTER_DEG
