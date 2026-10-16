@@ -35,7 +35,7 @@ class StationaryDetector:
             self.report=dict(reason='collecting_vibration_baseline' if self.baseline is None else 'settling_window');return False
         times=np.array([r[0] for r in self.rows]);pts=np.array([r[1] for r in self.rows])
         pts[:,2]=np.unwrap(pts[:,2]);times-=times[0]
-        # Quarter-second medians suppress fast oscillation. Every block must have
+        # Half-second medians support 10–15 Hz VIO output. Every block must have
         # enough real observations; missing visual tracking cannot look like rest.
         bucket=np.floor(times/self.t['still_bucket_s']).astype(int)
         centers=[];bt=[]

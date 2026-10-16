@@ -5,9 +5,10 @@ import queue
 import signal
 import threading
 import time
+import traceback
 from collections import deque
 from pathlib import Path
-from .stream import Latest,ImuSynchronizer,CaptureClock,publish_latest
+from .stream import Latest,ImuSynchronizer,CaptureClock,StereoSequence,OutputWatchdog,VideoDeadline,publish_latest
 from .recording import Recorder
 
 
@@ -17,6 +18,7 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
     pipes=[];threads=[];bridge=None;mapping=None;rec=Recorder(output_dir,cfg['logging']);errors=queue.Queue()
     frames=Latest();tags=Latest();tag_results=Latest();preview_tasks=Latest()
     enabled=threading.Event();started=time.monotonic();clock=CaptureClock();epoch=time.monotonic_ns() & ((1<<63)-1)
+    stereo_sequence=StereoSequence()
     received=0;raw_received=[0];sdk_gaps=[0];processed=0;last_obs=None;latest_tag=dict(ok=False,reason='not_seen');imu=None
     try:
         import cv2
@@ -47,12 +49,12 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
         rec.put(bundle,'device.json');observer=Observer(cfg)
         if not cfg.get('camera_only'):
             from .ros_adapter import Bridge
-            bridge=Bridge(estimator_file,output_dir,epoch,cfg['openvins']['max_input_age_s'])
+            bridge=Bridge(estimator_file,output_dir,epoch,cfg['openvins']['max_input_age_s'],cancel=stop)
             if cfg.get('mapping',{}).get('enabled'):
                 from .mapping import Mapping
                 mapping=Mapping(bridge,bundle,cfg,output_dir)
         if setup is not None:setup.put(dict(calibration=cfg['calibration'],device=bundle),timeout=2)
-        imu=ImuSynchronizer(c['imu_capacity'],c['max_imu_gap_s'])
+        imu=ImuSynchronizer(c['imu_capacity'],c['max_imu_gap_s'],startup_window_s=.5,short_gap_s=.1)
         def timestamp(frame):
             if frame.get_frame_timestamp_domain()!=rs.timestamp_domain.hardware_clock:raise ValueError('RealSense hardware clock required')
             return frame.get_timestamp()/1000.
@@ -69,14 +71,24 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
         ipipe.start(ic,motion);pipes.append(ipipe);vpipe.start(vc);pipes.append(vpipe)
         depth_scale=vp.get_device().first_depth_sensor().get_depth_scale() if c['depth_enabled'] else 1.
         def capture():
-            previous=None
+            previous=None;deadline=VideoDeadline(time.monotonic(),c['startup_timeout_s'])
             while not stop.is_set():
                 try:
-                    fs=vpipe.wait_for_frames(1000);number=fs.get_infrared_frame(1).get_frame_number()
-                    raw_received[0]+=1
-                    if previous is not None:sdk_gaps[0]+=max(0,number-previous-1)
-                    previous=number;frames.put((fs,time.monotonic()))
-                except RuntimeError as exc:
+                    deadline.check(time.monotonic())
+                    fs=vpipe.poll_for_frames()
+                    if not fs:
+                        stop.wait(.005);continue
+                    l,r,cf=fs.get_infrared_frame(1),fs.get_infrared_frame(2),fs.get_color_frame()
+                    if not l or not r or not cf:
+                        deadline.incomplete+=1;stop.wait(.005);continue
+                    number=l.get_frame_number()
+                    if not stereo_sequence.accept(number,r.get_frame_number(),timestamp(l),timestamp(r)):
+                        # A repeated frameset is not a fresh camera observation.
+                        stop.wait(.005);continue
+                    last_frame=time.monotonic();deadline.accepted(last_frame);raw_received[0]+=1
+                    if previous is not None and not stereo_sequence.counter_anomalies:sdk_gaps[0]+=max(0,number-previous-1)
+                    previous=number;frames.put((fs,last_frame))
+                except Exception as exc:
                     if not stop.is_set():errors.put('video: '+str(exc))
                     return
         def detect():
@@ -96,20 +108,24 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     tag['capture_key']=str(cf.get_frame_number());tag_results.put(tag)
             except Exception as exc:errors.put('tag: '+str(exc))
         def preview():
-            from .webview import encode_preview
-            while not stop.is_set():
-                item=preview_tasks.get()
-                if item is None:stop.wait(.01);continue
-                image,obs=item
-                try:publish_latest(previews,(obs['capture_id'],encode_preview(image,obs,cfg['view'])))
-                except Exception as exc:errors.put('preview: '+str(exc));return
+            try:
+                from .webview import encode_preview
+                while not stop.is_set():
+                    item=preview_tasks.get()
+                    if item is None:stop.wait(.01);continue
+                    image,obs=item
+                    publish_latest(previews,(obs['capture_id'],encode_preview(image,obs,cfg['view'])))
+            except Exception as exc:errors.put('preview: '+str(exc))
         enabled.set()
-        for fn in (capture,detect,preview):
+        acquisition_started=time.monotonic()
+        for fn in ((capture,detect,preview) if view else (capture,detect)):
             th=threading.Thread(target=fn,daemon=True);threads.append(th);th.start()
-        last_color=-1.;last_tag=-1.;last_view=-1.;pending=deque(maxlen=32);latest_image=None;last_state_at=time.monotonic()
+        last_color=-1.;last_tag=-1.;last_view=-1.;pending=deque(maxlen=32);latest_image=None;output_watchdog=OutputWatchdog();have_vio_output=False;last_diagnostic=0.
         while not stop.is_set():
             if not errors.empty():raise RuntimeError(errors.get_nowait())
             if imu.fault:raise RuntimeError(imu.fault)
+            if not imu.startup_ready and time.monotonic()-acquisition_started>c['startup_timeout_s']:
+                raise RuntimeError('IMU/video startup continuity timeout: '+json.dumps(imu.status()))
             for sample in imu.drain():
                 if bridge:bridge.imu(sample)
             item=frames.get()
@@ -118,20 +134,34 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 if not l or not r or not cf:raise RuntimeError('missing IR stereo/color frames')
                 stamp=timestamp(l);right_stamp=timestamp(r);color_stamp=timestamp(cf)
                 if abs(stamp-right_stamp)>c['stereo_skew_s']:raise RuntimeError('unsynchronized_stereo')
-                clock.observe('left',stamp,arrival);received+=1
+                clock.observe('left',stamp,arrival)
                 left=cv2.remap(np.asanyarray(l.get_data()),*maps[0],cv2.INTER_LINEAR)
                 right=cv2.remap(np.asanyarray(r.get_data()),*maps[1],cv2.INTER_LINEAR)
                 latest_image=(stamp,left)
-                if mapping:mapping.image(stamp,left,right)
-                if bridge:bridge.stereo(left,right,stamp)
+                if imu.begin(stamp,time.monotonic()):
+                    # The first image cannot enter OpenVINS until its clean
+                    # continuous IMU history is sent. This is acquisition
+                    # warmup, not inertial/stationary calibration readiness.
+                    for sample in imu.drain():
+                        if bridge:bridge.imu(sample)
+                if mapping and imu.startup_ready:mapping.image(stamp,left,right)
+                if bridge and imu.startup_ready:
+                    bridge.stereo(left,right,stamp)
+                    received+=1
+                    # Native output cannot exist before its first video input.
+                    # The independent camera startup timeout covers this phase.
+                    output_watchdog.input(time.monotonic())
                 if color_stamp>last_color and color_stamp-last_tag>=cfg['tag']['period_s']:
                     tags.put((fs,color_stamp));last_tag=color_stamp
                 last_color=max(last_color,color_stamp)
-                if cfg.get('camera_only'):
-                    last_obs=dict(capture_id=stamp,arrival=arrival,sensor_epoch=epoch,sensor_ready=False,local_valid=False,
+                if cfg.get('camera_only') or not have_vio_output:
+                    last_obs=dict(preview_only=True,capture_id=stamp,arrival=arrival,sensor_epoch=epoch,sensor_ready=False,local_valid=False,
                         local_pose=[0.,0.,0.],pose=None,usable=False,stationary=False,clock_fault=False,imu_bad=False,
                         transport_lag_s=max(0.,time.monotonic()-clock.host_time(stamp)),tag=copy.deepcopy(latest_tag),
-                        odom=dict(ok=False,reason='camera_only_no_vio'),imu=dict(ready=False,calibration=dict(state='DISABLED',reason='camera_only')))
+                        odom=dict(ok=False,reason='camera_only_no_vio' if cfg.get('camera_only') else
+                            'waiting_for_openvins_output' if imu.startup_ready else 'imu_startup_stabilizing'),
+                        imu=dict(ready=False,calibration=dict(state='DISABLED' if cfg.get('camera_only') else 'COLLECTING',
+                            reason='camera_only' if cfg.get('camera_only') else 'waiting_for_openvins_output')))
             tag=tag_results.get()
             if tag is not None:
                 latest_tag=tag;rec.put(dict(kind='tag',value=tag))
@@ -141,8 +171,9 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 packets=bridge.drain()
                 for packet in packets:
                     if packet['fault']:raise RuntimeError(packet['fault'])
-                    last_state_at=time.monotonic();packet['imu_arrival']=min(imu.arrival,packet['arrival'])
+                    output_watchdog.output(time.monotonic());have_vio_output=True;packet['imu_arrival']=min(imu.arrival,packet['arrival'])
                     packet['transport_lag_s']=max(0.,packet['arrival']-clock.host_time(packet['stamp']))
+                    packet['imu_short_gaps']=imu.status()['short_gaps']
                     neutral=True
                     if motion_hint is not None:
                         with motion_hint.get_lock():
@@ -163,11 +194,19 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     obs['device_model']=bundle['raw_models']['color'];obs['vio_gyro_norm']=packet.get('gyro_norm')
                     rec.put(dict(kind='vio',value=packet));last_obs=obs
                     if mapping:mapping.state(packet)
-                if time.monotonic()-last_state_at>10:raise RuntimeError('OpenVINS output timeout')
+                diagnostic=dict(camera_received=raw_received[0],stereo_sent=received,imu_paired=imu.sequence,
+                    last_imu_device_stamp=imu.last.get('gyro'),last_video_device_stamp=clock.last.get('left'),
+                    vio_output_seen=have_vio_output,imu=imu.status(),transport=bridge.status())
+                if time.monotonic()-last_diagnostic>=1:
+                    rec.put(diagnostic,'pipeline_status.json');last_diagnostic=time.monotonic()
+                if output_watchdog.expired(time.monotonic()):
+                    log=Path(output_dir)/'openvins.log'
+                    tail=log.read_text(errors='replace')[-6000:] if log.exists() else '(no openvins.log)'
+                    raise RuntimeError('OpenVINS output timeout; pipeline='+json.dumps(diagnostic)+'\nOpenVINS log:\n'+tail)
             if last_obs is not None:
                 elapsed=max(.001,time.monotonic()-started)
                 last_obs['performance']=dict(camera_fps=raw_received[0]/elapsed,stereo_sent_fps=received/elapsed,sdk_frame_gaps=sdk_gaps[0],processed_fps=processed/elapsed,
-                    latest_replaced=frames.dropped,tag_replaced=tags.dropped,ros_state_dropped=bridge.dropped if bridge else 0)
+                    stereo_counter_anomalies=stereo_sequence.counter_anomalies,sdk_gap_count_reliable=not bool(stereo_sequence.counter_anomalies),stereo_duplicates=stereo_sequence.duplicates,latest_replaced=frames.dropped,tag_replaced=tags.dropped,ros_state_dropped=bridge.dropped if bridge else 0)
                 last_obs['recording']=rec.status()
                 if mapping:last_obs['mapping']=mapping.status()
                 rec.put(last_obs);publish_latest(results,last_obs)
@@ -180,17 +219,26 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
             if rec.status()['error']:raise RuntimeError(rec.status()['error'])
             stop.wait(.002)
     except Exception as exc:
+        # Persist synchronously BEFORE setting stop: multiprocessing.Queue uses
+        # an asynchronous feeder, so stop can reach the parent before its error.
+        try:
+            (Path(output_dir)/'camera_error.txt').write_text(traceback.format_exc())
+        except OSError:
+            traceback.print_exc()
         # A fault notification must reach the supervisor; stale data is also
         # rejected independently by its age gate and the CAN process lease.
         try:results.put(dict(worker_error=type(exc).__name__+': '+str(exc)),timeout=.5)
         except queue.Full:publish_latest(results,dict(worker_error=str(exc)))
     finally:
         enabled.clear();stop.set()
+        # Finish nonblocking SDK polling/alignment before closing its streams.
+        for th in threads:th.join(1)
         for pipe in reversed(pipes):
             try:pipe.stop()
             except Exception:pass
-        for th in threads:th.join(1)
-        if mapping:mapping.close()
-        if bridge:bridge.close()
+        for resource in (mapping,bridge):
+            if resource:
+                try:resource.close()
+                except Exception:traceback.print_exc()
         rec.put(dict(camera_received=raw_received[0],stereo_sent=received,sdk_frame_gaps=sdk_gaps[0],processed=processed,imu_samples=imu.sequence if imu else 0,
-            imu_fault=imu.fault if imu else None),'metrics.json');rec.close()
+            imu_fault=imu.fault if imu else None,imu=imu.status() if imu else None,stereo_duplicates=stereo_sequence.duplicates,stereo_counter_anomalies=stereo_sequence.counter_anomalies,sdk_gap_count_reliable=not bool(stereo_sequence.counter_anomalies)),'metrics.json');rec.close()

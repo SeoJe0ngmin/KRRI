@@ -29,7 +29,7 @@
           "value": 0.3
         },
         "tag_height_m": {
-          "description": "태그 중심 높이[m]",
+          "description": "태그 중심 높이[m] 밑변은 1.35m",
           "value": 1.58
         },
         "camera_height_m": {

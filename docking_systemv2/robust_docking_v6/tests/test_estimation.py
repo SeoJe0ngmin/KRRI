@@ -50,7 +50,9 @@ class Estimation(unittest.TestCase):
     def packet(self,t,x,epoch=1):
         T=np.eye(4);T[0,3]=x
         previous=getattr(self,'last_packet',(t,x));D=np.eye(4);D[0,3]=x-previous[1];self.last_packet=(t,x)
-        return dict(delta_valid=True,delta_from_stamp=previous[0],relative_transform=D,relative_covariance=np.eye(6)*1e-9,stamp=t,epoch=epoch,arrival=t+1,imu_arrival=t+1,features=50,initialized=True,visual_valid=True,
+        return dict(quality_version=1,tracking_valid=True,continued_features=50,state_stamp=t,
+            msckf_update_features=10,slam_update_features=0,correction_applied=True,correction_age_s=0.,zero_velocity_update=False,
+            delta_valid=True,delta_from_stamp=previous[0],relative_transform=D,relative_covariance=np.eye(6)*1e-9,stamp=t,epoch=epoch,arrival=t+1,imu_arrival=t+1,features=50,initialized=True,visual_valid=True,
             T_odom_imu=T,covariance=np.eye(6)*1e-5,transport_lag_s=.01,gyro_norm=0.)
     def test_physical_1point2m_is_not_a_tag_correction_or_command(self):
         self.s['calibration']['T_body_imu']=np.eye(4).tolist();o=Observer(self.s)
@@ -79,7 +81,7 @@ class Estimation(unittest.TestCase):
         self.s['calibration']['T_body_imu']=np.eye(4).tolist();o=Observer(self.s)
         for i in range(220):a=o.add_vio(self.packet(i/30,0))
         self.assertTrue(a['stationary'])
-        p=self.packet(220/30,0);p['visual_valid']=False;a=o.add_vio(p)
+        p=self.packet(220/30,0);p['tracking_valid']=False;a=o.add_vio(p)
         self.assertFalse(a['stationary']);self.assertFalse(a['usable'])
     def test_pnp_covariance_increases_with_distance(self):
         K=np.array([[900.,0,640],[0,900,360],[0,0,1.]])
@@ -98,7 +100,7 @@ class Estimation(unittest.TestCase):
         for i in range(201):q.add('gyro',i*.005,[0,0,.01],i*.005+1)
         values=q.drain();self.assertEqual(len(values),201)
         for s in values:self.assertAlmostEqual(s['accel'][0],s['stamp'])
-        q.add('gyro',2,[0,0,0]);self.assertEqual(q.fault,'imu_clock_or_sample_gap')
+        q.add('gyro',2,[0,0,0]);self.assertIn('imu_clock_or_sample_gap: stream=gyro reason=sample_gap',q.fault)
     def test_imu_queue_overflow_is_not_silent_drop(self):
         q=ImuSynchronizer(capacity=2)
         for i in range(3):q.add('gyro',i*.005,[0,0,0])
@@ -121,6 +123,7 @@ class Estimation(unittest.TestCase):
         o['capture_id']=o['arrival']=62;c.step(62,o);self.assertEqual(c.state,'FAULT')
     def test_sdk_rig_yaml_is_readable_by_opencv_and_uses_actual_extrinsics(self):
         import tempfile,json
+        from pathlib import Path
         from types import SimpleNamespace
         from docking.sensor_calibration import prepare
         class Profile:
@@ -137,6 +140,17 @@ class Estimation(unittest.TestCase):
             self.assertEqual(fs.getNode('cam0').getNode('T_cam_imu').size(),4);fs.release()
             self.assertAlmostEqual(np.array(bundle['T_left_imu'])[0,3],.01)
             self.assertEqual(bundle['raw_models']['color']['width'],1280)
+            # Exercise every matrix as OpenVINS' Eigen parser does. Merely
+            # opening the YAML or reading an unrelated node misses aliases.
+            fs=cv2.FileStorage(folder+'/imu.yaml',cv2.FILE_STORAGE_READ)
+            node=fs.getNode('imu0')
+            for name in ('Tw','Ta','R_IMUtoACC','R_IMUtoGYRO','Tg'):
+                m=node.getNode(name)
+                self.assertTrue(m.isSeq(),name);self.assertEqual(m.size(),3,name)
+                actual=[[m.at(r).at(c).real() for c in range(3)] for r in range(3)]
+                np.testing.assert_array_equal(actual,np.zeros((3,3)) if name=='Tg' else np.eye(3))
+            fs.release()
+            self.assertNotIn('&id',(Path(folder)/'imu.yaml').read_text())
 
     def test_hand_eye_rejects_planar_unobservable_motions(self):
         samples=[dict(T_base_body=matrix([i*.1,0,i*.1]).tolist(),T_camera_tag=np.eye(4).tolist()) for i in range(12)]

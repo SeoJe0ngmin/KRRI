@@ -77,7 +77,10 @@ def rectification(left,right,T_right_left):
 
 
 class OpenCvYaml(yaml.SafeDumper):
-    pass
+    # OpenCV FileStorage does not resolve YAML anchors/aliases. The IMU
+    # identity matrices share a Python object, but must be written in full.
+    def ignore_aliases(self,data):
+        return True
 OpenCvYaml.add_representer(list,lambda dumper,value:dumper.represent_sequence('tag:yaml.org,2002:seq',value,flow_style=True))
 
 def yaml_file(path,data):

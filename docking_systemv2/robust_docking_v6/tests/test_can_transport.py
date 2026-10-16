@@ -75,6 +75,10 @@ class TransportTests(unittest.TestCase):
              patch('docking.canbus.time.sleep', side_effect=sleep), \
              patch('docking.canbus.signal.signal'):
             _worker(config()['can'], shared, abort, Close(), Ready(), health)
+        self.assertEqual([f.id_ for _,f in sent[:15]],[0x2E3,0x764,0x1E3]*5)
+        first_forward=next(i for i,(_,f) in enumerate(sent) if f.id_==0x1E3 and f.data[2]==97)
+        self.assertEqual([f.id_ for _,f in sent[first_forward-2:first_forward+1]],[0x2E3,0x764,0x1E3])
+        self.assertEqual([f.id_ for _,f in sent[first_forward-2:first_forward+13]],[0x2E3,0x764,0x1E3]*5)
         movement = [(t, f) for t, f in sent if f.id_ == 0x1E3]
         self.assertTrue(all(f.data == [127]*8 for _, f in movement[:5]))
         self.assertTrue(any(f.data[2] == 97 for _, f in movement))
@@ -110,7 +114,7 @@ class DiagnosticTransportTests(unittest.TestCase):
         class Frame:
             def __init__(self, id_, data, flags=0):
                 self.id, self.data, self.flags = id_, list(data), flags
-        for failure in ('foreign', 'busoff', 'no_ack'):
+        for failure in ('foreign', 'busoff', 'no_ack', 'error_frame', 'overrun', 'both'):
             clock, sent, flushed = [10.], [], []
             shared, health = Shared([0., 0.]), Shared([0., 0.])
             abort = threading.Event()
@@ -131,12 +135,18 @@ class DiagnosticTransportTests(unittest.TestCase):
                     if frame.id == 0x1E3 and frame.data[2] == 97: self.driving = True
                     if failure != 'no_ack' or not self.driving:
                         self.rx.append(Frame(frame.id, frame.data, Flags.TXACK))
+                    if self.driving and failure in ('error_frame','overrun','both'):
+                        bits={'error_frame':Flags.ERROR_FRAME,'overrun':Flags.OVERRUN,'both':Flags.ERROR_FRAME|Flags.OVERRUN}[failure]
+                        self.rx.append(Frame(0, [], bits))
                     if failure == 'foreign' and self.driving:
                         self.rx.append(Frame(0x1E3, [127]*8))
                 def read(self, timeout=0):
                     if not self.rx: raise NoMsg()
                     return self.rx.pop(0)
-                def readStatus(self): return Status.BUS_OFF if failure=='busoff' and self.driving else 0
+                def readStatus(self):
+                    if abort.is_set():
+                        assert sent[-1][1].id==0x1E3 and sent[-1][1].data==[127]*8
+                    return Status.BUS_OFF if failure=='busoff' and self.driving else 0
                 def read_error_counters(self): return types.SimpleNamespace(tx=0, rx=0, overrun=0)
             channel = Channel()
             class Close:
@@ -158,10 +168,16 @@ class DiagnosticTransportTests(unittest.TestCase):
                  patch('docking.canbus.signal.signal'):
                 _worker(cfg, shared, abort, Close(), Ready(), health, reports, faults)
             self.assertTrue(abort.is_set())
-            self.assertIn('CAN', faults.get_nowait()['fault'])
+            failure_report=faults.get_nowait()
+            self.assertIn('CAN', failure_report['fault'])
+            if failure in ('error_frame','overrun','both'):
+                self.assertEqual(failure_report['fault_frame']['error_frame'],failure!='overrun')
+                self.assertEqual(failure_report['fault_frame']['rx_overrun'],failure!='error_frame')
+                self.assertIn('after_stop_snapshot',failure_report)
             self.assertTrue(flushed)
             self.assertTrue(any(f.id == 0x1E3 and f.data[2] == 97 for _,f in sent))
-            self.assertTrue(all(f.id==0x1E3 and f.data==[127]*8 for _,f in sent[-3:]))
+            self.assertTrue(all(f.data==[127]*8 for _,f in sent[-9:] if f.id==0x1E3))
+            self.assertEqual([f.id for _,f in sent[-9:]],[0x2E3,0x764,0x1E3]*3)
             for _,f in sent:
                 if f.id==0x1E3: self.assertTrue(all(f.data[i]==127 for i in (0,3,4,5,6,7)))
                 if f.id==0x2E3: self.assertEqual(f.data[:4]+f.data[5:],[0x42,0,0,0x0A,0x40,0x69,0x93])

@@ -2,6 +2,16 @@ std_msgs/Header header
 uint64 epoch
 bool initialized
 bool visual_valid
+# Versioned adapter contract: tracking is distinct from correction cadence.
+uint32 quality_version
+bool tracking_valid
+uint32 continued_features
+float64 state_stamp
+uint32 msckf_update_features
+uint32 slam_update_features
+bool correction_applied
+# -1 means no verified correction yet. ZUPT also counts as a correction.
+float64 correction_age_s
 bool zero_velocity_update
 uint32 features
 # Row-major T_odom_imu, never JPL quaternion coefficients interpreted as Hamilton.

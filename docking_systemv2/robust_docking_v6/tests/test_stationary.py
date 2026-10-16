@@ -45,3 +45,14 @@ class StationaryTest(unittest.TestCase):
         self.assertFalse(self.feed(d,7,10,lambda t:[0,0,.01*(t-7)]))
         for t in np.arange(10,13,1/60):result=d.update(t,[0,0,0],.2,True,True)
         self.assertFalse(result)
+    def test_rest_at_measured_14_hz_and_drift_rejection(self):
+        for speed, expected in ((0.,True),(.003,False)):
+            d=self.detector()
+            for t in np.arange(0,8,1/14):
+                result=d.update(float(t),[speed*t,0,0],0.,True,True)
+            self.assertEqual(result,expected,d.report)
+    def test_sparse_visual_samples_still_rejected(self):
+        d=self.detector()
+        for t in np.arange(0,8,1/4):
+            result=d.update(float(t),[0,0,0],0.,True,True)
+        self.assertFalse(result)

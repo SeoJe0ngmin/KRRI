@@ -5,6 +5,7 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 DOCK_RS_LIB="${DOCK_RS_PREFIX:-$HOME/.local/share/krri-v6/realsense}/install/lib"
 if [[ -d "$DOCK_RS_LIB" ]]; then export LD_LIBRARY_PATH="$DOCK_RS_LIB:${LD_LIBRARY_PATH:-}"; fi
 DOCK_V6_WS="${DOCK_V6_WS:-$HOME/.local/share/krri-v6/ros_ws}"
+export DOCK_V6_WS
 DOCK_V6_ENV="${DOCK_V6_ENV:-$HOME/.venvs/docking-v6}"
 # ROS-generated scripts may reference unset shell variables.
 DOCK_NOUNSET=0

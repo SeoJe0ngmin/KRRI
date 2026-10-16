@@ -4,6 +4,7 @@ Only this thread serializes/writes records. Producers hand over immutable
 snapshots; queue overflow, storage errors and limits are visible counters.
 """
 import json
+from .serialization import numpy_json
 import os
 import queue
 import threading
@@ -49,7 +50,7 @@ class Recorder:
                 except queue.Empty:
                     filename = value = None
                 if value is not None and not self.error:
-                    data = json.dumps(value, ensure_ascii=False, allow_nan=False)+'\n'
+                    data = json.dumps(value, ensure_ascii=False, allow_nan=False, default=numpy_json)+'\n'
                     size = len(data.encode('utf8'))
                     if self.counts['bytes']+size > cap:
                         self.error = 'recording_size_limit; control continues'

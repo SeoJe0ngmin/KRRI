@@ -21,7 +21,7 @@ from .geometry import cut_position,remaining,front,arrival_y
 from .recording import Recorder
 from .console import Console
 
-CAN_CONFIG=dict(channel=0,bitrate=500000,diagnostics=dict(enabled=True,
+CAN_CONFIG=dict(channel=0,bitrate=500000,diagnostics=dict(enabled=True,error_frame_policy='report',
     max_ack_age_s=.2,max_write_gap_s=.15,poll_budget_s=.001,status_period_s=.1,
     max_rx_per_poll=64,max_pending=4096))
 
@@ -32,9 +32,57 @@ def drain(q):
         except queue.Empty:break
     return last
 
+def read_fast_imu(shared, previous):
+    """Nonblocking snapshot; a writer collision does not invalidate cached data."""
+    lock=shared.get_lock()
+    if not lock.acquire(False):return previous
+    try:return shared[:]
+    finally:lock.release()
+
+
+def fast_imu_available(snapshot, now, max_age):
+    return bool(snapshot[7] and not snapshot[6] and math.isfinite(snapshot[1])
+                and now-snapshot[1]<=max_age)
+
+
+def advance_capture(previous,update):
+    # Startup video previews can precede a delayed first estimator result.
+    # They never establish the control-observation ordering or grant readiness.
+    if update.get('preview_only'):return previous
+    if previous is not None and update['capture_id']<=previous:raise RuntimeError('nonmonotonic observation')
+    return update['capture_id']
+
 def run(args,cfg_override=None,stop_when=None):
+    """Retry only recoverable IMU acquisition faults in measurement mode.
+
+    Each attempt owns new processes/queues and an independent output directory.
+    Drive/shadow faults always return through the existing CAN abort cleanup.
+    """
+    import copy
+    for attempt in range(4):
+        current=copy.copy(args)
+        if attempt and getattr(args,'output',None):
+            current.output=str(args.output)+'_retry_'+str(attempt)
+        try:
+            return _run_once(current,copy.deepcopy(cfg_override),stop_when)
+        except RuntimeError as exc:
+            recoverable=any(x in str(exc) for x in (
+                'reason=sample_gap','accel_interpolation_gap','unbracketed_imu'))
+            if args.command!='measure' or getattr(args,'calibration_forward',False) or not recoverable or attempt==3:raise
+            if stop_when is not None:
+                reset=getattr(stop_when,'reset',None)
+                if reset is None:raise
+                reset()
+            print(f'IMU 공백: 이전 측정 구간 폐기. 센서/OpenVINS 재시작 {attempt+1}/3 (각 시도 로그 별도 보존)',flush=True)
+            time.sleep(2.)
+
+
+def _run_once(args,cfg_override=None,stop_when=None):
     cfg=cfg_override or load(args.common,args.mode,require_mount=args.command!='measure')
-    sensor=cfg['sensor'];live=args.command=='drive';active=args.command!='measure'
+    sensor=cfg['sensor'];active=args.command!='measure'
+    pulse=bool(getattr(args,'calibration_forward',False))
+    live=args.command=='drive' or pulse
+    if pulse and (active or stop_when is None or not hasattr(stop_when,'tick')):raise ValueError('invalid calibration supervisor')
     if active and (getattr(args,'no_tag',False) or getattr(args,'no_odom',False)):
         raise ValueError('--no-tag/--no-odom은 measure에서만 사용 가능합니다')
     if getattr(args,'no_tag',False):sensor['tag']['enabled']=False
@@ -42,6 +90,9 @@ def run(args,cfg_override=None,stop_when=None):
     sensor['sensor_calibration']=getattr(args,'sensor_calibration',None)
     sensor['mapping']['enabled']=getattr(args,'profile','core')=='mapped'
     if active and sensor['camera_only']:raise ValueError('camera-only는 measure에서만 가능합니다')
+    if not sensor['camera_only']:
+        from .ros_adapter import check_build_ready
+        check_build_ready()
     if live and (not args.execute or not sys.stdin.isatty()):raise ValueError('실주행은 --execute와 대화형 SSH 터미널이 필요합니다')
     cut=None
     output=Path(args.output) if args.output else WORK/(time.strftime('%Y%m%d_%H%M%S')+'_'+uuid.uuid4().hex[:6]+'_'+args.command)
@@ -59,14 +110,18 @@ def run(args,cfg_override=None,stop_when=None):
     for sig in (signal.SIGINT,signal.SIGTERM,signal.SIGHUP):old_handlers[sig]=signal.signal(sig,interrupt)
     try:
         camera.start()
-        if active:
+        if active or pulse:
             stdin_flags=os.get_blocking(sys.stdin.fileno());os.set_blocking(sys.stdin.fileno(),False)
+        if pulse:
+            from .canbus import Can
+            can=Can(CAN_CONFIG,cfg['tuning']['lease_s'])
+            print('CAN 직진 보정: 센서 준비 후 Enter → 정지 30초 → 자동 전진 3초. s+Enter / Ctrl+C 정지.',flush=True)
         if args.view:
             from .webview import Dashboard
             dash=Dashboard(args.port)
             print('화면: SSH 포트 전달 후 http://127.0.0.1:%d'%args.port,flush=True)
         print('출력: '+str(output),flush=True)
-        print('브레이크를 잡고 실제 정차 상태를 유지하세요. 진동·준비 측정 중. READY 이후 Enter로 출발. s+Enter / Ctrl+C 정지.' if active else '측정 전용: CAN을 열지 않습니다.',flush=True)
+        print('브레이크를 잡고 실제 정차 상태를 유지하세요. 진동·준비 측정 중. READY 이후 Enter로 출발. s+Enter / Ctrl+C 정지.' if active else ('CAN 직진 보정 활성화' if pulse else '측정 전용: CAN을 열지 않습니다.'),flush=True)
         last_tick=time.monotonic();preparation_saved=False
         while True:
             now=time.monotonic();loop_gap=now-last_tick;last_tick=now
@@ -87,10 +142,13 @@ def run(args,cfg_override=None,stop_when=None):
             if update is not None:
                 if 'worker_error' in update:raise RuntimeError(update['worker_error'])
                 obs=update
-            if not camera.is_alive() or stop.is_set():raise RuntimeError('camera worker stopped')
+            if not camera.is_alive() or stop.is_set():
+                error_file=output/'camera_error.txt'
+                detail=error_file.read_text() if error_file.exists() else 'No Python traceback; inspect openvins.log and OS logs for native crash/OOM.'
+                raise RuntimeError(f'camera worker stopped (exitcode={camera.exitcode}, logs={output})\n{detail}')
             if obs is None and now-t0>sensor['camera']['startup_timeout_s']+25:raise RuntimeError('camera startup timeout')
             enter=False
-            if active and select.select([sys.stdin],[],[],0)[0]:
+            if (active or pulse) and select.select([sys.stdin],[],[],0)[0]:
                 chunk=os.read(sys.stdin.fileno(),4096)
                 if not chunk:terminal='ssh_eof';break
                 buf+=chunk
@@ -103,6 +161,18 @@ def run(args,cfg_override=None,stop_when=None):
                 health=can.status()
                 if health['latched'] or not health['alive'] or health['tx_worker_age_s']>cfg['tuning']['lease_s']:
                     raise RuntimeError('CAN watchdog/transport: '+str(health))
+            if pulse:
+                # Refresh during WAIT/BASELINE too, before the first moving tick.
+                fast_now=read_fast_imu(fast,fast_now)
+                if stop_when.command!='stop' and loop_gap>cfg['tuning']['lease_s']:
+                    raise RuntimeError('calibration supervisor deadline missed')
+                stop_when.tick(now,update,enter)
+                command=stop_when.command
+                if command!='stop':
+                    if not fast_imu_available(fast_now,now,cfg['tuning']['imu_age_s']):
+                        raise RuntimeError('calibration fast IMU unavailable')
+                can.set(command,expires_at=stop_when.since+3 if command=='forward' else None)
+                status=dict(state=stop_when.phase,command=command)
             if active and controller is not None:
                 if not planner.is_alive():raise RuntimeError('planner worker stopped')
                 if loop_gap>cfg['tuning']['lease_s'] and controller.command!='stop':raise RuntimeError('supervisor deadline missed')
@@ -126,8 +196,7 @@ def run(args,cfg_override=None,stop_when=None):
                 neutral=status['command']=='stop';since=hints[2] if hints[1]==1 and neutral else now
                 hints[:]=[now,float(neutral),since]
             if update is not None:
-                if last_capture is not None and update['capture_id']<=last_capture:raise RuntimeError('nonmonotonic observation')
-                last_capture=update['capture_id']
+                last_capture=advance_capture(last_capture,update)
                 rec.put(dict(now=now,status=status,loop_gap_s=loop_gap,observation_capture=last_capture,can=can.status() if can else None))
             if rec.status().get('error'):raise RuntimeError(rec.status()['error'])
             if dash:
@@ -140,7 +209,8 @@ def run(args,cfg_override=None,stop_when=None):
                 dash.update(dict(mode=args.command,controller=status,observation=obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x']),control_recording=rec.status()),drain(previews))
             if now-last_print>=2:
                 perf=(obs or {}).get('performance',{})
-                console.write('%s | %s | camera %.1f / process %.1f fps | %s'%(status['state'],status['command'],perf.get('camera_fps',0),perf.get('processed_fps',0),status.get('reason','')));last_print=now
+                odom=(obs or {}).get('odom',{})
+                console.write('%s | %s | camera %.1f / process %.1f fps | odom %s: %s | %s'%(status['state'],status['command'],perf.get('camera_fps',0),perf.get('processed_fps',0),odom.get('ok',False),odom.get('reason','sensor_starting'),status.get('reason','')));last_print=now
             if status['state'] in ('FAULT','COMPLETE'):terminal=status.get('reason',status['state']);break
             if update is not None and stop_when and stop_when(update):terminal='measurement_complete';break
             if args.seconds and now-t0>=args.seconds:terminal='requested_duration';break
@@ -154,7 +224,11 @@ def run(args,cfg_override=None,stop_when=None):
         # STOP/latch before joins, disk flush, UI shutdown or other blocking work.
         if can:can.abort()
         stop.set()
-        if can:can.close()
+        if can:
+            can.close()
+            can_final=can.status()
+            if can_final.get('diagnostics',{}).get('fault'):
+                rec.put(can_final,'can_fault.json')
         if stdin_flags is not None:os.set_blocking(sys.stdin.fileno(),stdin_flags)
         for sig,fn in old_handlers.items():signal.signal(sig,fn)
         for process in (camera,planner):

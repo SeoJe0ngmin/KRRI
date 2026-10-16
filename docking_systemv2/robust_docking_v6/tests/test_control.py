@@ -53,11 +53,13 @@ class Control(unittest.TestCase):
         self.c=config();self.c['tuning']['preparation_s']=1.
         self.ctrl=Controller(self.c,-2.5,0.)
     def started(self):
-        x=self.ctrl;x.step(0.,observation(0.),True);x.step(1.1,observation(1.1))
+        x=self.ctrl;x.step(0.,observation(0.),True)
+        for i in range(1,12):x.step(i/10,observation(i/10))
         self.assertEqual(x.state,'WAIT_ENTER');x.step(1.2,observation(1.2),True)
         return x
     def test_enter_before_ready_is_not_latched(self):
-        self.ctrl.step(0.,observation(0),True);self.ctrl.step(1.1,observation(1.1))
+        self.ctrl.step(0.,observation(0),True)
+        for i in range(1,12):self.ctrl.step(i/10,observation(i/10))
         self.assertEqual(self.ctrl.state,'WAIT_ENTER');self.assertIsNone(self.ctrl.mission_start)
     def test_waiting_motion_restarts_preparation(self):
         x=self.started();x.state='WAIT_ENTER'

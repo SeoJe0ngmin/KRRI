@@ -9,6 +9,7 @@ class Controller:
         self.cfg=cfg;self.t=cfg['tuning'];self.cut=cut;self.created=now
         self.state='PREPARING';self.reason='stationary_preparation';self.command='stop'
         self.mission_start=None;self.stable_start=None;self.last_capture=None
+        self.prep_seconds=0.;self.prep_last=None;self.prep_anchor=None;self.prep_pause=None
         self.responses=Responses();self.plan_id=0;self.request=None;self.route=[];self.route_points=[]
         self.action=None;self.pending_distance=None;self.brake=None;self.blind=False
         self.search_start=None;self.sweep=0.;self.motion_start=None;self.stop_at=None
@@ -119,9 +120,28 @@ class Controller:
         if new and fresh and o.get('tag',{}).get('detected'):self.last_seen=now
         still=fresh and o.get('stationary')
         if self.state in ('PREPARING','WAIT_ENTER'):
-            if not still:self.stable_start=None
-            elif new and self.stable_start is None:self.stable_start=o['capture_id']
-            duration=0 if self.stable_start is None else o['capture_id']-self.stable_start
+            if new:
+                # Retain confirmed preparation time across short observed settling,
+                # but not real movement, stale tracking or coordinate resets.
+                anchor=self.prep_anchor
+                same=bool(anchor and fresh and
+                    o.get('motion_epoch')==anchor.get('motion_epoch') and
+                    o.get('tracking_generation')==anchor.get('tracking_generation') and
+                    np.linalg.norm(np.array(o['local_pose'][:2])-anchor['local_pose'][:2])<=.004 and
+                    abs(wrap(o['local_pose'][2]-anchor['local_pose'][2]))<=math.radians(.35))
+                recheck=bool(same and o.get('stationary_report',{}).get('reason')=='settling_window')
+                if still:
+                    if self.prep_pause is not None and (not same or now-self.prep_pause>3.):self.prep_seconds=0.
+                    if self.prep_last is not None and 0<o['capture_id']-self.prep_last<=self.t['frame_gap_s']:
+                        self.prep_seconds+=o['capture_id']-self.prep_last
+                    self.prep_last=o['capture_id'];self.prep_anchor=dict(o);self.prep_pause=None
+                else:
+                    self.prep_last=None
+                    if self.prep_pause is None:self.prep_pause=now
+                    if not recheck or now-self.prep_pause>3.:self.prep_seconds=0.;self.prep_anchor=None
+            if not fresh:
+                self.prep_seconds=0.;self.prep_last=None;self.prep_anchor=None
+            duration=self.prep_seconds
             self.preparation_report=dict(stable_seconds=duration,required_seconds=self.t['preparation_s'],
                 stationary_report=(o or {}).get('stationary_report'),
                 imu_ready=bool(o and o.get('sensor_ready')),tag_seen=bool(o and o.get('valid')),
@@ -131,10 +151,10 @@ class Controller:
                 certified_error_bound=False)
             if self.state=='PREPARING':
                 if now-self.created>self.t['preparation_timeout_s']:return self.fault('preparation_timeout')
-                if duration>=self.t['preparation_s']:
+                if still and duration>=self.t['preparation_s']:
                     self.state='WAIT_ENTER';self.reason='ready_press_enter';self.initialized_at=now
             elif not still:
-                self.state='PREPARING';self.created=now;self.reason='moved_while_waiting_repeat_preparation'
+                self.state='PREPARING';self.created=now;self.reason='rechecking_before_enter'
             elif enter:
                 self.mission_start=now;self.state='PLAN';self.reason='operator_started'
             return self.status()
@@ -180,7 +200,6 @@ class Controller:
                     d,fine=self.pending_distance;self.pending_distance=None;self.begin_drive(now,o,d,fine)
                 else:self.state='PLAN'
             elif now-self.stop_at>self.t['settle_timeout_s']:
-                if fresh:return self.fault('stop_not_confirmed')
                 stopped_at=self.stop_at
                 self.recover(now,'stopped_pose_reacquisition')
                 self.recovery_at=stopped_at

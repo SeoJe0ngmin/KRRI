@@ -23,6 +23,8 @@
 #include <track/TrackBase.h>
 #include <utils/sensor_data.h>
 #include <types/IMU.h>
+#include <types/Landmark.h>
+#include "quality.hpp"
 
 using Motion=docking_v6_msgs::msg::Motion;
 using Stereo=docking_v6_msgs::msg::Stereo;
@@ -31,7 +33,24 @@ static double seconds(const builtin_interfaces::msg::Time& t) { return t.sec+t.n
 class Estimator : public ov_msckf::VioManager {
 public:
   explicit Estimator(ov_msckf::VioManagerOptions& p):VioManager(p) {}
+  // Upstream initialized() also requires timelastupdate != -1. That timestamp
+  // is only set at the END of the normal visual update; initial clone warmup
+  // can return first, followed by ZUPT forever while stationary. The actual
+  // inertial initialization flag already certifies a constructed state/P.
+  // Tracking, current timestamp and correction evidence are checked separately.
+  bool filter_initialized() const { return is_initialized_vio; }
   std::vector<cv::KeyPoint> tracks() { return trackFEATS->get_last_obs()[0]; }
+  std::vector<size_t> ids(size_t camera) { return trackFEATS->get_last_ids()[camera]; }
+  docking_quality::Failures slam_failures() const {
+    docking_quality::Failures failures;
+    for (const auto& item : state->_features_SLAM) {
+      // ArUco rejection does not increment this counter; do not infer its updates.
+      if (item.first > size_t(4*state->_options.max_aruco_features) && !item.second->should_marg)
+        failures[item.first]=item.second->update_fail_count;
+    }
+    return failures;
+  }
+  bool normal_update_completed(double stamp) const { return std::abs(timelastupdate-stamp)<1e-5; }
   bool zupt() const { return did_zupt_update && !has_moved_since_zupt; }
   void clear_quality() { good_features_MSCKF.clear(); }
 };
@@ -43,9 +62,15 @@ class Bridge : public rclcpp::Node {
   std::deque<Motion::ConstSharedPtr> imus_; std::deque<ImageItem> images_;
   std::thread worker_; std::atomic<bool> running_{true};
   uint64_t epoch_=0,sequence_=0,dropped_=0; bool have_epoch_=false;
-  int parent_pid_=0; double last_visual_=-1,last_published_=-1;
+  int parent_pid_=0; double last_published_=-1;
+  docking_quality::Monitor quality_;
+  docking_quality::Failures slam_before_;
   Eigen::Matrix4d previous_T_=Eigen::Matrix4d::Identity();
-  double last_received_imu_=-1,last_received_image_=-1,last_fed_imu_=-1,max_age_=.3;
+  double last_received_imu_=-1,last_received_image_=-1,max_age_=.3;
+  std::atomic<double> last_fed_imu_{-1};
+  std::atomic<uint64_t> states_published_{0};
+  std::atomic<const char*> stage_{"waiting_for_input"};
+  rclcpp::TimerBase::SharedPtr health_timer_;
   Eigen::Vector3d gyro_=Eigen::Vector3d::Zero();
   std::string fault_;
   rclcpp::Subscription<Motion>::SharedPtr imu_sub_;
@@ -110,7 +135,8 @@ class Bridge : public rclcpp::Node {
   }
   void publish(const Stereo& m) {
     Output out;out.header=m.header;out.header.frame_id="odom";out.epoch=m.epoch;
-    out.last_imu_stamp=last_fed_imu_;out.initialized=estimator_->initialized();
+    out.quality_version=1;out.correction_age_s=-1;
+    out.last_imu_stamp=last_fed_imu_;out.initialized=estimator_->filter_initialized();
     {std::lock_guard<std::mutex> lock(mutex_);out.stereo_dropped=dropped_;out.fault=fault_;}
     auto tracks=estimator_->tracks();out.features=tracks.size();out.zero_velocity_update=estimator_->zupt();
     for(const auto& key:tracks) {geometry_msgs::msg::Point32 p;p.x=key.pt.x;p.y=key.pt.y;out.left_points.push_back(p);}
@@ -130,11 +156,24 @@ class Bridge : public rclcpp::Node {
       for(int r=0;r<6;r++)for(int c=0;c<6;c++)out.covariance[6*r+c]=P(r,c);
       for(int i=0;i<3;i++) {out.gyro_bias[i]=imu->bias_g()(i);out.accel_bias[i]=imu->bias_a()(i);out.velocity_world[i]=imu->vel()(i);}
       out.gyro_norm=(gyro_-imu->bias_g()).norm();
-      if(std::abs(state->_timestamp-seconds(m.header.stamp))<1e-5)relative_quality(out,state,T);
-      if(out.zero_velocity_update || estimator_->get_good_features_MSCKF().size()>=3)last_visual_=state->_timestamp;
-      out.visual_valid=tracks.size()>=20 && state->_timestamp-last_visual_<=.2 && std::abs(state->_timestamp-seconds(m.header.stamp))<1e-5;
     }
-    output_->publish(out);
+    auto state=estimator_->get_state();out.state_stamp=state->_timestamp;
+    out.msckf_update_features=estimator_->get_good_features_MSCKF().size();
+    out.slam_update_features=docking_quality::accepted_stereo_slam(slam_before_,estimator_->slam_failures(),
+        estimator_->ids(0),estimator_->ids(1),estimator_->normal_update_completed(seconds(m.header.stamp)));
+    auto q=quality_.observe(seconds(m.header.stamp),state->_timestamp,out.initialized,
+        estimator_->ids(0),out.msckf_update_features,out.slam_update_features,out.zero_velocity_update);
+    out.continued_features=q.continued;out.tracking_valid=q.tracking;
+    out.correction_applied=q.corrected;out.correction_age_s=q.correction_age;
+    // Retained field name for mapping consumers; freshness/uncertainty/control
+    // eligibility are evaluated separately in the Python observer.
+    out.visual_valid=q.tracking;
+    if(q.state_current) {
+      Eigen::Matrix4d T=Eigen::Matrix4d::Identity();
+      T.block<3,3>(0,0)=state->_imu->Rot().transpose();T.block<3,1>(0,3)=state->_imu->pos();
+      relative_quality(out,state,T);
+    }
+    output_->publish(out);++states_published_;
   }
   void work() {
     while(running_) {
@@ -160,15 +199,19 @@ class Bridge : public rclcpp::Node {
         } else if(!imus_.empty()) {motion=imus_.front();imus_.pop_front();}
       }
       try {
-        if(motion)feed_imu(*motion);
+        if(motion){stage_="feed_imu";feed_imu(*motion);}
         if(camera) {
+          stage_="track_and_update";
           if(seconds(camera->left.header.stamp)!=seconds(camera->header.stamp) ||
              seconds(camera->right.header.stamp)!=seconds(camera->header.stamp))throw std::runtime_error("stereo_stamp_mismatch");
           ov_core::CameraData d;d.timestamp=seconds(camera->header.stamp);d.sensor_ids={0,1};
           d.images={image(camera->left),image(camera->right)};
           d.masks={cv::Mat::zeros(d.images[0].size(),CV_8UC1),cv::Mat::zeros(d.images[1].size(),CV_8UC1)};
-          estimator_->clear_quality();estimator_->feed_measurement_camera(d);publish(*camera);
+          slam_before_=estimator_->slam_failures();
+          estimator_->clear_quality();estimator_->feed_measurement_camera(d);
+          stage_="publish_state";publish(*camera);
         }
+        stage_="waiting_for_input";
       } catch(const std::exception& e) {std::lock_guard<std::mutex> lock(mutex_);fault_=e.what();}
     }
   }
@@ -202,6 +245,15 @@ public:
       last_received_image_=t;if(!fault_.empty())return;
       if(images_.size()>=2){images_.pop_front();dropped_++;}
       images_.push_back({m,std::chrono::steady_clock::now()});wake_.notify_one();
+    });
+    // Runs on the ROS executor, independently of the estimator worker. A stuck
+    // initializer/tracker therefore leaves useful evidence instead of silence.
+    health_timer_=create_wall_timer(std::chrono::seconds(2),[this]{
+      std::lock_guard<std::mutex> lock(mutex_);
+      fprintf(stderr,"[pipeline] stage=%s imu_sequence=%llu imu_received=%.6f imu_fed=%.6f image_received=%.6f imu_queue=%zu image_queue=%zu dropped=%llu outputs=%llu state_subscribers=%zu fault=%s\n",
+        stage_.load(),static_cast<unsigned long long>(sequence_),last_received_imu_,last_fed_imu_.load(),
+        last_received_image_,imus_.size(),images_.size(),static_cast<unsigned long long>(dropped_),
+        static_cast<unsigned long long>(states_published_.load()),output_->get_subscription_count(),fault_.c_str());
     });
     worker_=std::thread([this]{work();});
   }

@@ -40,7 +40,28 @@ bash scripts/install_realsense.sh
 bash scripts/preflight.sh check --sensor-only
 ```
 
-ROS 기본 패키지와 OpenCV 등 apt 의존성은 시스템에, OpenVINS와 브리지는 `~/.local/share/krri-v6/ros_ws`, 전용 Python은 `~/.venvs/docking-v6`에 둔다. 기존 `~/.venvs/krri`는 그대로 둔다. `(krri)`를 먼저 활성화할 필요 없이 실행 스크립트가 v6 전용 환경을 선택한다. 네이티브 브리지 코드가 업데이트됐으면 설치 스크립트를 다시 실행하여 증분 빌드한다. Kvaser 시스템 드라이버는 기존 설치를 사용한다.
+ROS 기본 패키지와 OpenCV 등 apt 의존성은 시스템에, OpenVINS와 브리지는 `~/.local/share/krri-v6/ros_ws`, 전용 Python은 `~/.venvs/docking-v6`에 둔다. 기존 `~/.venvs/krri`는 그대로 둔다. `(krri)`를 먼저 활성화할 필요 없이 실행 스크립트가 v6 전용 환경을 선택한다. Kvaser 시스템 드라이버는 기존 설치를 사용한다.
+
+**이미 설치를 마친 Jetson에서 브리지/메시지 변경을 반영할 때:** 코드 복사 후 아래 명령을 한 번 실행한다. apt·다운로드 없이 메시지·브리지 두 패키지를 다시 생성한다. 기존 실행은 먼저 종료한다. 이전 두 패키지의 build/install 산출물은 `~/.local/share/krri-v6/ros_ws/rebuild_backups/`에 보관하고 OpenVINS 원본·세 라이브러리 빌드·측정 로그·common은 보존한다.
+
+```bash
+cd /home/jetson/krri/docking_systemv2/robust_docking_v6
+bash scripts/rebuild_openvins.sh
+```
+
+`Clock skew detected` 또는 날짜가 1970년이면 **맥 터미널에서** 먼저 현재 시간을 맞춘다. USB 연결만으로 가능하다.
+
+```bash
+ssh -t jetson-wired "sudo date -u -s '$(date -u '+%Y-%m-%d %H:%M:%S')'"
+```
+
+그 뒤 **Jetson 터미널에서** 다음처럼 `&&`로 연결하면 빌드 성공 시에만 측정한다.
+
+```bash
+bash scripts/rebuild_openvins.sh && bash scripts/run_nano.sh measure --seconds 90 --view
+```
+
+스크립트도 빌드 미완료 표시가 남으면 VIO 실행을 차단한다. 표시 파일을 수동으로 지우지 말고 재빌드를 완료한다. 시스템 날짜는 파일 기반 빌드에 영향을 주지만, IMU 시간 검사에는 장치 타임스탬프를 사용하므로 날짜 수정만으로 IMU 누락이 해결됐다고 판단하지 않는다.
 
 설치 스크립트는 OpenVINS 원본을 보존하고 별도 빌드 사본의 CMake 설정만 C++17/Jazzy용으로 생성한다. 추정 알고리즘은 원본과 같으며 사용하지 않는 예제·시각화 실행 파일은 빌드하지 않는다.
 
@@ -63,6 +84,18 @@ bash scripts/run_nano.sh measure --camera-only --seconds 60 --view
 ```
 
 `--camera-only`는 위치 추정·주행 준비 완료 판정을 하지 않는다. OpenVINS 초기화가 끝나도 태그가 유효하게 관측되기 전에는 입구 기준 pose가 없다.
+
+`odom` 확인 항목:
+- `tracking_ok`: 현재 영상에서 앞 프레임과 같은 특징점을 계속 추적하는지.
+- `corrected_this_frame` / `correction_recent` / `correction_age_s`: 보정 여부와 마지막 보정 이후 초. `correction_recent=false`만으로 추적 실패는 아니다.
+- `ok`: 추적·시각·지연·IMU·상대 이동 연속성·최대 보정 공백 검사를 통과했는지. 실패 이유는 `reason`에 나온다.
+- `usable_for_docking`: 입구 기준 위치와 불확실성까지 통과했는지. `ok=true`와 별개다.
+
+카메라 첫 영상 대기는 최대 30초, OpenVINS 무응답 제한은 첫 영상 전달 이후 10초다. 준비 중 영상은 제어 관측으로 사용하지 않는다. 오류가 나면 실행 폴더의 `camera_error.txt`, `pipeline_status.json`, `openvins.log`를 확인한다. 마지막 파일의 `[pipeline]` 줄은 입력 수신·대기열·처리 단계·출력 수를 보여 준다. 입력만 계속 와도 무응답 제한을 갱신하지 않는다.
+
+불완전한 첫 프레임셋은 위 제한 안에서 기다리며 완전한 새 IR 좌·우/컬러가 와야 영상 준비로 처리한다. `imu_clock_or_sample_gap`에는 `stream`, `reason`(역전/중복/누락), 장치 시간 차이와 호스트 수신 간격이 표시된다. `metrics.json`에도 센서별 마지막 시각·수신 수·남은 대기열을 저장한다. 실제 IMU 끊김을 숨기거나 누락 구간을 임의로 채우지는 않는다.
+
+OpenVINS에 첫 데이터를 전달하기 전에는 IMU 수신을 0.5초 준비한다. 장치 시간과 호스트 수신 시간이 모두 연속 진행하고 좌·우 IR 영상 시각과 맞아야 시작한다. 준비 중 시간 점프가 있으면 양쪽 IMU 버퍼를 비우고 새 구간을 수집한다(`startup_resets`, `last_startup_reset` 기록). 오래된 샘플이 한꺼번에 도착하는 것만으로 준비 완료가 되지 않는다. 영상은 이때도 표시하며 `odom.reason=imu_startup_stabilizing`이다. 준비 제한은 기존 30초이며, 전달 시작 후 끊김은 재초기화로 숨기지 않고 중단한다. 이 준비는 정차 판정이나 IMU 바이어스 보정 완료와 별개다.
 
 ## 4. 현장 입력·재장착 보정
 
@@ -129,3 +162,26 @@ bash scripts/run_nano.sh measure --profile mapped --seconds 90 --view
 정지 준비 중에는 브레이크를 잡고 실제 정차를 유지한다. VIO 초기화 후 6초의 진동 기준 수집과 기존 60초 준비 측정을 거쳐 READY가 나온 뒤 Enter로 출발한다. 회전·직진 후에는 중립 이후의 2초 관측으로 잔여 이동·되튐을 확인한다. 실패 이유는 로그의 `stationary_report`에서 확인한다. 엔진 진동 허용과 ±3cm 도킹 정확도 검사는 별개다. OpenVINS 자체 초기화 실패는 이 판정으로 우회하지 않는다.
 
 2026-10-16 공통 치수: 차폭 1.3m, 탑재부 내부 폭 1.4m(임시). 중앙에서 좌우 물리적 여유는 각각 5cm이며 정렬 허용 오차는 3cm를 유지한다. 이미 젠슨에 공통 설정이 있으면 일반 업데이트는 보존하므로, 해당 두 `value`를 젠슨에서도 수정하거나 의도적으로 `--with-common`을 사용한다(후자는 다른 공통값도 맥 값으로 덮어쓴다).
+
+### heading 0 없이 CAN 직진 장착 보정
+
+```bash
+cd /home/jetson/krri/docking_systemv2/robust_docking_v6
+bash scripts/preflight.sh mount-straight --seconds 180 --view --mode left --execute
+```
+
+이 명령은 CAN을 연다. 조향을 직진으로 고정하고 태그가 계속 보이는 전진 공간을 확보한다.
+센서가 준비되면 SSH 터미널 Enter를 누른다. 정지 30초 측정 후 기존 forward(바이트 67)로
+3초 전진 명령을 보낸다. 중립 후 잔여 이동·되튐이 안정될 때까지 확인하고 mount를 저장·종료한다.
+정지 후 추가 30초 측정은 없다. 정지 확인은 최소 3초, 최대 60초이다.
+`s`+Enter / Ctrl+C / SSH 입력 종료 / 센서·CAN 오류 시 정지하며 자동 재전진하지 않는다.
+180초는 준비·입력 대기 등을 포함한 전체 제한 시간이다. 3초는 명령 시간이며 이동 거리 보장이 아니다.
+
+`공통 직진 장착 보정 저장 완료`를 확인한 뒤 수동 모드로 실제 출발 위치로 이동한다.
+CAN 모드로 전환하고 기존 run 명령을 실행한다. 주행은 현재 위치를 새로 추정한다.
+
+태그 위치의 두 정지 구간 중앙값과 수직 축으로 유효 진행 정렬을 구한다.
+순간 태그 각도 0.5도 조건은 사용하지 않는다. 산포는 불확실성으로 남기며 표본 수로 나누지 않는다.
+유효 이동 거리 0.15~2m, 추적 기준 연속성, 직진 중 회전, 정지 관측·태그 커버리지를 확인한다.
+결과는 mount_report.json에 저장하고 유효한 보정만 common.json에 적용한다. 실패·중단 시 기존 mount를 유지한다.
+카메라 재장착 후 다시 보정해야 하며, 차량 쏠림이 포함될 수 있어 절대 정확도를 보증하지 않는다.

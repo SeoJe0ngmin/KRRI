@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import numpy as np
+from .frames import R_REFERENCE_TAG
 
 ROOT=Path(__file__).resolve().parents[2]
 COMMON=ROOT/'configs/common.json'
@@ -17,7 +18,7 @@ TUNING=dict(preparation_s=60.,preparation_timeout_s=180.,mission_timeout_s=600.,
     depth=6,beam=8,expansions=48,planning_timeout_s=3.,final_zone_m=1.5,last_alignment_m=.15,
     position_tolerance_m=.03,longitudinal_tolerance_m=.05,cut_margin_px=45.,transition_margin_slack_px=5.,
     sensor_age_s=.3,imu_age_s=.25,lease_s=.3,frame_gap_s=.4,
-    vibration_baseline_s=6.,still_bucket_s=.25,
+    vibration_baseline_s=6.,still_bucket_s=.5,
     vibration_position_cap_m=.02,vibration_yaw_cap_rad=math.radians(2),vibration_gyro_cap_rps=math.radians(3),
     still_translation_m=.004,still_yaw_rad=math.radians(.35),
     uncertainty_limit_m=.20,uncertainty_limit_rad=math.radians(6),
@@ -57,6 +58,8 @@ def load(path=COMMON, mode='central', require_mount=False):
             if not number(site[k]) or site[k]<=0:raise ValueError('common: '+k+' 미입력')
         if site['bay_width_m']<=site['vehicle_width_m']:raise ValueError('탑재부 폭은 차폭보다 커야 합니다')
     sensor=json.loads((ROOT/'robust_docking_v6/configs/runtime.json').read_text())
+    gap=sensor['openvins']['max_correction_gap_s']
+    if not number(gap) or not 0<gap<=1.:raise ValueError('max_correction_gap_s must be within (0, 1] seconds')
     sensor['tag'].update(id=site['tag_id'],size_m=site['tag_size_m'])
     sensor['calibration']={}
     sensor['rig']=dict(tag_height_m=site['tag_height_m'],camera_height_m=site['camera_height_m'],camera_to_fork_tip_m=site['camera_to_fork_tip_m'])
@@ -67,7 +70,7 @@ def load(path=COMMON, mode='central', require_mount=False):
         R=np.array(mount['R_body_camera'],float)
         if R.shape!=(3,3) or not np.isfinite(R).all() or not np.allclose(R.T@R,np.eye(3),atol=1e-5) or abs(np.linalg.det(R)-1)>1e-5:raise ValueError('invalid mount rotation')
         T=np.eye(4);T[:3,:3]=R;T[:3,3]=[0,site['camera_lateral_m'],site['camera_height_m']]
-        D=np.eye(4);D[:3,:3]=[[0,0,-1],[-1,0,0],[0,1,0]]
+        D=np.eye(4);D[:3,:3]=R_REFERENCE_TAG
         D[:3,3]=[site['tag_plane_offset_m'],(site['left_tag_offset_m'] or 0) if mode=='left' else 0,site['tag_height_m']]
         sensor['calibration'].update(T_body_camera=T.tolist(),T_dock_tag=D.tolist(),camera_model=mount['camera_model'])
         sensor['camera']['serial']=mount['camera_model']['serial']
@@ -77,7 +80,7 @@ def load(path=COMMON, mode='central', require_mount=False):
         # drive/shadow require the validated common mounting result above.
         T=np.eye(4);T[:3,:3]=[[0,0,1],[-1,0,0],[0,-1,0]]
         T[:3,3]=[0,site['camera_lateral_m'],site['camera_height_m']]
-        D=np.eye(4);D[:3,:3]=[[0,0,-1],[-1,0,0],[0,1,0]]
+        D=np.eye(4);D[:3,:3]=R_REFERENCE_TAG
         D[:3,3]=[site['tag_plane_offset_m'],(site['left_tag_offset_m'] or 0) if mode=='left' else 0,site['tag_height_m']]
         sensor['calibration'].update(T_body_camera=T.tolist(),T_dock_tag=D.tolist(),camera_model=None,mount_covariance=None)
     u=sensor['uncertainty']

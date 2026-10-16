@@ -6,6 +6,7 @@ from .stationary import StationaryDetector
 from .history import PoseHistory,State
 from .tag import dock_measurement
 from .geometry import pose,matrix
+from .vio_quality import quality
 from .uncertainty import (transform,inverse,perturb,jacobian,covariance,se3_planar,
     anchor_observation,compose_cov,fork_uncertainty,target_lateral_uncertainty,drift_bound)
 
@@ -39,6 +40,16 @@ class Observer:
         if packet.get('fault'):raise ValueError('OpenVINS: '+packet['fault'])
         if not packet.get('initialized'):
             return None
+        report=quality(packet,self.cfg)
+        if not report['state_current']:
+            # Never label an old estimator state with a new camera timestamp or
+            # feed it to tag alignment, relative motion or stationary detection.
+            self.history.items.clear();self.last_state=None
+            self.alignment.reset(packet['epoch']);self.stationary_detector.reset_window()
+            return dict(capture_id=packet['stamp'],arrival=packet['arrival'],sensor_epoch=packet['epoch'],
+                sensor_ready=True,local_valid=False,local_pose=[],pose=None,usable=False,stationary=False,
+                clock_fault=False,imu_bad=True,transport_lag_s=packet['transport_lag_s'],
+                tag=dict(self.last_tag),odom=report,imu=dict(ready=True))
         state=self.body_state(packet)
         previous=self.last_state
         new_epoch=previous is None or previous.epoch!=state.epoch
@@ -58,15 +69,23 @@ class Observer:
             def anchor_delta(e):return pose(A@matrix(current)@inverse(matrix(prev)@matrix(d+e)))
             H=jacobian(anchor_delta,np.zeros(3),(2,))
             self.noise+=np.sqrt(np.maximum(np.diag(H@Q@H.T),0.))
+        # Additional engineering uncertainty for an isolated missing IMU interval.
+        # Native integration uses real timestamps; no synthetic zero samples.
+        gaps=packet.get('imu_short_gaps',0)
+        extra=max(0,gaps-getattr(self,'last_imu_short_gaps',0))
+        self.last_imu_short_gaps=gaps
+        if extra:self.noise+=extra*np.array([.03,.03,math.radians(2.)])
         state.noise=self.noise.copy();self.history.add(state);self.last_state=state
         p,P=se3_planar(state.T,state.P)
         if self.previous_local is not None:self.travel+=float(np.linalg.norm(p[:2]-self.previous_local[:2]))
         self.previous_local=p.copy()
-        good=bool(packet.get('visual_valid') and state.features>=self.u['min_features'])
+        report=quality(packet,self.cfg,continuity=bool(continuity));good=report['ok']
+        report['imu_short_gaps']=gaps
+        report['imu_gap_uncertainty_added']=bool(extra)
         imu_age=packet['arrival']-packet.get('imu_arrival',-math.inf)
         still=self.stationary_detector.update(state.stamp,p,float(packet.get('gyro_norm',math.inf)),
             good and packet.get('captured_after_neutral',True) and 0<=imu_age<=self.t['imu_age_s'],neutral,packet.get('neutral_since'))
-        return self.snapshot(packet,p,P,good,bool(still))
+        return self.snapshot(packet,p,P,report,bool(still))
 
     def add_tag(self, tag):
         self.last_tag={k:v for k,v in tag.items() if k not in ('T_camera_tag','covariance')}
@@ -91,7 +110,8 @@ class Observer:
         self.fusion=report
         return report
 
-    def snapshot(self, packet, local, Plocal, good, still):
+    def snapshot(self, packet, local, Plocal, odom, still):
+        good=odom['ok']
         state=self.last_state;world=P=None;fork_report=None;age=None
         if self.alignment.ready:
             # VIO's arbitrary global gauge cancels in relative motion. Propagate
@@ -130,8 +150,7 @@ class Observer:
             stationary=still,stationary_report=dict(self.stationary_detector.report),tracking_generation=state.epoch,motion_epoch=self.motion_epoch,
             anchor_stamp=self.alignment.stamp,blind_age_s=age,distance_since_anchor_m=self.travel,
             tag=tag,tag_fusion=dict(self.fusion),fork_uncertainty=fork_report,
-            odom=dict(ok=good,reason='openvins_tracked' if good else 'openvins_visual_unavailable',
-                      features=state.features,tracked_points=packet.get('points',[])),
+            odom=dict(odom,usable_for_docking=usable),
             imu=dict(ready=True,age_s=imu_age,gyro_bias_rps=packet.get('gyro_bias'),
                      accel_bias_mps2=packet.get('accel_bias'),calibration=dict(state='READY',reason='openvins_initialized')),
             source='OpenVINS + capture-time AprilTag alignment')

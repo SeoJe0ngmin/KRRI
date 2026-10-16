@@ -73,7 +73,8 @@
     "depth_gate_m": 0.3
   },
   "openvins": {
-    "description": "FEJ 사용, 장치 보정값은 실행 시 SDK에서 생성. noise는 미검증 엔지니어링 초기값이며 device 모델의 실측치가 아님.",
+    "description": "FEJ 사용, 장치 보정값은 실행 시 SDK에서 생성. noise는 미검증 엔지니어링 초기값. max_correction_gap_s는 연속 추적 중 보정 사이 예측을 허용하는 최대 초이며 정확도 보증이 아님.",
+    "max_correction_gap_s": 1.0,
     "gyro_noise_density": 0.001,
     "accel_noise_density": 0.01,
     "gyro_random_walk": 0.0001,

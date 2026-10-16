@@ -15,6 +15,7 @@ DOCK_ARCH="$(dpkg --print-architecture)"
 [[ "$DOCK_ARCH" == arm64 || "$DOCK_ARCH" == amd64 ]] || exit 2
 DOCK_V6_WS="${DOCK_V6_WS:-$HOME/.local/share/krri-v6/ros_ws}"
 DOCK_V6_ENV="${DOCK_V6_ENV:-$HOME/.venvs/docking-v6}"
+/usr/bin/python3 "$DOCK_APP/scripts/build_support.py" "$DOCK_APP/ros2"
 sudo apt-get update
 sudo apt-get install --no-remove -y curl ca-certificates git build-essential cmake software-properties-common python3-venv python3-dev
 if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
@@ -86,6 +87,10 @@ set -u
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then sudo rosdep init; fi
 rosdep update
 rosdep install --from-paths "$DOCK_V6_WS/src" --ignore-src --rosdistro jazzy -y
+exec 9>"$DOCK_V6_WS/.docking_rebuild.lock"
+flock -n 9 || { echo '다른 브리지 재빌드가 진행 중입니다.' >&2; exit 2; }
+touch "$DOCK_V6_WS/.docking_rebuild_pending"
+/usr/bin/python3 "$DOCK_APP/scripts/build_support.py" "$DOCK_APP/ros2" --workspace "$DOCK_V6_WS"
 cd "$DOCK_V6_WS"
 CMAKE_BUILD_PARALLEL_LEVEL=1 MAKEFLAGS=-j1 /usr/bin/colcon build --base-paths "$DOCK_V6_WS/src" --packages-up-to docking_openvins \
   --parallel-workers 1 --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
@@ -93,4 +98,5 @@ source "$DOCK_APP/scripts/environment.sh"
 cd "$DOCK_APP"
 "$DOCK_PYTHON" -m unittest discover -s tests -q
 "$DOCK_PYTHON" -m docking.preflight check --sensor-only
+rm "$DOCK_V6_WS/.docking_rebuild_pending"
 printf '%s\n' '설치/소프트웨어 검사 완료. 실제 센서 확인: bash scripts/run_nano.sh measure --seconds 90 --view'
