@@ -66,7 +66,7 @@ def run(args,cfg_override=None,stop_when=None):
             dash=Dashboard(args.port)
             print('화면: SSH 포트 전달 후 http://127.0.0.1:%d'%args.port,flush=True)
         print('출력: '+str(output),flush=True)
-        print('정지 상태로 준비 측정 중. READY 이후 Enter로 출발. s+Enter / Ctrl+C 정지.' if active else '측정 전용: CAN을 열지 않습니다.',flush=True)
+        print('브레이크를 잡고 실제 정차 상태를 유지하세요. 진동·준비 측정 중. READY 이후 Enter로 출발. s+Enter / Ctrl+C 정지.' if active else '측정 전용: CAN을 열지 않습니다.',flush=True)
         last_tick=time.monotonic();preparation_saved=False
         while True:
             now=time.monotonic();loop_gap=now-last_tick;last_tick=now

@@ -22,7 +22,7 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
         import cv2
         import numpy as np
         import pyrealsense2 as rs
-        from .sensor_calibration import prepare
+        from .sensor_calibration import prepare,device_profiles
         from .observer import Observer
         from .tag import TagObserver
         cv2.setNumThreads(cfg['opencv_threads'])
@@ -40,6 +40,9 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
             if sensor.supports(rs.option.enable_auto_exposure):sensor.set_option(rs.option.enable_auto_exposure,float(c['auto_exposure']))
             if sensor.supports(rs.option.emitter_enabled):sensor.set_option(rs.option.emitter_enabled,float(c['emitter_enabled']))
         profiles=(vp.get_stream(rs.stream.infrared,1),vp.get_stream(rs.stream.infrared,2),vp.get_stream(rs.stream.color),ip.get_stream(rs.stream.gyro),ip.get_stream(rs.stream.accel))
+        # Keep the common factory device alive while resolving inter-sensor calibration.
+        calibration_device=vp.get_device()
+        profiles=device_profiles(calibration_device,profiles)
         bundle,maps,Rga,estimator_file=prepare(cfg,profiles,serial,Path(output_dir)/'calibration',cfg.get('sensor_calibration'))
         rec.put(bundle,'device.json');observer=Observer(cfg)
         if not cfg.get('camera_only'):
@@ -142,7 +145,9 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     packet['transport_lag_s']=max(0.,packet['arrival']-clock.host_time(packet['stamp']))
                     neutral=True
                     if motion_hint is not None:
-                        with motion_hint.get_lock():neutral=bool(motion_hint[1])
+                        with motion_hint.get_lock():
+                            neutral=bool(motion_hint[1]);packet['neutral_since']=motion_hint[2]
+                        packet['captured_after_neutral']=clock.host_time(packet['stamp'])>=packet['neutral_since']
                     # Insert current VIO before delayed colour measurements.
                     obs=observer.add_vio(packet,neutral)
                     while pending and observer.last_state and pending[0]['stamp']<=observer.last_state.stamp:

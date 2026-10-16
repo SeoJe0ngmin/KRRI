@@ -123,6 +123,7 @@ class Controller:
             elif new and self.stable_start is None:self.stable_start=o['capture_id']
             duration=0 if self.stable_start is None else o['capture_id']-self.stable_start
             self.preparation_report=dict(stable_seconds=duration,required_seconds=self.t['preparation_s'],
+                stationary_report=(o or {}).get('stationary_report'),
                 imu_ready=bool(o and o.get('sensor_ready')),tag_seen=bool(o and o.get('valid')),
                 imu_calibration=(o or {}).get('imu',{}).get('calibration'),
                 tag_repeatability=(o or {}).get('tag_position_window'),

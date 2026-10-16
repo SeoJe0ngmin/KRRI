@@ -1,11 +1,11 @@
 """OpenVINS observations -> existing controller contract, no commanded pose."""
-from collections import deque
 import math
 import numpy as np
 from .alignment import Alignment,AnchorEvent
+from .stationary import StationaryDetector
 from .history import PoseHistory,State
 from .tag import dock_measurement
-from .geometry import pose,wrap,matrix
+from .geometry import pose,matrix
 from .uncertainty import (transform,inverse,perturb,jacobian,covariance,se3_planar,
     anchor_observation,compose_cov,fork_uncertainty,target_lateral_uncertainty,drift_bound)
 
@@ -14,11 +14,12 @@ class Observer:
     def __init__(self,cfg):
         self.cfg=cfg;self.t=cfg['tuning'];self.u=cfg['uncertainty'];self.cal=cfg['calibration']
         self.history=PoseHistory(self.u['history_s'],self.u['history_samples'],self.u['interpolation_gap_s'])
-        self.alignment=Alignment(self.u);self.stationary_window=deque();self.motion_epoch=0
+        self.alignment=Alignment(self.u);self.motion_epoch=0
         self.last_tag=dict(ok=False,reason='not_seen',detected=False,search_candidate=False)
         self.fusion=dict(reason='no_tag');self.last_tag_stamp=None;self.conflict=False
         self.travel=0.;self.previous_local=None;self.last_anchor=None
         self.last_state=None;self.rejected_tags=0;self.noise=np.zeros(3)
+        self.stationary_detector=StationaryDetector(self.t,self.u)
 
     def body_state(self, packet):
         # Native adapter publishes T_odom_imu and a world-frame left-error P.
@@ -45,7 +46,7 @@ class Observer:
                     abs(packet.get('delta_from_stamp',-1)-previous.stamp)<1e-5 and
                     state.stamp-previous.stamp<=self.t['frame_gap_s'])
         if new_epoch or not continuity:
-            self.alignment.reset(state.epoch);self.stationary_window.clear();self.previous_local=None
+            self.alignment.reset(state.epoch);self.stationary_detector.reset_window();self.previous_local=None
             self.motion_epoch+=1;self.last_anchor=None;self.travel=0.;self.conflict=False;self.noise=np.zeros(3)
         if continuity:
             D=transform(packet['relative_transform']);Pd=covariance(packet['relative_covariance'],6)
@@ -62,17 +63,9 @@ class Observer:
         if self.previous_local is not None:self.travel+=float(np.linalg.norm(p[:2]-self.previous_local[:2]))
         self.previous_local=p.copy()
         good=bool(packet.get('visual_valid') and state.features>=self.u['min_features'])
-        if good and neutral:
-            self.stationary_window.append((state.stamp,p.copy(),float(packet.get('gyro_norm',math.inf))))
-        else:self.stationary_window.clear()
-        while self.stationary_window and state.stamp-self.stationary_window[0][0]>self.t['stable_s']+.1:
-            self.stationary_window.popleft()
-        still=False
-        if self.stationary_window and state.stamp-self.stationary_window[0][0]>=self.t['stable_s']:
-            pts=np.array([x[1] for x in self.stationary_window]);angles=np.array([wrap(x-pts[0,2]) for x in pts[:,2]])
-            rates=[x[2] for x in self.stationary_window]
-            still=(np.ptp(pts[:,:2],axis=0).max()<self.t['still_translation_m'] and
-                np.ptp(angles)<self.t['still_yaw_rad'] and np.percentile(rates,90)<self.u['still_gyro_norm_rps'])
+        imu_age=packet['arrival']-packet.get('imu_arrival',-math.inf)
+        still=self.stationary_detector.update(state.stamp,p,float(packet.get('gyro_norm',math.inf)),
+            good and packet.get('captured_after_neutral',True) and 0<=imu_age<=self.t['imu_age_s'],neutral,packet.get('neutral_since'))
         return self.snapshot(packet,p,P,good,bool(still))
 
     def add_tag(self, tag):
@@ -105,6 +98,11 @@ class Observer:
             # native clone/current JOINT covariance, not two absolute marginals.
             Pa=drift_bound(self.alignment.P,self.noise-self.alignment.noise)
             world,P=compose_cov(self.alignment.mean,Pa,local,np.zeros((3,3)),unknown_correlation=False)
+            # Preserve startup vibration as an uncertainty floor, never divide by frame count.
+            vibration=self.stationary_detector.pose_std
+            R=matrix(self.alignment.mean)[:3,:3]
+            J=np.eye(3);J[:2,:2]=R[:2,:2]
+            P=P+J@np.diag(vibration**2)@J.T
             age=max(0.,state.stamp-self.alignment.stamp)
             # Diagnostic + gate at the controlled point, not only camera origin.
             site=self.cfg['site'];f,F=fork_uncertainty(world,P,site['camera_to_fork_tip_m'],self.u['fork_length_std_m'])
@@ -129,7 +127,7 @@ class Observer:
             covariance=None if P is None else P.tolist(),confidence_radius=None if radius is None else radius.tolist(),
             confidence_kind='joint_relative_vio_covariance_ci_plus_declared_floors_not_certified',bounded=False,
             valid=world is not None,usable=usable,local_pose=local.tolist(),local_valid=good,
-            stationary=still,tracking_generation=state.epoch,motion_epoch=self.motion_epoch,
+            stationary=still,stationary_report=dict(self.stationary_detector.report),tracking_generation=state.epoch,motion_epoch=self.motion_epoch,
             anchor_stamp=self.alignment.stamp,blind_age_s=age,distance_since_anchor_m=self.travel,
             tag=tag,tag_fusion=dict(self.fusion),fork_uncertainty=fork_report,
             odom=dict(ok=good,reason='openvins_tracked' if good else 'openvins_visual_unavailable',

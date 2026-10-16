@@ -2,7 +2,7 @@
 <package format="3">
   <name>docking_openvins</name><version>0.1.0</version>
   <description>Bounded OpenVINS adapter for the KRRI docking runtime.</description>
-  <maintainer email="maintainer@localhost">KRRI</maintainer><license>GPL-3.0-or-later</license>
+  <maintainer email="maintainer@example.com">KRRI</maintainer><license>GPL-3.0-or-later</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend><depend>docking_v6_msgs</depend>
   <depend>ov_core</depend><depend>ov_init</depend><depend>ov_msckf</depend>

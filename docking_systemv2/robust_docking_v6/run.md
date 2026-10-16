@@ -10,6 +10,16 @@ bash /Users/seojeongmin/krri/docking_systemv2/update_jetson.sh --host jetson-wir
 
 맥에서 수정한 **common까지 덮어쓸 때만** 끝에 `--with-common`을 붙인다. v6 폴더만 따로 복사하면 공통 설정이 빠지므로 `docking_systemv2` 전체를 복사한다. 실행 중에는 업데이트하지 않는다.
 
+이전 AprilTag 코드까지 모두 보낼 때는 맥에서 다음 하나를 실행한다. 위 명령도 별도로 실행할 필요는 없다.
+
+```bash
+bash /Users/seojeongmin/krri/update_jetson_all.sh --host jetson-wired
+```
+
+`apriltag_v1~v6`, `docking_system`, `docking_systemv2`의 코드·문서를 추가/갱신한다. 측정 로그·과거 백업·가상환경은 제외하고 Jetson의 두 `common.json`은 이미 있으면 보존한다. 대상 파일을 삭제하지 않는다. VS Code에서 `/home/jetson/krri`를 열어 전체 폴더를 확인한다. 코드 복사는 각 버전의 라이브러리 설치를 대신하지 않는다.
+
+v6의 [algorithm.md](algorithm.md), [오차 보정 도식](docs/images/error_correction.png), [전체 주행 도식](docs/images/overall_flow.png)도 두 전송 명령 모두에 포함된다.
+
 ## 2. Jetson 최초 설치 — 나중에 한 번
 
 Ubuntu 24.04 / ROS 2 Jazzy 구성이다. 다운로드할 때 인터넷이 필요하며 설치 후 USB 접속·실행에는 인터넷이 필요하지 않다.
@@ -21,6 +31,8 @@ bash scripts/install_jetson.sh
 
 RTAB-Map 지도도 사용할 때는 `bash scripts/install_jetson.sh --mapped`.
 
+Jetson 저장소의 OpenCV 4.8과 Ubuntu 4.6 패키지가 섞이지 않도록 설치 스크립트가 OpenCV 개발 패키지·contrib·Python 패키지를 Ubuntu 4.6의 같은 버전으로 지정한다. 전역 패키지 우선순위는 변경하지 않으며, 기존 패키지를 삭제해야 하는 설치는 중단한다. 이전 스크립트에서 `libopencv-contrib-dev` 의존성 오류가 났다면 맥에서 코드를 다시 복사하고 위 설치 명령을 다시 실행한다.
+
 기존 RealSense SDK는 Python 버전이 맞으면 그대로 연결한다. `pyrealsense2` 누락/ABI 오류만 남으면 다음을 실행한다. 커널·기존 SDK를 교체하지 않는 별도 RSUSB 빌드다.
 
 ```bash
@@ -28,7 +40,7 @@ bash scripts/install_realsense.sh
 bash scripts/preflight.sh check --sensor-only
 ```
 
-ROS/OpenVINS는 `~/.local/share/krri-v6/ros_ws`, 전용 Python은 `~/.venvs/docking-v6`에 둔다. v5 가상환경은 그대로 둔다. 네이티브 브리지 코드가 업데이트됐으면 설치 스크립트를 다시 실행하여 증분 빌드한다. Kvaser 시스템 드라이버는 기존 설치를 사용한다.
+ROS 기본 패키지와 OpenCV 등 apt 의존성은 시스템에, OpenVINS와 브리지는 `~/.local/share/krri-v6/ros_ws`, 전용 Python은 `~/.venvs/docking-v6`에 둔다. 기존 `~/.venvs/krri`는 그대로 둔다. `(krri)`를 먼저 활성화할 필요 없이 실행 스크립트가 v6 전용 환경을 선택한다. 네이티브 브리지 코드가 업데이트됐으면 설치 스크립트를 다시 실행하여 증분 빌드한다. Kvaser 시스템 드라이버는 기존 설치를 사용한다.
 
 설치 스크립트는 OpenVINS 원본을 보존하고 별도 빌드 사본의 CMake 설정만 C++17/Jazzy용으로 생성한다. 추정 알고리즘은 원본과 같으며 사용하지 않는 예제·시각화 실행 파일은 빌드하지 않는다.
 
@@ -113,3 +125,7 @@ bash scripts/run_nano.sh measure --profile mapped --seconds 90 --view
 입력 형식은 `{"samples":[{"T_base_body":[4×4행렬],"T_camera_tag":[4×4행렬]}, ...]}`. 결과는 검토용이며 common을 자동 덮어쓰지 않는다. 일반 현장 재장착에서는 앞의 `preflight mount`를 사용한다.
 
 코드 시험(센서/CAN 불필요): `DOCK_PYTHON=...`로 설치된 Python을 지정하거나 전용 환경에서 `python -m unittest discover -s tests -q`.
+
+정지 준비 중에는 브레이크를 잡고 실제 정차를 유지한다. VIO 초기화 후 6초의 진동 기준 수집과 기존 60초 준비 측정을 거쳐 READY가 나온 뒤 Enter로 출발한다. 회전·직진 후에는 중립 이후의 2초 관측으로 잔여 이동·되튐을 확인한다. 실패 이유는 로그의 `stationary_report`에서 확인한다. 엔진 진동 허용과 ±3cm 도킹 정확도 검사는 별개다. OpenVINS 자체 초기화 실패는 이 판정으로 우회하지 않는다.
+
+2026-10-16 공통 치수: 차폭 1.3m, 탑재부 내부 폭 1.4m(임시). 중앙에서 좌우 물리적 여유는 각각 5cm이며 정렬 허용 오차는 3cm를 유지한다. 이미 젠슨에 공통 설정이 있으면 일반 업데이트는 보존하므로, 해당 두 `value`를 젠슨에서도 수정하거나 의도적으로 `--with-common`을 사용한다(후자는 다른 공통값도 맥 값으로 덮어쓴다).

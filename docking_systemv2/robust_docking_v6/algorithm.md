@@ -2,6 +2,8 @@
 
 2026-10-16: 설계 검토 후 실행 코드 구현. Jetson 설치·네이티브 빌드·카메라·CAN 실물 검증은 아직 수행하지 않았다. [실행 순서](run.md)
 
+도식은 이 v6 폴더의 `docs/images/`에 PNG와 편집 가능한 SVG로 함께 둔다. [오차 보정 PNG](docs/images/error_correction.png) · [전체 주행 PNG](docs/images/overall_flow.png). 코드 전송 시 이 문서와 도식도 함께 복사된다.
+
 ## 센서와 라이브러리
 
 | 역할 | 구현/의존성 | 현재 상태 |
@@ -34,9 +36,9 @@ CPU 연산은 OpenVINS native worker, 컬러 태그 thread, JPEG thread, 로그 
 
 ## 위치와 오차 보정
 
-![오차 보정 설계 도식](docs/images/error_correction.png)
+![현재 구현의 오차 보정 도식](docs/images/error_correction.png)
 
-그림의 지도/ORB 분기는 확장 설계를 포함한다. 아래가 현재 실행 경로다.
+그림과 아래 흐름은 현재 구현 기준이다. RTAB-Map은 선택적인 지도 기록·진단이며 제어 위치 보정에는 넣지 않는다. ORB-SLAM3 자동 전환은 미구현이다.
 
 ```mermaid
 flowchart TD
@@ -93,7 +95,7 @@ Python은 태그 anchor 이후의 상대 이동 불확실성을 전파한다. �
 
 ## 주행 흐름과 CAN
 
-![전체 알고리즘 설계 도식](docs/images/overall_flow.png)
+![현재 구현의 전체 주행 도식](docs/images/overall_flow.png)
 
 1. common·장치 모델·의존성 확인 → 정지 상태 OpenVINS 초기화 및 60초 준비 관측.
 2. READY 이후 Enter → 태그 미관측이면 왼쪽 60° 단위 최대 360° 탐색.
@@ -127,3 +129,15 @@ preflight mount는 차량이 수평이고 태그면 법선과 독립적으로 �
 - [OpenCV calibration](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html): IPPE·camera calibration·hand-eye.
 - [RTAB-Map ROS 2](https://github.com/introlab/rtabmap_ros/tree/ros2): external odometry와 stereo mapping.
 - [참고 코드 대응표](dependencies/REFERENCE_CODE.md): WPILib 촬영시각 보정, robot_localization innovation 처리, Visual_Based_Odometry 검토 내용. 원본 참고 파일은 실행 경로 밖에 보존했다.
+
+### 진동과 잔여 이동을 구분하는 정지 판정 (2026-10-16)
+
+출발 준비 때 운전자가 브레이크를 잡고 실제 정차를 유지한다. OpenVINS 초기화 이후 유효한 영상 추적·신선한 IMU 관측 6초로 진동 기준을 수집한다. 중립 명령 자체가 실제 정차의 증거는 아니다. 지속적인 위치·각도 추세, 과도한 진동, 추적 누락이 있으면 기준을 채택하지 않는다. 채택한 기준은 해당 실행 중 고정하며 주행 후 더 느슨하게 재학습하지 않는다.
+
+0.25초 구간별 위치·각도 중앙값의 전체 범위와 선형 추세를 검사한다. 기존 4mm·0.35°는 순간 표본 범위가 아니라 이 대표값의 이동·회전 한도로 사용한다. 되돌아와 순이동이 0인 되튐도 중간 구간의 변화를 검사한다. 영상 특징점 기반 OpenVINS 위치 변화와 추적 유효성·특징점 수, 자이로를 함께 사용한다. 원시 픽셀 이동을 독립 센서로 재융합하지 않는다.
+
+주행·회전 후 중립 이후에 촬영된 관측만 새 2초 창에 포함한다. 지연 도착한 중립 이전 영상은 제외한다. 이동·되튐이 창 안에 남으면 정지 확인을 보류하고, 추적 단절·시간 역전·중립 전환은 창을 초기화한다. 정지 대기 상한 20초와 추적 복구 상한은 유지한다.
+
+진동 허용 폭은 초기 기준의 2배까지이며 최소 기존 기준, 최대 위치 20mm·각도 2°·자이로 3°/s로 제한한다. 이 값들은 검증 전 공학적 설정이며 실제 오차 보장이 아니다. 느린 진동이 잔여 이동과 구분되지 않으면 통과를 보장하지 않는다. 초기 기준 및 현재 인정된 정지 창의 흔들림 중 큰 값을 위치·방향 공분산에 남기고 프레임 수로 나누지 않는다. ±3cm 정렬·포크 끝 불확실성 검사는 그대로 유지한다. 이 판정은 OpenVINS 내부 초기화/ZUPT 임계값을 변경하지 않는다.
+
+`stationary_report`에 수집/실패 이유, 추세, 구간 변동, 진동 크기와 허용치가 기록된다. 준비 결과는 `startup_measurement.json`에도 포함된다.

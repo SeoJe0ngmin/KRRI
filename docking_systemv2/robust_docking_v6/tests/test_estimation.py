@@ -77,9 +77,9 @@ class Estimation(unittest.TestCase):
         state=o.body_state(self.packet(2,0));self.assertGreater(state.P[1,1],3e-5)
     def test_stationary_requires_visual_tracking_and_neutral(self):
         self.s['calibration']['T_body_imu']=np.eye(4).tolist();o=Observer(self.s)
-        for i in range(70):a=o.add_vio(self.packet(i/30,0))
+        for i in range(220):a=o.add_vio(self.packet(i/30,0))
         self.assertTrue(a['stationary'])
-        p=self.packet(70/30,0);p['visual_valid']=False;a=o.add_vio(p)
+        p=self.packet(220/30,0);p['visual_valid']=False;a=o.add_vio(p)
         self.assertFalse(a['stationary']);self.assertFalse(a['usable'])
     def test_pnp_covariance_increases_with_distance(self):
         K=np.array([[900.,0,640],[0,900,360],[0,0,1.]])

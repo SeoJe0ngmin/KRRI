@@ -16,7 +16,7 @@ DOCK_ARCH="$(dpkg --print-architecture)"
 DOCK_V6_WS="${DOCK_V6_WS:-$HOME/.local/share/krri-v6/ros_ws}"
 DOCK_V6_ENV="${DOCK_V6_ENV:-$HOME/.venvs/docking-v6}"
 sudo apt-get update
-sudo apt-get install -y curl ca-certificates git build-essential cmake software-properties-common python3-venv python3-dev
+sudo apt-get install --no-remove -y curl ca-certificates git build-essential cmake software-properties-common python3-venv python3-dev
 if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
   sudo add-apt-repository -y universe
   DOCK_APT_RELEASE="$(curl -fsSL https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
@@ -27,11 +27,22 @@ if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
   sudo dpkg -i "$DOCK_DEB"
   sudo apt-get update
 fi
-sudo apt-get install -y ros-jazzy-ros-base python3-colcon-common-extensions python3-rosdep \
-  libeigen3-dev libboost-all-dev libceres-dev libopencv-dev libopencv-contrib-dev \
-  python3-numpy python3-scipy python3-opencv python3-yaml python3-pytest \
+# Jetson r39.2 gives NVIDIA's monolithic libopencv-dev 4.8 priority 600,
+# above Ubuntu's split 4.6 packages (500). ROS Jazzy/contrib use the latter.
+# Select matching versions for this transaction; do not change global apt pins.
+DOCK_OPENCV_VERSION="$(LC_ALL=C apt-cache policy libopencv-contrib-dev | awk '$1 == "Candidate:" {print $2}')"
+if [[ "$DOCK_OPENCV_VERSION" != 4.6.* ]]; then
+  printf 'Ubuntu 24.04 OpenCV 4.6 패키지를 확인할 수 없습니다: %s\n' "$DOCK_OPENCV_VERSION" >&2
+  echo 'apt-cache policy libopencv-dev libopencv-contrib-dev python3-opencv 결과를 확인하세요.' >&2
+  exit 2
+fi
+printf 'OpenCV 설치 버전: %s (Ubuntu/ROS Jazzy)\n' "$DOCK_OPENCV_VERSION"
+sudo apt-get install --no-remove -y ros-jazzy-ros-base python3-colcon-common-extensions python3-rosdep \
+  libeigen3-dev libboost-all-dev libceres-dev \
+  "libopencv-dev=$DOCK_OPENCV_VERSION" "libopencv-contrib-dev=$DOCK_OPENCV_VERSION" \
+  "python3-opencv=$DOCK_OPENCV_VERSION" python3-numpy python3-scipy python3-yaml python3-pytest \
   ros-jazzy-cv-bridge ros-jazzy-image-transport ros-jazzy-tf2-geometry-msgs
-if ((DOCK_MAPPING)); then sudo apt-get install -y ros-jazzy-rtabmap-ros; fi
+if ((DOCK_MAPPING)); then sudo apt-get install --no-remove -y ros-jazzy-rtabmap-ros; fi
 /usr/bin/python3 -m venv --system-site-packages "$DOCK_V6_ENV"
 "$DOCK_V6_ENV/bin/python" -m pip install 'pupil-apriltags==1.0.4.post11' 'canlib==1.33.358'
 # Do not replace a working RSUSB SDK with a different PyPI wheel.

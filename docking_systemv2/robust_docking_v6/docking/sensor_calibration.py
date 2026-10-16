@@ -9,8 +9,33 @@ from .tag import model_matrix
 from .uncertainty import transform,inverse
 
 
-def extrinsic(source,target):
-    e=source.get_extrinsics_to(target)
+def device_profiles(device, requested):
+    """Match stream modes on ONE device instance, sharing its extrinsics graph.
+
+    Separate pipeline.resolve() calls may return independent device instances.
+    Never query inter-sensor extrinsics across those instances.
+    """
+    def key(p):
+        mode=(p.stream_type(),p.stream_index(),p.format(),p.fps())
+        if p.is_video_stream_profile():
+            v=p.as_video_stream_profile()
+            mode+=(v.width(),v.height())
+        return mode
+    available=[p for sensor in device.query_sensors() for p in sensor.get_stream_profiles()]
+    selected=[]
+    for request in requested:
+        matches=[p for p in available if key(p)==key(request)]
+        if len(matches)!=1:
+            raise RuntimeError(f'Factory calibration profile match failed: {key(request)} ({len(matches)} matches)')
+        selected.append(matches[0])
+    return tuple(selected)
+
+
+def extrinsic(source,target,label='source -> target'):
+    try:
+        e=source.get_extrinsics_to(target)
+    except RuntimeError as exc:
+        raise RuntimeError(f'RealSense factory extrinsics unavailable ({label}): {exc}') from exc
     T=np.eye(4);T[:3,:3]=np.array(e.rotation).reshape(3,3,order='F');T[:3,3]=e.translation
     return transform(T)
 
@@ -64,7 +89,8 @@ def prepare(cfg,profiles,serial,output,overrides=None):
     left,right,color,gyro,accel=profiles
     data=json.loads(Path(overrides).read_text()) if overrides else {}
     models=[model(p,serial,data.get(name)) for p,name in zip((left,right,color),('left','right','color'))]
-    T_rl=extrinsic(left,right);T_li=extrinsic(gyro,left);T_lc=extrinsic(color,left)
+    T_rl=extrinsic(left,right,'IR left -> IR right');T_li=extrinsic(gyro,left,'gyro -> IR left');T_lc=extrinsic(color,left,'color -> IR left')
+    Rga=extrinsic(accel,gyro,'accel -> gyro')[:3,:3]
     maps,Rs,Ps=rectification(models[0],models[1],T_rl)
     cal=cfg['calibration'];old=cal.get('camera_model')
     if cal.get('mount_valid') and old:
@@ -103,4 +129,4 @@ def prepare(cfg,profiles,serial,output,overrides=None):
         timestamp_offset_source='SDK common hardware clock; online time calibration disabled',
         calibration_accuracy='factory calibration plus declared floors, not an accuracy certificate')
     (folder/'device.json').write_text(json.dumps(bundle,indent=2))
-    return bundle,maps,extrinsic(accel,gyro)[:3,:3],folder/'estimator.yaml'
+    return bundle,maps,Rga,folder/'estimator.yaml'
