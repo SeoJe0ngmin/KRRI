@@ -1,0 +1,83 @@
+{
+  "description": "새 v5 공통 설정. value만 수정. null은 현장 미입력이며 측정값으로 위장하지 않습니다.",
+  "fields": {
+    "site": {
+      "description": "사용자가 확인할 차량·현장 값",
+      "fields": {
+        "vehicle_width_m": {
+          "description": "실제 차폭[m]; 현장 입력",
+          "value": null
+        },
+        "bay_width_m": {
+          "description": "탑재부 실제 내부 폭[m]; 현장 입력",
+          "value": null
+        },
+        "left_tag_offset_m": {
+          "description": "입구 중심에서 좌측 태그까지 거리[m]; 왼쪽 양수",
+          "value": null
+        },
+        "tag_plane_offset_m": {
+          "description": "입구면에서 태그면까지 앞뒤 거리[m]; 안쪽 양수",
+          "value": 0.0
+        },
+        "tag_id": {
+          "description": "AprilTag 36h11 ID",
+          "value": 1
+        },
+        "tag_size_m": {
+          "description": "태그 검은 테두리 바깥 변 길이[m]",
+          "value": 0.3
+        },
+        "tag_height_m": {
+          "description": "태그 중심 높이[m]",
+          "value": 1.58
+        },
+        "camera_height_m": {
+          "description": "카메라 광학 중심 높이[m]",
+          "value": 0.57
+        },
+        "camera_lateral_m": {
+          "description": "차량 중심선에서 카메라 좌우 위치[m]; 왼쪽 양수",
+          "value": 0.0
+        },
+        "camera_to_fork_tip_m": {
+          "description": "카메라→포크 앞끝[m]",
+          "value": 1.5
+        },
+        "rear_extent_m": {
+          "description": "카메라 기준 차량 뒤끝 거리[m]; 기존 사용자 선택값",
+          "value": 1.0
+        }
+      }
+    },
+    "operation": {
+      "description": "성능 보증이 아닌 운영 제한",
+      "fields": {
+        "mission_timeout_s": {
+          "description": "출발 Enter 이후 전체 제한[s]",
+          "value": 600.0
+        },
+        "settle_timeout_s": {
+          "description": "동작 후 정지·재측정 최대[s]",
+          "value": 20.0
+        },
+        "recovery_timeout_s": {
+          "description": "정지 상태 추적 회복 최대[s]",
+          "value": 60.0
+        },
+        "preparation_s": {
+          "description": "IMU 준비 후 정지 측정 구간[s]",
+          "value": 60.0
+        },
+        "preparation_timeout_s": {
+          "description": "출발 전 준비 전체 제한[s]",
+          "value": 180.0
+        }
+      }
+    },
+    "mount": {
+      "description": "preflight mount가 작성. 재장착할 때 다시 측정",
+      "value": null
+    }
+  }
+}

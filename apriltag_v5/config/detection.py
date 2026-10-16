@@ -1,0 +1,42 @@
+"""태그·카메라·화면. 현장에서 사람이 정하거나 재는 값만.
+
+★ = 미측정.  계산으로 나오는 값(태그 컷 거리 등)은 여기 두지 않는다.
+장소마다 다른 값(태그·카메라 높이 · 노출)은 config/sites/<SITE>.py 에 있고 여기서 이름만 이어 준다 (2026-10-02, config/site.py).
+"""
+from config.sites import load as _site_values
+
+_SITE = _site_values()
+
+# ── 무엇을 보나 ─────────────────────────────────────────────────────
+TAG_ID = 1
+TAG_SIZE_M = 0.300                 # 검은 테두리 바깥까지. 인쇄물 실측 (2026-10-02 줄자 재확인). 거리가 이 값에 정비례한다
+COLOR_SIZE = (1920, 1080)          # D435i 컬러 최대. 가로 화각 70.5도
+COLOR_AUTO_EXPOSURE = _SITE.COLOR_AUTO_EXPOSURE   # 장소 값 — 실외 True · 실내 False (config/sites/<SITE>.py)
+
+# ── 어디에 달렸나 (태그 컷 거리가 여기서 계산된다) ──────────────────
+TAG_HEIGHT_M = _SITE.TAG_HEIGHT_M         # 장소 값 — 태그 **중심** 높이 (config/sites/<SITE>.py)
+CAMERA_HEIGHT_M = _SITE.CAMERA_HEIGHT_M   # 장소 값 — 바닥 → 카메라
+                                          # 둘 다 폴백·문서용 — 실행은 프레임마다 잰 높이차를 쓴다 (limits.tag_cut_live_m)
+
+# ── 이 프레임을 믿어도 되나 ─────────────────────────────────────────
+MIN_TAG_PX = 20.0                  # 태그 한 변이 이보다 작으면 자세를 안 믿는다
+MAX_REPROJ_RMS_PX = 2.0
+MIN_DECISION_MARGIN = 20.0         # 저조도 하한. 거리에는 둔감하다
+TAG_EDGE_MARGIN_PX = 60.0          # 가장자리에 이만큼 붙으면 잘리기 직전으로 본다
+AMBIGUITY_RATIO = 0.8              # 두 PnP 해의 재투영오차 비가 이 위면 각도를 버린다
+                                   # (9/21 실측 모호율 14 %, 3.5 m)
+
+# ── 장비 규격 (근거 확정. 바꾸면 틀린다) ────────────────────────────
+D435I_COLOR_REF = (1920, 1080, 1359.2, 1359.0, 956.9, 571.3)   # w,h,fx,fy,cx,cy
+IR_SIZE = (1280, 720)              # IR 은 fx 가 컬러의 1/3 이라 거리도 1/3
+COLOR_EXPOSURE_UNIT_US = 100.0     # 컬러 노출 눈금 (UVC 규격). 83 = 8.3 ms
+BLUR_CLEAN_PX = 10.0               # 여기까지 검출 100 %
+BLUR_DEAD_PX = 32.0                # 여기서 0 %
+DEFAULT_QUAD_BLUR = 0.0            # 검출 전 블러. 안 넣는 게 최선이었다
+QUAD_DECIMATE = 2.0                # 후보 탐색 해상도 (라이브러리 기본값). 절반 해상도로 사각형을 찾고 모서리는 원본에서 다듬는다.
+                                   # 1.0(원본)은 8 m 의 41 px 태그를 더 잘 찾지만 **VM 에서 한 장 ~80 ms → 12.5 fps**
+                                   # (calibrate device 실측: 보낸 366 장 중 58 % 버림, CPU 183 %, 자이로 처리간격 p99 54.6 ms).
+                                   # 맥 네이티브에선 3.1 → 7.4 ms 였다 — VM/Jetson 에선 그 측정이 안 통한다.
+                                   # 2.0 은 9/21 실측(지연 중앙 21 ms)을 낸 설정. 8 m 에서 태그를 못 찾으면 그때 다시 본다
+TAG_CELLS = 8                      # tag36h11 한 변의 칸 수 (테두리 포함)
+MM_PER_INCH = 25.4                 # tools/make_tag_pdf.py 전용

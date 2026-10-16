@@ -1,0 +1,340 @@
+{
+  "_shared": {
+    "mode": "hardware",
+    "platform": "nano",
+    "variant": "c_gyro_vo",
+    "file": "../../configs/common.json"
+  },
+  "schema": 1,
+  "purpose": "hardware",
+  "validation": {
+    "approved": false,
+    "geometry": null,
+    "extrinsics": null,
+    "vision_error": null,
+    "motion_contracts": null,
+    "timing": null,
+    "stop_detection": null,
+    "recovery": null,
+    "startup_search": null
+  },
+  "body": {
+    "front_m": 1.5,
+    "rear_m": 1.0,
+    "half_width_m": 0.75
+  },
+  "scene": null,
+  "grid": null,
+  "goal": null,
+  "observation_error": null,
+  "actions": null,
+  "startup_measurement": {
+    "enabled": true,
+    "duration_s": 60.0,
+    "timeout_s": 180.0,
+    "max_sample_gap_s": 0.5
+  },
+  "synthesis": {
+    "sweep_segments": 8,
+    "max_nodes": 20000
+  },
+  "limits": {
+    "max_age_s": null,
+    "max_speed_mps": 0.5,
+    "max_yaw_rate_rps": 0.5,
+    "stop_speed_mps": 0.02,
+    "stop_yaw_rate_rps": 0.02,
+    "stop_dwell_s": 0.4,
+    "settle_timeout_s": null,
+    "lease_s": null,
+    "run_timeout_s": 300.0,
+    "max_steps": 20
+  },
+  "can": {
+    "channel": 0,
+    "bitrate": 500000,
+    "deflections": {
+      "forward": 60,
+      "forward_slow": 30,
+      "backward": 60,
+      "rotate": 20
+    },
+    "diagnostics": {
+      "enabled": true,
+      "verified": false,
+      "max_ack_age_s": null,
+      "max_write_gap_s": null,
+      "poll_budget_s": 0.001,
+      "status_period_s": 0.1,
+      "max_rx_per_poll": 64,
+      "max_pending": 4096
+    }
+  },
+  "sensor": {
+    "schema": 1,
+    "opencv_threads": 1,
+    "camera": {
+      "serial": null,
+      "stream": "infrared",
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "emitter_enabled": false,
+      "auto_exposure": true,
+      "exposure_us": null,
+      "gain": null,
+      "auto_exposure_priority": null,
+      "depth_enabled": true,
+      "allow_startup_auto_exposure": true
+    },
+    "tag": {
+      "enabled": true,
+      "id": 1,
+      "size_m": 0.3,
+      "threads": 2,
+      "quad_decimate": 2.0,
+      "min_margin": 20,
+      "max_hamming": 0,
+      "edge_px": 15,
+      "max_reproj_px": 2.0,
+      "max_ambiguity_ratio": 0.8,
+      "period_s": 0.15,
+      "full_scan_period_s": 1.0,
+      "roi_padding": 1.0,
+      "min_tag_px": 20,
+      "quad_sigma": 0.0
+    },
+    "odom": {
+      "enabled": true,
+      "max_features": 120,
+      "feature_spacing_px": 15,
+      "min_inliers": 20,
+      "min_inlier_ratio": 0.65,
+      "min_spatial_bins": 4,
+      "min_depth_m": 0.3,
+      "max_depth_m": 8.0,
+      "depth_patch_spread_m": 0.08,
+      "fb_error_px": 1.0,
+      "max_reproj_px": 1.5,
+      "max_pair_gap_s": 0.4,
+      "max_speed_mps": 1.0,
+      "max_rotation_rps": 1.0,
+      "gyro_consistency_rad": 0.07,
+      "exclude_normalized_rects": [],
+      "gyro_aided_tracking": true
+    },
+    "imu": {
+      "gyro_hz": 200,
+      "accel_hz": 100,
+      "yaw_axis": [
+        0,
+        -1,
+        0
+      ],
+      "gyro_bias_rps": [
+        0,
+        0,
+        0
+      ],
+      "gyro_scale": 1.0,
+      "max_gap_s": 0.05,
+      "max_age_s": null,
+      "yaw_sign_verified": false,
+      "startup_calibration": {
+        "enabled": true,
+        "duration_s": 10.0,
+        "timeout_s": 60.0,
+        "min_sample_ratio": 0.5,
+        "max_gap_s": 0.05,
+        "moving_dps": 0.5,
+        "gravity_mps2": 9.80665,
+        "gravity_tolerance_mps2": 0.5,
+        "max_gyro_std_dps": 0.3,
+        "motion_window_s": 0.1,
+        "max_gyro_peak_dps": 5.0,
+        "max_gyro_window_std_dps": 0.15,
+        "max_accel_std_mps2": 0.15,
+        "max_axis_tilt_deg": 30.0,
+        "align_axis_to_gravity": true
+      },
+      "stationary_recalibration": {
+        "enabled": true,
+        "verified": false,
+        "duration_s": 3.0,
+        "max_visual_gap_s": 0.4,
+        "control_max_age_s": 1.0,
+        "max_speed_mps": null,
+        "max_visual_yaw_rate_rps": null,
+        "relative_yaw_error_rad": null,
+        "max_bias_change_rps": null
+      }
+    },
+    "calibration": {
+      "verified": false,
+      "T_body_camera": null,
+      "T_dock_tag": null,
+      "R_body_camera": null,
+      "camera_lateral_m": 0.0,
+      "R_dock_tag": null,
+      "tag_position_xy_m": [
+        null,
+        null
+      ],
+      "camera_model": null
+    },
+    "bounds": {
+      "verified": false,
+      "capture_to_callback_max_s": null,
+      "tag_pose_error": null,
+      "odom_error_per_m": null,
+      "odom_error_per_frame": null,
+      "odom_error_per_rad": null,
+      "relative_translation_error_m": null,
+      "max_acceleration_mps2": null,
+      "gyro_rate_error_rps": null
+    },
+    "view": {
+      "fps": 5,
+      "width": 640,
+      "jpeg_quality": 65
+    },
+    "rig": {
+      "body_reference": "ground_centerline_at_camera_station",
+      "tag_height_m": 1.58,
+      "camera_height_m": 0.57,
+      "camera_to_fork_tip_m": 1.5,
+      "source": "apriltag_v5/config/sites/kw.py (heights), config/control.py (front distance); user confirmed unchanged 2026-10-11",
+      "rear_extent_note": "2026-10-15 사용자: 카메라 뒤 CAN박스까지 약 0.5m, 계산용 뒤끝은 보수적으로 1.0m 사용. 빈 후진 공간 길이와 별개.",
+      "width_note": "2026-10-15 사용자: 차폭은 약 1.3m로 추정하며 1.5m 이하. 계산에는 1.5m 상한(반폭 0.75m)을 사용하며 실측 확정값은 아님. 탑재부 폭/실제 측면 간격은 미측정. 0.03m는 좌우 목표 오차."
+    },
+    "logging": {
+      "queue_size": 4096,
+      "flush_s": 1.0,
+      "max_bytes": 524288000
+    },
+    "diagnostics": {
+      "window_s": 60.0,
+      "max_samples": 6000,
+      "reject_rotational_blur_px": null,
+      "lighting": "outdoor"
+    },
+    "stop_window": {
+      "enabled": true,
+      "verified": false,
+      "min_s": 0.15,
+      "max_s": 0.75,
+      "reference_period_s": 0.15,
+      "max_frame_gap_s": 0.5,
+      "translation_error_m": null,
+      "yaw_error_rad": null,
+      "max_angular_acceleration_rps2": null
+    },
+    "tracking_recovery": {
+      "enabled": true,
+      "verified": false,
+      "hold_keyframe_s": 0.6,
+      "max_bridge_s": 0.3,
+      "max_episode_s": 120.0,
+      "max_unobserved_speed_mps": null
+    },
+    "tag_fusion": {
+      "enabled": true,
+      "max_tag_weight": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    }
+  },
+  "operational": {
+    "max_forward_m": 1.5,
+    "max_backward_m": 0.5,
+    "min_rotate_rad": 0.014660765716752368
+  },
+  "prealignment": {
+    "enabled": true,
+    "entry_x_m": 0.0,
+    "center_y_m": 0.0,
+    "corridor_half_width_m": null,
+    "staging_x_range_m": null,
+    "alignment_y_m": null,
+    "alignment_yaw_rad": null,
+    "trigger_lateral_m": null,
+    "max_duration_s": 120.0,
+    "max_actions": 5
+  },
+  "visibility": {
+    "enabled": true,
+    "projection_margin_px": null,
+    "odometry_regions": [],
+    "odometry_evidence": null,
+    "odometry_pose_regions": []
+  },
+  "trial": {
+    "kind": null,
+    "standoff_m": 0.5,
+    "tag_plane_x_m": 0.0,
+    "forward_tolerance_m": 0.1,
+    "lateral_tolerance_m": 0.03,
+    "yaw_tolerance_rad": null,
+    "insertion_front_m": null
+  },
+  "site": {
+    "name": null,
+    "lighting": "outdoor"
+  },
+  "recovery": {
+    "enabled": true,
+    "timeout_s": 120.0,
+    "stable_s": 1.0,
+    "max_sample_gap_s": 0.5,
+    "min_samples": 3,
+    "max_attempts": 3,
+    "pause_error_ratio": 0.9,
+    "resume_error_ratio": 0.6,
+    "return_heading_tolerance_rad": 0.035,
+    "max_return_actions": 6,
+    "min_tag_samples": 3,
+    "reserve_return_sweep": true,
+    "blind_return": {
+      "enabled": true,
+      "verified": false,
+      "stop_rest_after_s": null,
+      "rest_speed_upper_mps": null,
+      "max_heading_error_rad": null
+    }
+  },
+  "startup_search": {
+    "enabled": true,
+    "direction": "left",
+    "timeout_s": 180.0,
+    "initial_wait_s": 1.0,
+    "stable_s": 1.0,
+    "max_sample_gap_s": 0.5,
+    "min_missing_samples": 3,
+    "min_tag_samples": 3,
+    "pose_error_ratio": 0.6,
+    "max_sweep_rad": 6.283185307179586,
+    "max_rotation_s": 120.0,
+    "max_start_delay_s": null,
+    "max_stop_response_s": null,
+    "brake_reserve_rad": null,
+    "max_center_drift_m": null,
+    "stop_drift_reserve_m": null,
+    "free_radius_m": null,
+    "improvement": {
+      "enabled": true,
+      "retry_wait_s": 2.0,
+      "max_attempts": 4,
+      "center_tolerance_rad": 0.05,
+      "max_center_turn_rad": 0.35,
+      "max_saturated_fraction": 0.4,
+      "max_dark_fraction": 0.8
+    }
+  },
+  "experiment": {
+    "variant": "c_gyro_vo",
+    "description": "Gyro-aided VO + gyro heading + weighted tag correction",
+    "full_vio": false
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "_shared": {
+    "mode": "site",
+    "site": "kw_park_left_tag",
+    "file": "../../../configs/common.json"
+  },
+  "site": {
+    "name": "kw",
+    "lighting": "outdoor",
+    "note": "입구 중심선을 y=0, 차량 진입 방향의 왼쪽을 +y로 정의. 2026-10-15 사용자 요청으로 태그 좌측 거리를 임시 1.00m로 설정. 실측값이나 흰 여백에서 계산한 값이 아님. 태그 앞뒤 위치와 실제 정지 깊이는 미정.",
+    "width_note": "2026-10-15 사용자: 차폭은 약 1.3m로 추정하며 1.5m 이하. 계산에는 1.5m 상한(반폭 0.75m)을 사용하며 실측 확정값은 아님. 탑재부 폭/실제 측면 간격은 미측정. 0.03m는 좌우 목표 오차."
+  },
+  "scene": null,
+  "grid": null,
+  "sensor": {
+    "calibration": {
+      "R_dock_tag": null,
+      "tag_position_xy_m": [
+        null,
+        1.0
+      ]
+    }
+  },
+  "trial": {
+    "insertion_front_m": null,
+    "lateral_tolerance_m": 0.03
+  }
+}

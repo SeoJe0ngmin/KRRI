@@ -1,0 +1,7 @@
+{
+  "folder": "robust_docking_v2",
+  "previous_folder": "robust_docking_v1",
+  "variant": "a_baseline",
+  "description": "기본 VO + 자이로 방향 + 태그 직접 보정",
+  "full_vio": false
+}

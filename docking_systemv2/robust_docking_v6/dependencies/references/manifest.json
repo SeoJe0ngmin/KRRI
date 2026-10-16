@@ -1,0 +1,66 @@
+[
+  {
+    "name": "wpilib",
+    "repository": "https://github.com/wpilibsuite/allwpilib",
+    "commit": "34ef0d2a388fbc14974d6f9850ab57148d9cdfd1",
+    "role": "reference_only",
+    "files": [
+      {
+        "path": "LICENSE.md",
+        "sha256": "fb89d94504564dc7c78694c5f4291e23cda05ecfe45a003ca4911d493009115d",
+        "bytes": 1539
+      },
+      {
+        "path": "wpilibjExamples/src/main/java/org/wpilib/examples/rebuiltcmdv3/PoseEstimator.java",
+        "sha256": "199e82c4db9e8ba042a71eace6095cb7734bc6b6fc23a08f725cb19d9822cee5",
+        "bytes": 2277
+      },
+      {
+        "path": "wpimath/src/main/java/org/wpilib/math/estimator/PoseEstimator.java",
+        "sha256": "9838f60590a8c0aa09ed7072cd824db98253a450380925b9fad8df4b5b48f527",
+        "bytes": 17987
+      }
+    ]
+  },
+  {
+    "name": "robot_localization",
+    "repository": "https://github.com/cra-ros-pkg/robot_localization",
+    "commit": "3efa714fb9c1ff40966327b7bed7053b2570be4d",
+    "role": "reference_only",
+    "files": [
+      {
+        "path": "src/ekf.cpp",
+        "sha256": "431331568e9cc042aca3fd06f7f70252ec9a70d32e09a47d9dccc1be678b5660",
+        "bytes": 17733
+      },
+      {
+        "path": "src/ros_filter.cpp",
+        "sha256": "164b6ac643a9be92c72343fa010728a8486c72861460e45b7a9e798206b37f73",
+        "bytes": 146491
+      },
+      {
+        "path": "params/ekf.yaml",
+        "sha256": "0c68fcd4345fc72d7d22e9f848101dd86bbc100db0a0e69e92dd0a2ddf7e2e1f",
+        "bytes": 18493
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "baec7235ef687e028567622e5ef59d5184c70dc03d609039d9ca33ce0695da5a",
+        "bytes": 3437
+      }
+    ]
+  },
+  {
+    "name": "visual_based_odometry",
+    "repository": "https://github.com/jerWenger/Visual_Based_Odometry",
+    "commit": "84a40ab43369a748e40130d1c3970c1d6217b372",
+    "role": "reference_only",
+    "files": [
+      {
+        "path": "README.md",
+        "sha256": "af7ccd364278ef1214857450c7cac3036f303168fdb2be89a3520fb3474c7015",
+        "bytes": 5979
+      }
+    ]
+  }
+]

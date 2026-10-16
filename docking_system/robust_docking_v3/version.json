@@ -1,0 +1,7 @@
+{
+  "folder": "robust_docking_v3",
+  "previous_folder": "robust_docking_v2",
+  "variant": "b_tag_fusion",
+  "description": "VO + 자이로 방향 + 태그 가중 보정",
+  "full_vio": false
+}

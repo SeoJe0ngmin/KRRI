@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1920" viewBox="0 0 1800 1920">
+<rect width="1800" height="1920" fill="#FAFCFF"/>
+<text x="65" y="48" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="48" font-weight="700" fill="#142C40">v6 · 현재 위치와 오차를 어떻게 보정하나</text>
+<text x="65" y="112" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#506779">설계안 · OpenVINS 중심 / 태그로 도킹 기준 보정 / 지도·보조 추적은 조건부 사용</text>
+<rect x="65" y="180" width="795" height="178" rx="20" fill="#E9F2FF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="89" y="202" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">IR 좌·우 + IMU</text>
+<text x="89" y="252" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">스테레오 IR 640×480 / 자이로·가속도</text>
+<text x="89" y="291" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">캡처 시각 · 좌표계 · 보정값을 먼저 일치시킴</text>
+<rect x="940" y="180" width="795" height="178" rx="20" fill="#FFF3DC" stroke="#CCD8E3" stroke-width="2"/>
+<text x="964" y="202" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">컬러 1280×720 + AprilTag</text>
+<text x="964" y="252" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">태그 크기·ID·장착 위치는 공통 설정에서 읽음</text>
+<text x="964" y="291" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">탑재부 입구 중심에 대한 측정값을 만듦</text>
+<polyline points="462,358 462,410" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="462,410 454.6055859201091,394.6923992600045 469.3944140798909,394.6923992600045" fill="#6A8294"/>
+<polyline points="1338,358 1338,410" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="1338,410 1330.605585920109,394.6923992600045 1345.394414079891,394.6923992600045" fill="#6A8294"/>
+<rect x="65" y="410" width="795" height="220" rx="20" fill="#E9F2FF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="89" y="432" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">① OpenVINS · 연속적인 이동 추정</text>
+<text x="89" y="482" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">IMU로 예측 → 영상 특징점으로 보정</text>
+<text x="89" y="521" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">위치·자세·속도·IMU bias와 공분산 추정</text>
+<text x="89" y="560" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">관성으로 더 간 거리와 회전도 관측에 반영</text>
+<rect x="940" y="410" width="795" height="220" rx="20" fill="#FFF3DC" stroke="#CCD8E3" stroke-width="2"/>
+<text x="964" y="432" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">② 태그 관측 품질 검사</text>
+<text x="964" y="482" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">작은 태그 · 흐림 · PnP 모호성 · 튐 검사</text>
+<text x="964" y="521" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">거리·자세에 따른 오차와 연속 프레임 상관 반영</text>
+<text x="964" y="560" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">검출됐다는 이유만으로 위치값을 채택하지 않음</text>
+<polyline points="462,630 462,690" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="462,690 454.6055859201091,674.6923992600045 469.3944140798909,674.6923992600045" fill="#6A8294"/>
+<polyline points="1338,630 1338,690" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="1338,690 1330.605585920109,674.6923992600045 1345.394414079891,674.6923992600045" fill="#6A8294"/>
+<rect x="65" y="690" width="795" height="183" rx="20" fill="#E9F2FF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="89" y="712" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">③ 시각별 오도메트리 이력</text>
+<text x="89" y="762" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">이동량 계산은 연속 odom 좌표에서 수행</text>
+<text x="89" y="801" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">지도 원점 변경을 실제 차량 이동으로 세지 않음</text>
+<rect x="940" y="690" width="795" height="183" rx="20" fill="#FFF3DC" stroke="#CCD8E3" stroke-width="2"/>
+<text x="964" y="712" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">④ 촬영 시점에서 비교</text>
+<text x="964" y="762" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">늦게 온 태그와 같은 시각의 VIO를 비교</text>
+<text x="964" y="801" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">도킹 기준 변환을 보정한 뒤 현재 위치에 적용</text>
+<polyline points="462,873 462,920 900,920 900,970" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="900,970 892.6055859201091,954.6923992600045 907.3944140798909,954.6923992600045" fill="#6A8294"/>
+<polyline points="1338,873 1338,920 900,920" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="900,920 915.3076007399955,912.6055859201091 915.3076007399955,927.3944140798909" fill="#6A8294"/>
+<rect x="330" y="970" width="1140" height="225" rx="20" fill="#E6F5F0" stroke="#CCD8E3" stroke-width="2"/>
+<text x="354" y="992" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">⑤ 도킹 기준 추정 · 태그 + 연속 VIO</text>
+<text x="354" y="1042" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">도킹 좌표에서 위치·각도와 불확실성을 함께 유지</text>
+<text x="354" y="1081" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">같은 IMU·영상·지도에서 나온 정보를 독립 관측으로 중복 합치지 않음</text>
+<text x="354" y="1120" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">태그가 없으면 VIO로 이어가되, 드리프트가 사라졌다고 보지 않음</text>
+<polyline points="900,1195 900,1560" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="900,1560 892.6055859201091,1544.6923992600045 907.3944140798909,1544.6923992600045" fill="#6A8294"/>
+<rect x="65" y="1235" width="795" height="222" rx="20" fill="#F0F3F7" stroke="#CCD8E3" stroke-width="2"/>
+<text x="89" y="1257" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">지도 보조 · RTAB-Map</text>
+<text x="89" y="1307" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="400" fill="#142C40">OpenVINS odom + IR 키프레임 → 지도·재방문</text>
+<text x="89" y="1346" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="400" fill="#142C40">입구 위치는 태그와 연결해야 알 수 있음</text>
+<text x="89" y="1385" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="400" fill="#142C40">지도 보정은 검증 후 반영 · 즉시 이동량에 합산 금지</text>
+<rect x="940" y="1235" width="795" height="222" rx="20" fill="#F0F3F7" stroke="#CCD8E3" stroke-width="2"/>
+<text x="964" y="1257" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">선택적 보조 추적 · ORB-SLAM3</text>
+<text x="964" y="1307" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="400" fill="#142C40">유효한 지도 또는 미리 실행된 추적기가 필요</text>
+<text x="964" y="1346" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="400" fill="#142C40">좌표 정렬·지도 세대·추적 상태 검증 후 전환</text>
+<text x="964" y="1385" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="400" fill="#142C40">OpenVINS 실패 시 무조건 성공하는 대체품은 아님</text>
+<polyline points="462,1457 462,1510 900,1510 900,1560" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="900,1560 892.6055859201091,1544.6923992600045 907.3944140798909,1544.6923992600045" fill="#6A8294"/>
+<polyline points="1338,1457 1338,1510 900,1510" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="900,1510 915.3076007399955,1502.605585920109 915.3076007399955,1517.394414079891" fill="#6A8294"/>
+<rect x="330" y="1560" width="1140" height="183" rx="20" fill="#E6F5F0" stroke="#CCD8E3" stroke-width="2"/>
+<text x="354" y="1582" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">⑥ 품질 판정 → 실제 포크 끝 위치 → 반복 재계획</text>
+<text x="354" y="1632" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">연속 odom으로 잔여 이동 확인 / 도킹 좌표로 목표 오차 확인</text>
+<text x="354" y="1671" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">추적 불량: 정지·회복 → 검증 후 재계획 / 오차 0으로 리셋하지 않음</text>
+<text x="65" y="1800" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700" fill="#142C40">핵심: 정지 명령 ≠ 실제 정지 · 작은 공분산 ≠ 실제 오차 보장 · 화면 표시보다 내부 추정이 기준</text>
+<text x="65" y="1850" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#506779">설계 문서용 도식 · 실행 코드·실차 성능 검증은 아직 진행하지 않음</text>
+</svg>

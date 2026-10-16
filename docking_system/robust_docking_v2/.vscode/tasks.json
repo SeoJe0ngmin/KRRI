@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Nano: camera + IMU + CAN check (no transmit)",
+      "type": "process",
+      "command": "bash",
+      "args": ["scripts/run_nano.sh", "check-devices"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    },
+    {
+      "label": "VM: camera + IMU + CAN check (no transmit)",
+      "type": "process",
+      "command": "bash",
+      "args": ["scripts/run_vm.sh", "check-devices"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    },
+    {
+      "label": "VM: environment check (no devices)",
+      "type": "process",
+      "command": "bash",
+      "args": ["scripts/run_vm.sh", "doctor"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": []
+    },
+    {
+      "label": "VM: camera + dashboard (no CAN)",
+      "type": "process",
+      "command": "bash",
+      "args": ["scripts/run_vm.sh", "measure", "--view"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    },
+    {
+      "label": "Nano: camera + dashboard (no CAN)",
+      "type": "process",
+      "command": "bash",
+      "args": ["scripts/run_nano.sh", "measure", "--view"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    }
+  ]
+}

@@ -1,0 +1,221 @@
+"""Nonblocking mission state machine. All motion requires fresh measured feedback."""
+import math
+import numpy as np
+from .geometry import wrap,remaining,arrival_y,inside_bay,path_clear,front,finite,tag_margin,moved
+from .planner import Responses
+
+class Controller:
+    def __init__(self,cfg,cut,now):
+        self.cfg=cfg;self.t=cfg['tuning'];self.cut=cut;self.created=now
+        self.state='PREPARING';self.reason='stationary_preparation';self.command='stop'
+        self.mission_start=None;self.stable_start=None;self.last_capture=None
+        self.responses=Responses();self.plan_id=0;self.request=None;self.route=[];self.route_points=[]
+        self.action=None;self.pending_distance=None;self.brake=None;self.blind=False
+        self.search_start=None;self.sweep=0.;self.motion_start=None;self.stop_at=None
+        self.recovery_at=None;self.post_settle='PLAN';self.await_plan=None
+        self.events=[];self.initialized_at=None;self.preparation_report={};self.last_seen=None
+
+    def fault(self,reason):
+        self.state='FAULT';self.reason=reason;self.command='stop';self.request=None
+        return self.status()
+
+    def status(self):
+        return dict(state=self.state,reason=self.reason,command=self.command,blind=self.blind,
+                    search_sweep_deg=math.degrees(self.sweep),route=[dict(a) for a in self.route],
+                    preparation=dict(self.preparation_report),responses={k:dict(v) for k,v in self.responses.data.items()},
+                    route_points=[list(p) for p in self.route_points],
+                    estimate_use='response estimates affect planning/braking only, never measured pose')
+
+    def fresh(self,now,o):
+        return bool(o and not o.get('clock_fault') and o.get('sensor_ready') and not o.get('imu_bad') and
+                    finite(o.get('local_pose',[])) and len(o.get('local_pose',[]))==3 and
+                    (not o.get('usable') or (o.get('pose') is not None and finite(o['pose']))) and
+                    0<=now-o.get('arrival',-math.inf)<=self.t['sensor_age_s'] and
+                    o.get('transport_lag_s',0)<=self.t['sensor_age_s'] and o.get('local_valid'))
+
+    def accept_plan(self,reply,now,o):
+        if self.state!='PLANNING' or reply.get('id')!=self.plan_id:return
+        if reply.get('error'):self.fault('planner: '+reply['error']);return
+        old=self.await_plan
+        if not self.fresh(now,o) or not o.get('usable') or not o.get('stationary'):
+            self.recover(now,'observation_changed_during_plan');return
+        if o['motion_epoch']!=old['epoch'] or np.linalg.norm(np.array(o['pose'][:2])-old['pose'][:2])>.01 or abs(wrap(o['pose'][2]-old['pose'][2]))>math.radians(.5):
+            self.state='PLAN';return
+        result=reply['plan'];self.route=result['actions']
+        point=np.array(o['pose']);self.route_points=[point.tolist()]
+        for action in self.route:
+            point=moved(point,action['turn'],action['distance'],self.cfg['pivot'])
+            self.route_points.append(point.tolist())
+        if not self.route:
+            if result.get('complete'):self.state='PLAN'
+            else:self.fault(result['reason'])
+            return
+        a=self.route[0];self.pending_distance=(a['distance'],a['fine']) if a['turn'] else None
+        if a['turn']:
+            side='left' if a['turn']>0 else 'right';cmd='rotate_'+side+('_fine' if a['fine'] else '_slow')
+            target=abs(a['turn'])
+            if self.responses.get(cmd)['n']==0:target=min(target,math.radians(self.t['first_turn_deg']))
+            # If shortened, don't blindly execute the original diagonal leg.
+            if target<abs(a['turn'])-1e-8:self.pending_distance=None
+            self.begin(now,o,cmd,target,'SETTLE')
+        else:self.begin_drive(now,o,a['distance'],a['fine'])
+
+    def begin_drive(self,now,o,distance,fine):
+        cmd='backward' if distance<0 else 'forward_slow' if fine or self.blind else 'forward'
+        target=min(abs(distance),self.t['backward_max_m'] if distance<0 else self.t['forward_max_m'])
+        if self.responses.get(cmd)['n']==0:target=min(target,self.t['first_forward_m'])
+        if distance>0:target=min(target,max(0.,remaining(o['pose'],self.cfg)/max(.2,math.cos(o['pose'][2]))))
+        signed=-target if distance<0 else target
+        if not path_clear(o['pose'],0,signed,self.cfg):self.fault('bay_side_clearance');return
+        if not self.blind and tag_margin(moved(o['pose'],0,signed,self.cfg['pivot']),self.cfg)<self.cfg['sensor']['tag']['edge_px']:
+            self.state='PLAN';self.reason='rotation_changed_visibility_replan';return
+        if target<.005:self.state='PLAN';return
+        self.begin(now,o,cmd,target,'SETTLE')
+
+    def begin(self,now,o,cmd,target,after):
+        self.action=dict(command=cmd,target=target,start_local=o['local_pose'][:],generation=o['tracking_generation'],
+                         epoch=o['motion_epoch'],started=now,after=after,speed=0.,progress=0.,previous=0.,last=now)
+        self.state='MOVING';self.command=cmd;self.reason='measured_motion_feedback';self.motion_start=None
+
+    def progress(self,o):
+        a=self.action;p=np.array(o['local_pose']);start=np.array(a['start_local'])
+        if 'rotate' in a['command']:
+            return wrap(p[2]-start[2])*(1 if 'left' in a['command'] else -1)
+        delta=p[:2]-start[:2];signed=float(delta @ [math.cos(start[2]),math.sin(start[2])])
+        return -signed if a['command']=='backward' else signed
+
+    def stop(self,now,post='PLAN'):
+        self.command='stop';self.state='SETTLE';self.stop_at=now;self.post_settle=post
+        if self.action:self.brake=dict(self.action,stop_progress=self.action['progress'],stop_time=now)
+        self.reason='observing_coast_and_rebound'
+
+    def recover(self,now,reason):
+        if self.action and self.action['after']=='SEARCH':
+            self.fault('search_tracking_lost_unmeasured_angle');return
+        self.command='stop';self.state='RECOVER';self.recovery_at=now;self.reason=reason
+        self.pending_distance=None;self.action=None;self.brake=None;self.await_plan=None;self.request=None
+        self.route=[];self.route_points=[]
+
+    def step(self,now,o,enter=False):
+        if self.state in ('FAULT','COMPLETE'):return self.status()
+        if self.mission_start is not None and now-self.mission_start>self.t['mission_timeout_s']:return self.fault('mission_timeout')
+        if o and o.get('clock_fault'):return self.fault('sensor_clock_fault')
+        if o and o.get('imu',{}).get('calibration',{}).get('state')=='FAILED':return self.fault('imu_calibration_failed')
+        fresh=self.fresh(now,o)
+        new=bool(o and o.get('capture_id')!=self.last_capture)
+        if new:self.last_capture=o['capture_id']
+        if new and fresh and o.get('tag',{}).get('detected'):self.last_seen=now
+        still=fresh and o.get('stationary')
+        if self.state in ('PREPARING','WAIT_ENTER'):
+            if not still:self.stable_start=None
+            elif new and self.stable_start is None:self.stable_start=o['capture_id']
+            duration=0 if self.stable_start is None else o['capture_id']-self.stable_start
+            self.preparation_report=dict(stable_seconds=duration,required_seconds=self.t['preparation_s'],
+                imu_ready=bool(o and o.get('sensor_ready')),tag_seen=bool(o and o.get('valid')),
+                imu_calibration=(o or {}).get('imu',{}).get('calibration'),
+                tag_repeatability=(o or {}).get('tag_position_window'),
+                performance=(o or {}).get('performance'),
+                certified_error_bound=False)
+            if self.state=='PREPARING':
+                if now-self.created>self.t['preparation_timeout_s']:return self.fault('preparation_timeout')
+                if duration>=self.t['preparation_s']:
+                    self.state='WAIT_ENTER';self.reason='ready_press_enter';self.initialized_at=now
+            elif not still:
+                self.state='PREPARING';self.created=now;self.reason='moved_while_waiting_repeat_preparation'
+            elif enter:
+                self.mission_start=now;self.state='PLAN';self.reason='operator_started'
+            return self.status()
+        if self.state=='MOVING':
+            a=self.action
+            if not fresh or o['tracking_generation']!=a['generation'] or o['motion_epoch']!=a['epoch']:
+                self.recover(now,'tracking_lost_during_motion');return self.status()
+            search=a['after']=='SEARCH'
+            if not search and not o.get('usable'):
+                self.recover(now,'pose_untrusted');return self.status()
+            if o.get('usable') and not inside_bay(o['pose'],self.cfg):return self.fault('bay_side_clearance')
+            if new:
+                p=self.progress(o);dt=now-a['last']
+                if dt>0:a['speed']=.65*a['speed']+.35*(p-a['previous'])/dt
+                a.update(progress=p,previous=p,last=now)
+                if p>.005 and self.motion_start is None:self.motion_start=now
+                if p<(-math.radians(2) if 'rotate' in a['command'] else -.03):return self.fault('motion_direction_mismatch')
+            if search and o['tag'].get('detected'):
+                self.stop(now,'PLAN');return self.status()
+            if search and self.sweep+max(0,a['progress'])>=2*math.pi:
+                self.stop(now,'SEARCH_LIMIT');return self.status()
+            turn='rotate' in a['command']
+            cap=self.t['search_turn_timeout_s'] if search else self.t['rotation_timeout_s'] if turn else self.t['translation_timeout_s']
+            if now-a['started']>=cap:
+                self.command='stop';return self.fault('motion_time_limit')
+            response=self.responses.get(a['command']);reserve=max(0.,a['speed'])*(response['coast']+max(0,now-o['arrival']))
+            reserve=min(a['target']*.5,reserve)
+            # A drive must also respect the absolute target after tag corrections.
+            reached=(not search and not turn and a['command']!='backward' and remaining(o['pose'],self.cfg)<=reserve)
+            if a['progress']>=a['target']-reserve or reached:self.stop(now,'SEARCH' if search else 'PLAN')
+            return self.status()
+        self.command='stop'
+        if self.state=='SETTLE':
+            if still:
+                if self.brake and o['tracking_generation']==self.brake['generation'] and o['motion_epoch']==self.brake['epoch']:
+                    end=self.progress(o);b=self.brake
+                    if b['after']=='SEARCH':self.sweep+=max(0,end)
+                    self.responses.observe(b['command'],max(0,b['stop_progress']),b['stop_time']-b['started'],max(0,end-b['stop_progress']))
+                self.brake=None
+                self.action=None
+                if self.post_settle=='SEARCH_LIMIT':return self.fault('search_360_exhausted')
+                if self.pending_distance and o.get('usable'):
+                    d,fine=self.pending_distance;self.pending_distance=None;self.begin_drive(now,o,d,fine)
+                else:self.state='PLAN'
+            elif now-self.stop_at>self.t['settle_timeout_s']:
+                if fresh:return self.fault('stop_not_confirmed')
+                self.recover(now,'stopped_pose_reacquisition')
+            return self.status()
+        if self.state=='RECOVER':
+            if still and o.get('usable'):self.state='PLAN';self.reason='tracking_recovered_replan'
+            elif now-self.recovery_at>=self.t['recovery_timeout_s']:return self.fault('recovery_timeout')
+            return self.status()
+        if not still:
+            self.recover(now,'need_stopped_observation');return self.status()
+        if self.state=='PLANNING':
+            if now-self.await_plan['at']>self.t['planning_timeout_s']:return self.fault('planner_timeout')
+            return self.status()
+        if self.state=='PLAN':
+            if not o.get('usable'):
+                if self.blind or o.get('valid'):
+                    self.recover(now,'absolute_pose_untrusted');return self.status()
+                if self.search_start is None:self.search_start=now
+                if now-self.search_start>self.t['search_timeout_s'] or self.sweep>=2*math.pi-math.radians(1):return self.fault('search_exhausted')
+                # A detected but ambiguous tag calls for stationary re-observation.
+                if o['tag'].get('detected') or o['tag']['reason']=='not_scheduled' or (self.last_seen is not None and now-self.last_seen<2.):
+                    self.reason='waiting_for_tag_consensus';return self.status()
+                target=min(math.radians(self.t['search_step_deg']),2*math.pi-self.sweep)
+                self.begin(now,o,'rotate_left_slow',target,'SEARCH');return self.status()
+            p=o['pose'];rem=remaining(p,self.cfg)
+            if rem < -self.t['longitudinal_tolerance_m']:return self.fault('target_overshoot')
+            if abs(rem)<=self.t['longitudinal_tolerance_m']:
+                if abs(front(p,self.cfg)[1])<=self.t['position_tolerance_m']:
+                    self.state='COMPLETE';self.reason='measured_stop_at_target_not_accuracy_certificate'
+                else:self.fault('target_reached_with_lateral_error')
+                return self.status()
+            # Re-evaluate clipping at the observed lateral position/heading;
+            # the centreline cut x alone can be several cm too late.
+            margin=tag_margin(p,self.cfg)
+            at_transition=(p[0]>=self.cut-.05 or
+                (p[0]>=self.cut-self.t['final_zone_m'] and self.cfg['sensor']['tag']['edge_px']<=margin<=self.t['cut_margin_px']+self.t['transition_margin_slack_px']))
+            if at_transition or self.blind:
+                if not self.blind:
+                    if o.get('blind_age_s') is None or o['blind_age_s']>1.:
+                        self.recover(now,'need_recent_tag_before_blind');return self.status()
+                    if abs(arrival_y(p,self.cfg))>self.t['position_tolerance_m']:
+                        # Still visible: plan a fine correction, no separate yaw gate.
+                        pass
+                    else:self.blind=True
+                if self.blind:
+                    if abs(arrival_y(p,self.cfg))>self.t['position_tolerance_m']:
+                        return self.fault('blind_predicted_lateral_outside_tolerance')
+                    self.begin_drive(now,o,min(self.t['forward_max_m'],rem/max(.2,math.cos(p[2]))),True)
+                    return self.status()
+            self.plan_id+=1;self.await_plan=dict(at=now,pose=np.array(p),epoch=o['motion_epoch'])
+            self.request=dict(id=self.plan_id,pose=p,cut=self.cut,responses=self.responses.data.copy())
+            self.state='PLANNING';self.reason='six_step_beam_search'
+        return self.status()

@@ -1,0 +1,29 @@
+{
+  "_shared": {
+    "mode": "site",
+    "site": "kw_wall_stop",
+    "file": "../../../configs/common.json"
+  },
+  "site": {
+    "name": "kw",
+    "lighting": "outdoor",
+    "note": "2026-10-15 사용자 확인: 태그 면 = 꼬깔콘으로 표시한 탑재부 입구 면. 입구 중앙 지면을 원점으로 정의. 차량 앞끝을 그 면 0.50m 전에 정지.",
+    "width_note": "2026-10-15 사용자: 차폭은 약 1.3m로 추정하며 1.5m 이하. 계산에는 1.5m 상한(반폭 0.75m)을 사용하며 실측 확정값은 아님. 탑재부 폭/실제 측면 간격은 미측정. 0.03m는 좌우 목표 오차."
+  },
+  "scene": null,
+  "grid": null,
+  "sensor": {
+    "calibration": {
+      "R_dock_tag": null,
+      "tag_position_xy_m": [
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "trial": {
+    "standoff_m": 0.5,
+    "tag_plane_x_m": 0.0,
+    "lateral_tolerance_m": 0.03
+  }
+}

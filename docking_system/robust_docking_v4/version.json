@@ -1,0 +1,7 @@
+{
+  "folder": "robust_docking_v4",
+  "previous_folder": "robust_docking_v3",
+  "variant": "c_gyro_vo",
+  "description": "자이로 보조 VO + 자이로 방향 + 태그 가중 보정",
+  "full_vio": false
+}

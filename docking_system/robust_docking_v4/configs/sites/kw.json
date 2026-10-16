@@ -1,0 +1,26 @@
+{
+  "_shared": {
+    "mode": "site",
+    "site": "kw",
+    "file": "../../../configs/common.json"
+  },
+  "site": {
+    "name": "kw",
+    "lighting": "outdoor"
+  },
+  "body": {
+    "rear_m": null,
+    "half_width_m": null
+  },
+  "scene": null,
+  "grid": null,
+  "sensor": {
+    "calibration": {
+      "R_dock_tag": null,
+      "tag_position_xy_m": [
+        null,
+        null
+      ]
+    }
+  }
+}

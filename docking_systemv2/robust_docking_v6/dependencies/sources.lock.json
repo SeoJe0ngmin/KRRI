@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "prepared_date": "2026-10-16",
+  "scope": "design_and_dependency_source_preparation_only",
+  "source_cache_root": "/Users/seojeongmin/Documents/Codex/dependency_sources/robust_docking_v6",
+  "runtime_build_status": "not_built_not_deployed",
+  "sources": [
+    {
+      "name": "open_vins",
+      "role": "primary_vio",
+      "repository": "https://github.com/rpng/open_vins.git",
+      "commit": "69488123ed9362dd44b6f28e7f4680abbff1442b",
+      "branch_at_download": "master",
+      "commit_date": "2025-11-30T00:23:17-08:00",
+      "local_path": "/Users/seojeongmin/Documents/Codex/dependency_sources/robust_docking_v6/open_vins",
+      "clean_at_preparation": true,
+      "git_submodule_status": "",
+      "logical_bytes_including_git": 559222513,
+      "disk_bytes_including_git": 560193536,
+      "license": "GPL-3.0 (see upstream headers and LICENSE)",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "built": false,
+      "installed_on_jetson": false
+    },
+    {
+      "name": "rtabmap",
+      "role": "mapping_backend",
+      "repository": "https://github.com/introlab/rtabmap.git",
+      "commit": "af1ced217f3a05a124bb418261f175baddb08adc",
+      "branch_at_download": "master",
+      "commit_date": "2026-10-14T10:16:24-07:00",
+      "local_path": "/Users/seojeongmin/Documents/Codex/dependency_sources/robust_docking_v6/rtabmap",
+      "clean_at_preparation": true,
+      "git_submodule_status": "",
+      "logical_bytes_including_git": 77716645,
+      "disk_bytes_including_git": 81231872,
+      "license": "BSD-3-Clause",
+      "license_sha256": "4a0c68e73a1f791384606000981eb992a8d2b1110a60032b29cb96f709b2e510",
+      "built": false,
+      "installed_on_jetson": false
+    },
+    {
+      "name": "rtabmap_ros",
+      "role": "ros2_mapping_interface",
+      "repository": "https://github.com/introlab/rtabmap_ros.git",
+      "commit": "a8de404dc1c1cc3e6c3fd279827c8dc092080e8a",
+      "branch_at_download": "ros2",
+      "commit_date": "2026-10-14T08:05:52-07:00",
+      "local_path": "/Users/seojeongmin/Documents/Codex/dependency_sources/robust_docking_v6/rtabmap_ros",
+      "clean_at_preparation": true,
+      "git_submodule_status": "",
+      "logical_bytes_including_git": 11933096,
+      "disk_bytes_including_git": 13148160,
+      "license": "BSD-3-Clause",
+      "license_sha256": "67961b22e779ea9aee20b21c816b5c8f01bd1406c0a49817933303efb0448949",
+      "built": false,
+      "installed_on_jetson": false
+    },
+    {
+      "name": "ORB_SLAM3",
+      "role": "optional_secondary_tracker",
+      "repository": "https://github.com/UZ-SLAMLab/ORB_SLAM3.git",
+      "commit": "4452a3c4ab75b1cde34e5505a36ec3f9edcdc4c4",
+      "branch_at_download": "master",
+      "commit_date": "2022-02-10T09:26:50+01:00",
+      "local_path": "/Users/seojeongmin/Documents/Codex/dependency_sources/robust_docking_v6/ORB_SLAM3",
+      "clean_at_preparation": true,
+      "git_submodule_status": "",
+      "logical_bytes_including_git": 1695086115,
+      "disk_bytes_including_git": 1697222656,
+      "license": "GPL-3.0 (Thirdparty licenses separate)",
+      "license_sha256": "589ed823e9a84c56feb95ac58e7cf384626b9cbf4fda2a907bc36e103de1bad2",
+      "built": false,
+      "installed_on_jetson": false
+    }
+  ],
+  "reference_manifest": "references/manifest.json",
+  "reviewed_baseline": [
+    {
+      "path": "../robust_docking_v5/docking/canbus.py",
+      "sha256": "1c8178fc9785c6e38488ad8b59be03d092982cf8889d699f0b411cab1abedbae"
+    },
+    {
+      "path": "../robust_docking_v5/docking/config.py",
+      "sha256": "47dffd5c2032e7e264866baf8a3ffdf4bda53aa1b4dce80a5fa704e75460c509"
+    },
+    {
+      "path": "../robust_docking_v5/docking/planner.py",
+      "sha256": "e99f3be15e50c0d85a7092e6b1f1714c5a789a7201dfe0a6dbacfb5d23e7562d"
+    },
+    {
+      "path": "../robust_docking_v5/docking/controller.py",
+      "sha256": "573007bd46059167b3dcdae1f68c53aa33957815fde02aebe1a477e8d8f09d40"
+    },
+    {
+      "path": "../robust_docking_v5/docking/observer.py",
+      "sha256": "a552a1896978289b98606c5ac0a7b835910dbe2e61423f284a9bdf1847003b09"
+    },
+    {
+      "path": "../robust_docking_v5/docking/vision.py",
+      "sha256": "15a2f3f829b0d3c22b82e03895b1ded615c6a6b120d87ed25365f1283afa5e0b"
+    },
+    {
+      "path": "../robust_docking_v5/docking/camera.py",
+      "sha256": "6a830cf662576e8550f5662475ea503671039e6cb099ef5d551986f2e6cb5736"
+    },
+    {
+      "path": "../robust_docking_v5/docking/runtime.py",
+      "sha256": "65f2c2d95f5d97b3bd9ffc54410fa3707a155dd0eeb64a6eafda224584c69f7c"
+    },
+    {
+      "path": "../configs/common.json",
+      "sha256": "f45a13d17462a77d915a97a08d169cf332d3b96696b05a5536a3bef4ace9748b"
+    },
+    {
+      "path": "../configs/sensor.json",
+      "sha256": "a049af7520463d321ba5a7b892b2b6f107615907dc26b5172b34883f16195783"
+    },
+    {
+      "path": "../update_jetson.sh",
+      "sha256": "8d22dd1c4ffd3a9a412890895f90f65f0edd40c91e5ba9318222c36e7133f853"
+    }
+  ],
+  "orb_vocabulary": {
+    "archive_bytes": 42527984,
+    "sha256": "ff2d0e82a69a8f4c5c002e3a0dff82a00e5872e1659fac1b996f41166b92693b",
+    "members": [
+      {
+        "name": "ORBvoc.txt",
+        "bytes": 145250924
+      }
+    ],
+    "extracted": false,
+    "kind": "bag_of_visual_words_vocabulary_not_neural_network_weights"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "folder": "robust_docking_v1",
+  "previous_folder": "robust_docking",
+  "variant": "current",
+  "description": "기존 robust_docking 현재 구성 (태그 가중 보정 + 자이로 보조 VO)",
+  "full_vio": false
+}
