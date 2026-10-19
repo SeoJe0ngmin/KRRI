@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2180" viewBox="0 0 1800 2180">
+<rect width="1800" height="2180" fill="#FAFCFF"/>
+<text x="65" y="48" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="48" font-weight="700" fill="#142C40">v6 · 자동 도킹 전체 흐름</text>
+<text x="65" y="112" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#506779">현재 구현 · 최대 깊이 6 후보 계획 → 첫 구간 실행 → 실제 정지 위치에서 다시 계획</text>
+<rect x="90" y="180" width="1010" height="180" rx="20" fill="#E9F2FF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="202" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">1  현장 입력 + 주행 전 검사</text>
+<text x="114" y="252" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">common: 태그·카메라 치수, 차폭·입구 폭, 좌측 태그 거리</text>
+<text x="114" y="291" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">센서 프로필·시간·장착 보정·CAN 프레임과 연결 검사</text>
+<polyline points="595,360 595,402" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,402 587.6055859201091,386.6923992600045 602.3944140798909,386.6923992600045" fill="#6A8294"/>
+<rect x="90" y="402" width="1010" height="180" rx="20" fill="#E9F2FF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="424" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">2  정지 초기화 → 준비 완료 후 Enter</text>
+<text x="114" y="474" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">자이로 정지(0.5°/s)·VIO 속도로 정차 확인 / 초기 VIO 상태 확인</text>
+<text x="114" y="513" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">정지 30초 = σ 기준선(합격·불합격 없음), 최대 180초</text>
+<polyline points="595,582 595,624" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,624 587.6055859201091,608.6923992600045 602.3944140798909,608.6923992600045" fill="#6A8294"/>
+<rect x="90" y="624" width="1010" height="180" rx="20" fill="#FFF3DC" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="646" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">3  태그 탐색 → 입구 기준 확보</text>
+<text x="114" y="696" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">안 보이면 왼쪽으로 50°씩 나누어 최대 한 바퀴 탐색 · 찾으면 즉시 정지</text>
+<text x="114" y="735" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">작거나 불안정한 태그는 “위치 확보”로 인정하지 않음</text>
+<polyline points="595,804 595,846" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,846 587.6055859201091,830.6923992600045 602.3944140798909,830.6923992600045" fill="#6A8294"/>
+<rect x="90" y="846" width="1010" height="180" rx="20" fill="#E6F5F0" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="868" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">4  현재 위치에서 최대 6단계 후보 계획</text>
+<text x="114" y="918" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">입구 중심 법선에 접근하며 좌우·각도 오차를 함께 줄임</text>
+<text x="114" y="957" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">거리·회전·예상 소요시간 비교 → 첫 동작 하나만 실행</text>
+<polyline points="595,1026 595,1068" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,1068 587.6055859201091,1052.6923992600045 602.3944140798909,1052.6923992600045" fill="#6A8294"/>
+<rect x="90" y="1068" width="1010" height="180" rx="20" fill="#E6F5F0" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="1090" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">5  이동 → 정지 명령 → 잔여 이동·되튐 관측</text>
+<text x="114" y="1140" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">전진 최대 0.8m / 후진 최대 0.3m / 일반 회전 최대 15°</text>
+<text x="114" y="1179" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">태그·VIO·IMU로 실제 이동을 추적 · 정지 관측 최대 20초</text>
+<polyline points="595,1248 595,1290" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,1290 587.6055859201091,1274.6923992600045 602.3944140798909,1274.6923992600045" fill="#6A8294"/>
+<rect x="90" y="1290" width="1010" height="180" rx="20" fill="#E6F5F0" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="1312" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">6  실제 도착 위치 확인 · 목표까지 반복</text>
+<text x="114" y="1362" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">목표 미도달 → 현재 위치로 6단계 다시 계획</text>
+<text x="114" y="1401" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">회전 뒤 전진 전에도 최신 위치·가시성·통로를 재검사</text>
+<polyline points="1100,1380 1150,1380 1150,936 1100,936" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="1100,936 1115.3076007399955,928.6055859201091 1115.3076007399955,943.3944140798909" fill="#6A8294"/>
+<text x="1165" y="1070" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="700" fill="#187968">반복</text>
+<polyline points="595,1470 595,1512" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,1512 587.6055859201091,1496.6923992600045 602.3944140798909,1496.6923992600045" fill="#6A8294"/>
+<rect x="90" y="1512" width="1010" height="180" rx="20" fill="#FFF3DC" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="1534" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">7  필요한 경우 비가시 구간으로 전환</text>
+<text x="114" y="1584" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">앞 단계는 각도도 조정 / 마지막은 예상 도착 좌우 중심</text>
+<text x="114" y="1623" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">예상 도착 좌우 |평균| ≤ 3cm·통로 여유 안인지 확인 · σ는 기록</text>
+<polyline points="595,1692 595,1734" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="595,1734 587.6055859201091,1718.6923992600045 602.3944140798909,1718.6923992600045" fill="#6A8294"/>
+<rect x="90" y="1734" width="1010" height="180" rx="20" fill="#E9F2FF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="1756" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">8  모드별 목표 도달 → 정지·최종 오차 기록</text>
+<text x="114" y="1806" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">중앙: 포크 끝이 입구면 0.5m 앞에서 정지</text>
+<text x="114" y="1845" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">좌측: 포크 끝이 입구면을 지나 1m 지점에서 정지</text>
+<rect x="1250" y="180" width="470" height="260" rx="20" fill="#F0F3F7" stroke="#CCD8E3" stroke-width="2"/>
+<text x="1274" y="202" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">상시 · 관측 품질 검사</text>
+<text x="1274" y="252" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">지연·누락·추적 상태 검사</text>
+<text x="1274" y="291" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">태그·VIO 불일치 감시</text>
+<text x="1274" y="330" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">좌표·시계 연속성 검사</text>
+<text x="1274" y="369" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">추정 불확실성 전파</text>
+<rect x="1250" y="510" width="470" height="260" rx="20" fill="#FDECEF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="1274" y="532" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">추적 불량 → 정지·회복</text>
+<text x="1274" y="582" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">정지 관측과 회복은 병행</text>
+<text x="1274" y="621" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">같은 시간축으로 최대 60초</text>
+<text x="1274" y="660" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">복구 확인 후 현재 위치로</text>
+<text x="1274" y="699" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">다시 계획 · 실패하면 종료</text>
+<polyline points="1485,440 1485,510" fill="none" stroke="#6A8294" stroke-width="4"/>
+<polygon points="1485,510 1477.605585920109,494.6923992600045 1492.394414079891,494.6923992600045" fill="#6A8294"/>
+<polyline points="1250,640 1190,640 1190,890 1100,890" fill="none" stroke="#B86772" stroke-width="4"/>
+<polygon points="1100,890 1115.3076007399955,882.6055859201091 1115.3076007399955,897.3944140798909" fill="#B86772"/>
+<rect x="1250" y="870" width="470" height="310" rx="20" fill="#F0F3F7" stroke="#CCD8E3" stroke-width="2"/>
+<text x="1274" y="892" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">주행 시간 제한</text>
+<text x="1274" y="942" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#142C40">출발 전 준비 시간 제외</text>
+<text x="1274" y="981" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#142C40">전체 주행 최대 600초</text>
+<text x="1274" y="1020" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#142C40">6단계는 매번 다시 계산</text>
+<text x="1274" y="1059" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#142C40">전체 이동거리가 4.8m라는</text>
+<text x="1274" y="1098" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#142C40">뜻이 아님</text>
+<rect x="1250" y="1210" width="470" height="260" rx="20" fill="#FDECEF" stroke="#CCD8E3" stroke-width="2"/>
+<text x="1274" y="1232" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">CAN 전송은 별도 감시</text>
+<text x="1274" y="1282" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">합의한 주행 바이트 유지</text>
+<text x="1274" y="1321" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">포크·리프트 명령 추가 없음</text>
+<text x="1274" y="1360" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">계산·지도·로그가 늦어도</text>
+<text x="1274" y="1399" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">정지 명령 경로는 분리</text>
+<rect x="1250" y="1560" width="470" height="260" rx="20" fill="#F0F3F7" stroke="#CCD8E3" stroke-width="2"/>
+<text x="1274" y="1582" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">화면 · 지도 · 기록</text>
+<text x="1274" y="1632" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">IR 미리보기와 특징점</text>
+<text x="1274" y="1671" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">컬러는 태그 검출에 사용</text>
+<text x="1274" y="1710" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">RTAB-Map은 선택 기록용</text>
+<text x="1274" y="1749" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="26" font-weight="400" fill="#142C40">제어 위치로 자동 합산 안 함</text>
+<rect x="90" y="1970" width="1630" height="130" rx="20" fill="#E6F5F0" stroke="#CCD8E3" stroke-width="2"/>
+<text x="114" y="1992" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="31" font-weight="700" fill="#142C40">판단 기준</text>
+<text x="114" y="2042" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="28" font-weight="400" fill="#142C40">명령 거리나 학습 속도를 현재 위치로 쓰지 않음 · 태그가 없어도 주변 영상과 IMU로 이동을 관측</text>
+<text x="90" y="2130" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="400" fill="#506779">2026-10-16 구현 기준 · 진입 판정 통과가 실제 ±3cm 정확도를 보증하지 않음</text>
+</svg>

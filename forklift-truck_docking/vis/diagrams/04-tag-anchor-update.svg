@@ -1,0 +1,307 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1579" height="1981" viewBox="0 0 1579 1981" role="img" aria-label="태그 창 수용·건너뛰기·앵커 갱신">
+  <style>text{font-family:'Apple SD Gothic Neo','Noto Sans CJK KR',sans-serif}</style>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <rect x="32" y="28" width="5" height="56" rx="2" fill="#087E8B"/>
+  <text x="52" y="43" font-size="13" font-weight="600" fill="#537487">FORKLIFT DOCKING · DIAGRAM 04</text>
+  <text x="52" y="78" font-size="28" font-weight="700" fill="#16394F">태그 창 수용·건너뛰기·앵커 갱신</text>
+  <g transform="translate(32,112)"><g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(12.96 1779.76)">
+<title>G</title>
+<!-- A&#45;&gt;B -->
+<g id="edge1" class="edge">
+<title>A&#45;&gt;B</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M163.4,-1723.13C163.4,-1714.27 163.4,-1703.79 163.4,-1694.13"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="165.85,-1694.33 163.4,-1687.33 160.95,-1694.33 165.85,-1694.33"/>
+</g>
+<!-- B&#45;&gt;C -->
+<g id="edge2" class="edge">
+<title>B&#45;&gt;C</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M163.4,-1640.91C163.4,-1632.35 163.4,-1622.05 163.4,-1611.73"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="165.85,-1611.8 163.4,-1604.8 160.95,-1611.8 165.85,-1611.8"/>
+</g>
+<!-- C&#45;&gt;D -->
+<g id="edge3" class="edge">
+<title>C&#45;&gt;D</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M152.83,-1519.37C148.49,-1503.41 143.54,-1485.23 139.5,-1470.36"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="141.87,-1469.73 137.66,-1463.62 137.14,-1471.02 141.87,-1469.73"/>
+<text xml:space="preserve" text-anchor="middle" x="162.19" y="-1484.4" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- C&#45;&gt;E -->
+<g id="edge4" class="edge">
+<title>C&#45;&gt;E</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M218.26,-1534.83C265.52,-1514.69 333.51,-1485.72 381.61,-1465.23"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="382.32,-1467.59 387.79,-1462.59 380.39,-1463.08 382.32,-1467.59"/>
+<text xml:space="preserve" text-anchor="middle" x="347.5" y="-1484.4" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- E&#45;&gt;F -->
+<g id="edge5" class="edge">
+<title>E&#45;&gt;F</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M439.4,-1417.51C439.4,-1408.95 439.4,-1398.65 439.4,-1388.33"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="441.85,-1388.4 439.4,-1381.4 436.95,-1388.4 441.85,-1388.4"/>
+</g>
+<!-- F&#45;&gt;G -->
+<g id="edge6" class="edge">
+<title>F&#45;&gt;G</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M433.53,-1293.9C427.22,-1249.9 417.33,-1180.98 411.7,-1141.76"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="414.15,-1141.6 410.73,-1135.02 409.3,-1142.3 414.15,-1141.6"/>
+<text xml:space="preserve" text-anchor="middle" x="445.82" y="-1261" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- F&#45;&gt;H -->
+<g id="edge7" class="edge">
+<title>F&#45;&gt;H</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M481.02,-1304.94C510.29,-1283.93 549.68,-1255.67 581.08,-1233.14"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="582.49,-1235.15 586.75,-1229.07 579.63,-1231.16 582.49,-1235.15"/>
+<text xml:space="preserve" text-anchor="middle" x="553.27" y="-1261" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- G&#45;&gt;L -->
+<g id="edge12" class="edge">
+<title>G&#45;&gt;L</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M418.03,-1088.73C446.16,-1032.96 520.4,-885.8 520.4,-885.8 520.4,-885.8 543.47,-868.62 564.83,-852.7"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="566.12,-854.79 570.27,-848.65 563.19,-850.86 566.12,-854.79"/>
+</g>
+<!-- H&#45;&gt;I -->
+<g id="edge8" class="edge">
+<title>H&#45;&gt;I</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M620.68,-1153.88C609.14,-1117.8 593.9,-1070.2 593.9,-1070.2 593.9,-1070.2 593.9,-983.8 593.9,-983.8 593.9,-983.8 596,-959.45 597.81,-938.43"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="600.25,-938.7 598.41,-931.51 595.37,-938.28 600.25,-938.7"/>
+<text xml:space="preserve" text-anchor="middle" x="609.65" y="-1022.8" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- H&#45;&gt;J -->
+<g id="edge9" class="edge">
+<title>H&#45;&gt;J</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M677,-1161.08C713.25,-1134.03 764.95,-1095.47 803.37,-1066.81"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="804.54,-1069 808.68,-1062.85 801.61,-1065.07 804.54,-1069"/>
+<text xml:space="preserve" text-anchor="middle" x="776.06" y="-1106.6" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- I&#45;&gt;L -->
+<g id="edge13" class="edge">
+<title>I&#45;&gt;L</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M600.4,-885.33C600.4,-876.47 600.4,-865.99 600.4,-856.33"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="602.85,-856.53 600.4,-849.53 597.95,-856.53 602.85,-856.53"/>
+</g>
+<!-- J&#45;&gt;I -->
+<g id="edge11" class="edge">
+<title>J&#45;&gt;I</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M790.72,-996.17C748.57,-976.73 694.2,-951.66 654.38,-933.29"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="655.42,-931.07 648.03,-930.37 653.36,-935.52 655.42,-931.07"/>
+<text xml:space="preserve" text-anchor="middle" x="736" y="-952.2" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- J&#45;&gt;K -->
+<g id="edge10" class="edge">
+<title>J&#45;&gt;K</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M850.07,-984.21C848.14,-969.04 845.99,-952.23 844.21,-938.3"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="846.69,-938.34 843.37,-931.7 841.83,-938.96 846.69,-938.34"/>
+<text xml:space="preserve" text-anchor="middle" x="852.7" y="-952.2" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- K&#45;&gt;L -->
+<g id="edge14" class="edge">
+<title>K&#45;&gt;L</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M777.03,-885.22C744.77,-874.44 705.42,-861.29 672.05,-850.14"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="673.14,-847.92 665.72,-848.03 671.58,-852.57 673.14,-847.92"/>
+</g>
+<!-- L&#45;&gt;M -->
+<g id="edge15" class="edge">
+<title>L&#45;&gt;M</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M600.4,-803.11C600.4,-794.55 600.4,-784.25 600.4,-773.93"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="602.85,-774 600.4,-767 597.95,-774 602.85,-774"/>
+</g>
+<!-- M&#45;&gt;N -->
+<g id="edge16" class="edge">
+<title>M&#45;&gt;N</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M588.69,-681.09C577.09,-642.15 559.59,-583.4 549.15,-548.36"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="551.6,-548.02 547.26,-542.01 546.91,-549.42 551.6,-548.02"/>
+<text xml:space="preserve" text-anchor="middle" x="597.47" y="-646.6" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- M&#45;&gt;O -->
+<g id="edge17" class="edge">
+<title>M&#45;&gt;O</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M643.51,-689.65C669.1,-671.39 701.7,-648.14 728.67,-628.9"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="729.76,-631.14 734.03,-625.08 726.91,-627.15 729.76,-631.14"/>
+<text xml:space="preserve" text-anchor="middle" x="711.77" y="-646.6" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- N&#45;&gt;U -->
+<g id="edge23" class="edge">
+<title>N&#45;&gt;U</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M538.45,-495.81C534.61,-453.93 526.4,-364.6 526.4,-364.6 526.4,-364.6 526.4,-364.6 526.4,-135.2 526.4,-135.2 595.96,-98.7 651.77,-69.41"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="652.61,-71.74 657.67,-66.32 650.34,-67.4 652.61,-71.74"/>
+</g>
+<!-- O&#45;&gt;P -->
+<g id="edge18" class="edge">
+<title>O&#45;&gt;P</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M782.04,-558.3C783.11,-537.59 784.53,-510.09 785.76,-486.33"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="788.19,-486.66 786.11,-479.55 783.3,-486.41 788.19,-486.66"/>
+</g>
+<!-- P&#45;&gt;Q -->
+<g id="edge19" class="edge">
+<title>P&#45;&gt;Q</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M773.65,-393.47C763.71,-366.68 752.4,-336.2 752.4,-336.2 752.4,-336.2 739.25,-277.03 730.97,-239.78"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="733.46,-239.66 729.55,-233.36 728.67,-240.72 733.46,-239.66"/>
+<text xml:space="preserve" text-anchor="middle" x="770.32" y="-359.4" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- P&#45;&gt;R -->
+<g id="edge20" class="edge">
+<title>P&#45;&gt;R</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M834.87,-399.86C863.08,-379.62 899.2,-353.7 928.64,-332.57"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="929.99,-334.62 934.25,-328.55 927.14,-330.64 929.99,-334.62"/>
+<text xml:space="preserve" text-anchor="middle" x="912.77" y="-359.4" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- Q&#45;&gt;U -->
+<g id="edge24" class="edge">
+<title>Q&#45;&gt;U</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M723.92,-187.12C723.28,-159.27 722.14,-109.66 721.34,-74.32"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="723.79,-74.28 721.18,-67.34 718.89,-74.39 723.79,-74.28"/>
+</g>
+<!-- R&#45;&gt;S -->
+<g id="edge21" class="edge">
+<title>R&#45;&gt;S</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M970.95,-251.73C964.5,-229.03 956.46,-200.75 949.99,-177.97"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="952.35,-177.32 948.08,-171.26 947.64,-178.66 952.35,-177.32"/>
+<text xml:space="preserve" text-anchor="middle" x="980.09" y="-205" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">아니오</text>
+</g>
+<!-- R&#45;&gt;T -->
+<g id="edge22" class="edge">
+<title>R&#45;&gt;T</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M1046.8,-262.15C1101.75,-236.69 1180.89,-200.01 1239.22,-172.97"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="1240.07,-175.28 1245.39,-170.11 1238.01,-170.83 1240.07,-175.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1204.08" y="-205" font-family="Apple SD Gothic Neo" font-size="14.00" fill="#294d65">예</text>
+</g>
+<!-- T&#45;&gt;U -->
+<g id="edge25" class="edge">
+<title>T&#45;&gt;U</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M1142.81,-105.55C1071.98,-93.45 989.72,-79.4 916.71,-66.93"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="917.25,-64.54 909.94,-65.77 916.43,-69.37 917.25,-64.54"/>
+</g>
+<!-- A -->
+<g id="node1" class="node">
+<title>A</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M270.56,-1766.8C270.56,-1766.8 56.24,-1766.8 56.24,-1766.8 50.24,-1766.8 44.24,-1760.8 44.24,-1754.8 44.24,-1754.8 44.24,-1735.6 44.24,-1735.6 44.24,-1729.6 50.24,-1723.6 56.24,-1723.6 56.24,-1723.6 270.56,-1723.6 270.56,-1723.6 276.56,-1723.6 282.56,-1729.6 282.56,-1735.6 282.56,-1735.6 282.56,-1754.8 282.56,-1754.8 282.56,-1760.8 276.56,-1766.8 270.56,-1766.8"/>
+<text xml:space="preserve" text-anchor="middle" x="163.4" y="-1739.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">앞단 검사를 통과한 태그</text>
+</g>
+<!-- B -->
+<g id="node2" class="node">
+<title>B</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M258.32,-1684.6C258.32,-1684.6 68.48,-1684.6 68.48,-1684.6 62.48,-1684.6 56.48,-1678.6 56.48,-1672.6 56.48,-1672.6 56.48,-1653.4 56.48,-1653.4 56.48,-1647.4 62.48,-1641.4 68.48,-1641.4 68.48,-1641.4 258.32,-1641.4 258.32,-1641.4 264.32,-1641.4 270.32,-1647.4 270.32,-1653.4 270.32,-1653.4 270.32,-1672.6 270.32,-1672.6 270.32,-1678.6 264.32,-1684.6 258.32,-1684.6"/>
+<text xml:space="preserve" text-anchor="middle" x="163.4" y="-1657.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">최근 0.5초 창에 추가</text>
+</g>
+<!-- C -->
+<g id="node3" class="node">
+<title>C</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M152.09,-1598.4C152.09,-1598.4 52.43,-1563.2 52.43,-1563.2 46.77,-1561.2 46.77,-1557.2 52.43,-1555.2 52.43,-1555.2 152.09,-1520 152.09,-1520 157.74,-1518 169.06,-1518 174.71,-1520 174.71,-1520 274.37,-1555.2 274.37,-1555.2 280.03,-1557.2 280.03,-1561.2 274.37,-1563.2 274.37,-1563.2 174.71,-1598.4 174.71,-1598.4 169.06,-1600.4 157.74,-1600.4 152.09,-1598.4"/>
+<text xml:space="preserve" text-anchor="middle" x="163.4" y="-1553.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">관측 3개 이상?</text>
+</g>
+<!-- D -->
+<g id="node4" class="node">
+<title>D</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M250.8,-1461.2C250.8,-1461.2 12,-1461.2 12,-1461.2 6,-1461.2 0,-1455.2 0,-1449.2 0,-1449.2 0,-1430 0,-1430 0,-1424 6,-1418 12,-1418 12,-1418 250.8,-1418 250.8,-1418 256.8,-1418 262.8,-1424 262.8,-1430 262.8,-1430 262.8,-1449.2 262.8,-1449.2 262.8,-1455.2 256.8,-1461.2 250.8,-1461.2"/>
+<text xml:space="preserve" text-anchor="middle" x="131.4" y="-1434.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">tag_window_filling: 대기</text>
+</g>
+<!-- E -->
+<g id="node5" class="node">
+<title>E</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M577.16,-1461.2C577.16,-1461.2 301.64,-1461.2 301.64,-1461.2 295.64,-1461.2 289.64,-1455.2 289.64,-1449.2 289.64,-1449.2 289.64,-1430 289.64,-1430 289.64,-1424 295.64,-1418 301.64,-1418 301.64,-1418 577.16,-1418 577.16,-1418 583.16,-1418 589.16,-1424 589.16,-1430 589.16,-1430 589.16,-1449.2 589.16,-1449.2 589.16,-1455.2 583.16,-1461.2 577.16,-1461.2"/>
+<text xml:space="preserve" text-anchor="middle" x="439.4" y="-1434.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">PnP 방향과 VIO 방향 차이 계산</text>
+</g>
+<!-- F -->
+<g id="node6" class="node">
+<title>F</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M427.93,-1375.48C427.93,-1375.48 310.1,-1339.32 310.1,-1339.32 304.36,-1337.56 304.36,-1334.04 310.1,-1332.28 310.1,-1332.28 427.93,-1296.12 427.93,-1296.12 433.66,-1294.36 445.14,-1294.36 450.87,-1296.12 450.87,-1296.12 568.7,-1332.28 568.7,-1332.28 574.44,-1334.04 574.44,-1337.56 568.7,-1339.32 568.7,-1339.32 450.87,-1375.48 450.87,-1375.48 445.14,-1377.24 433.66,-1377.24 427.93,-1375.48"/>
+<text xml:space="preserve" text-anchor="middle" x="439.4" y="-1330.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">방향 offset 있음?</text>
+</g>
+<!-- G -->
+<g id="node7" class="node">
+<title>G</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M549.48,-1132.4C549.48,-1132.4 265.32,-1132.4 265.32,-1132.4 259.32,-1132.4 253.32,-1126.4 253.32,-1120.4 253.32,-1120.4 253.32,-1101.2 253.32,-1101.2 253.32,-1095.2 259.32,-1089.2 265.32,-1089.2 265.32,-1089.2 549.48,-1089.2 549.48,-1089.2 555.48,-1089.2 561.48,-1095.2 561.48,-1101.2 561.48,-1101.2 561.48,-1120.4 561.48,-1120.4 561.48,-1126.4 555.48,-1132.4 549.48,-1132.4"/>
+<text xml:space="preserve" text-anchor="middle" x="407.4" y="-1105.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">첫 창 중앙값으로 offset 초기화</text>
+</g>
+<!-- H -->
+<g id="node8" class="node">
+<title>H</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M621.71,-1235.08C621.71,-1235.08 459.8,-1197.32 459.8,-1197.32 453.95,-1195.96 453.95,-1193.24 459.8,-1191.88 459.8,-1191.88 621.71,-1154.12 621.71,-1154.12 627.56,-1152.76 639.24,-1152.76 645.09,-1154.12 645.09,-1154.12 807,-1191.88 807,-1191.88 812.85,-1193.24 812.85,-1195.96 807,-1197.32 807,-1197.32 645.09,-1235.08 645.09,-1235.08 639.24,-1236.44 627.56,-1236.44 621.71,-1235.08"/>
+<text xml:space="preserve" text-anchor="middle" x="633.4" y="-1189.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">창 전체가 정지로 표시됨?</text>
+</g>
+<!-- I -->
+<g id="node9" class="node">
+<title>I</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M655.36,-929C655.36,-929 545.44,-929 545.44,-929 539.44,-929 533.44,-923 533.44,-917 533.44,-917 533.44,-897.8 533.44,-897.8 533.44,-891.8 539.44,-885.8 545.44,-885.8 545.44,-885.8 655.36,-885.8 655.36,-885.8 661.36,-885.8 667.36,-891.8 667.36,-897.8 667.36,-897.8 667.36,-917 667.36,-917 667.36,-923 661.36,-929 655.36,-929"/>
+<text xml:space="preserve" text-anchor="middle" x="600.4" y="-902" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">offset 유지</text>
+</g>
+<!-- J -->
+<g id="node10" class="node">
+<title>J</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M843.63,-1067.85C843.63,-1067.85 650.38,-1029.35 650.38,-1029.35 644.5,-1028.17 644.5,-1025.83 650.38,-1024.65 650.38,-1024.65 843.63,-986.15 843.63,-986.15 849.52,-984.97 861.28,-984.97 867.17,-986.15 867.17,-986.15 1060.42,-1024.65 1060.42,-1024.65 1066.3,-1025.83 1066.3,-1028.17 1060.42,-1029.35 1060.42,-1029.35 867.17,-1067.85 867.17,-1067.85 861.28,-1069.03 849.52,-1069.03 843.63,-1067.85"/>
+<text xml:space="preserve" text-anchor="middle" x="855.4" y="-1021.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">직전 방향 보정 후 0.5초 경과?</text>
+</g>
+<!-- K -->
+<g id="node11" class="node">
+<title>K</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M960.16,-929C960.16,-929 720.64,-929 720.64,-929 714.64,-929 708.64,-923 708.64,-917 708.64,-917 708.64,-897.8 708.64,-897.8 708.64,-891.8 714.64,-885.8 720.64,-885.8 720.64,-885.8 960.16,-885.8 960.16,-885.8 966.16,-885.8 972.16,-891.8 972.16,-897.8 972.16,-897.8 972.16,-917 972.16,-917 972.16,-923 966.16,-929 960.16,-929"/>
+<text xml:space="preserve" text-anchor="middle" x="840.4" y="-902" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">차이의 5%만 offset에 반영</text>
+</g>
+<!-- L -->
+<g id="node12" class="node">
+<title>L</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M721.6,-846.8C721.6,-846.8 479.2,-846.8 479.2,-846.8 473.2,-846.8 467.2,-840.8 467.2,-834.8 467.2,-834.8 467.2,-815.6 467.2,-815.6 467.2,-809.6 473.2,-803.6 479.2,-803.6 479.2,-803.6 721.6,-803.6 721.6,-803.6 727.6,-803.6 733.6,-809.6 733.6,-815.6 733.6,-815.6 733.6,-834.8 733.6,-834.8 733.6,-840.8 727.6,-846.8 721.6,-846.8"/>
+<text xml:space="preserve" text-anchor="middle" x="600.4" y="-819.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">관측별 위치 앵커 후보 계산</text>
+</g>
+<!-- M -->
+<g id="node13" class="node">
+<title>M</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M588.82,-761.44C588.82,-761.44 453.69,-724.56 453.69,-724.56 447.9,-722.98 447.9,-719.82 453.69,-718.24 453.69,-718.24 588.82,-681.36 588.82,-681.36 594.61,-679.78 606.19,-679.78 611.98,-681.36 611.98,-681.36 747.11,-718.24 747.11,-718.24 752.9,-719.82 752.9,-722.98 747.11,-724.56 747.11,-724.56 611.98,-761.44 611.98,-761.44 606.19,-763.02 594.61,-763.02 588.82,-761.44"/>
+<text xml:space="preserve" text-anchor="middle" x="600.4" y="-716" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">기존 위치 앵커 있음?</text>
+</g>
+<!-- N -->
+<g id="node14" class="node">
+<title>N</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M685,-539.6C685,-539.6 395.8,-539.6 395.8,-539.6 389.8,-539.6 383.8,-533.6 383.8,-527.6 383.8,-527.6 383.8,-508.4 383.8,-508.4 383.8,-502.4 389.8,-496.4 395.8,-496.4 395.8,-496.4 685,-496.4 685,-496.4 691,-496.4 697,-502.4 697,-508.4 697,-508.4 697,-527.6 697,-527.6 697,-533.6 691,-539.6 685,-539.6"/>
+<text xml:space="preserve" text-anchor="middle" x="540.4" y="-512.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">first_anchor: 후보 중앙값 수용</text>
+</g>
+<!-- O -->
+<g id="node15" class="node">
+<title>O</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M932.2,-623.4C932.2,-623.4 628.6,-623.4 628.6,-623.4 622.6,-623.4 616.6,-617.4 616.6,-611.4 616.6,-611.4 616.6,-570.6 616.6,-570.6 616.6,-564.6 622.6,-558.6 628.6,-558.6 628.6,-558.6 932.2,-558.6 932.2,-558.6 938.2,-558.6 944.2,-564.6 944.2,-570.6 944.2,-570.6 944.2,-611.4 944.2,-611.4 944.2,-617.4 938.2,-623.4 932.2,-623.4"/>
+<text xml:space="preserve" text-anchor="middle" x="780.4" y="-596.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">허용 차이: 거리별 여유 + 0.29 ×</text>
+<text xml:space="preserve" text-anchor="middle" x="780.4" y="-574.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">경과시간</text>
+</g>
+<!-- P -->
+<g id="node16" class="node">
+<title>P</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M776.62,-475.1C776.62,-475.1 578.89,-436.5 578.89,-436.5 573,-435.35 573,-433.05 578.89,-431.9 578.89,-431.9 776.62,-393.3 776.62,-393.3 782.51,-392.15 794.29,-392.15 800.18,-393.3 800.18,-393.3 997.91,-431.9 997.91,-431.9 1003.8,-433.05 1003.8,-435.35 997.91,-436.5 997.91,-436.5 800.18,-475.1 800.18,-475.1 794.29,-476.25 782.51,-476.25 776.62,-475.1"/>
+<text xml:space="preserve" text-anchor="middle" x="788.4" y="-428.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">후보 절반 이상이 허용 범위 안?</text>
+</g>
+<!-- Q -->
+<g id="node17" class="node">
+<title>Q</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M890.96,-230.8C890.96,-230.8 557.84,-230.8 557.84,-230.8 551.84,-230.8 545.84,-224.8 545.84,-218.8 545.84,-218.8 545.84,-199.6 545.84,-199.6 545.84,-193.6 551.84,-187.6 557.84,-187.6 557.84,-187.6 890.96,-187.6 890.96,-187.6 896.96,-187.6 902.96,-193.6 902.96,-199.6 902.96,-199.6 902.96,-218.8 902.96,-218.8 902.96,-224.8 896.96,-230.8 890.96,-230.8"/>
+<text xml:space="preserve" text-anchor="middle" x="724.4" y="-203.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">refreshed: 범위 안 후보 중앙값 수용</text>
+</g>
+<!-- R -->
+<g id="node18" class="node">
+<title>R</title>
+<path fill="#fff5db" stroke="#c9ab62" stroke-width="1.3" d="M970.63,-333.85C970.63,-333.85 777.38,-295.35 777.38,-295.35 771.5,-294.17 771.5,-291.83 777.38,-290.65 777.38,-290.65 970.63,-252.15 970.63,-252.15 976.52,-250.97 988.28,-250.97 994.17,-252.15 994.17,-252.15 1187.42,-290.65 1187.42,-290.65 1193.3,-291.83 1193.3,-294.17 1187.42,-295.35 1187.42,-295.35 994.17,-333.85 994.17,-333.85 988.28,-335.03 976.52,-335.03 970.63,-333.85"/>
+<text xml:space="preserve" text-anchor="middle" x="982.4" y="-287.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">마지막 앵커 수용 후 1초 이상?</text>
+</g>
+<!-- S -->
+<g id="node19" class="node">
+<title>S</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M1103.88,-168.6C1103.88,-168.6 772.92,-168.6 772.92,-168.6 766.92,-168.6 760.92,-162.6 760.92,-156.6 760.92,-156.6 760.92,-115.8 760.92,-115.8 760.92,-109.8 766.92,-103.8 772.92,-103.8 772.92,-103.8 1103.88,-103.8 1103.88,-103.8 1109.88,-103.8 1115.88,-109.8 1115.88,-115.8 1115.88,-115.8 1115.88,-156.6 1115.88,-156.6 1115.88,-162.6 1109.88,-168.6 1103.88,-168.6"/>
+<text xml:space="preserve" text-anchor="middle" x="938.4" y="-141.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">tag_jump_skipped: 위치 앵커 유지 /</text>
+<text xml:space="preserve" text-anchor="middle" x="938.4" y="-120" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">VIO로 계속</text>
+</g>
+<!-- T -->
+<g id="node20" class="node">
+<title>T</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M1477.56,-168.6C1477.56,-168.6 1155.24,-168.6 1155.24,-168.6 1149.24,-168.6 1143.24,-162.6 1143.24,-156.6 1143.24,-156.6 1143.24,-115.8 1143.24,-115.8 1143.24,-109.8 1149.24,-103.8 1155.24,-103.8 1155.24,-103.8 1477.56,-103.8 1477.56,-103.8 1483.56,-103.8 1489.56,-109.8 1489.56,-115.8 1489.56,-115.8 1489.56,-156.6 1489.56,-156.6 1489.56,-162.6 1483.56,-168.6 1477.56,-168.6"/>
+<text xml:space="preserve" text-anchor="middle" x="1316.4" y="-141.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">accepted_after_skip: 범위 밖 후보</text>
+<text xml:space="preserve" text-anchor="middle" x="1316.4" y="-120" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">중앙값 수용</text>
+</g>
+<!-- U -->
+<g id="node21" class="node">
+<title>U</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M911.44,-64.8C911.44,-64.8 529.36,-64.8 529.36,-64.8 523.36,-64.8 517.36,-58.8 517.36,-52.8 517.36,-52.8 517.36,-12 517.36,-12 517.36,-6 523.36,0 529.36,0 529.36,0 911.44,0 911.44,0 917.44,0 923.44,-6 923.44,-12 923.44,-12 923.44,-52.8 923.44,-52.8 923.44,-58.8 917.44,-64.8 911.44,-64.8"/>
+<text xml:space="preserve" text-anchor="middle" x="720.4" y="-37.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">앵커·시각 갱신 / VIO 누적 분산·이동거리</text>
+<text xml:space="preserve" text-anchor="middle" x="720.4" y="-16.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">초기화</text>
+</g>
+</g>
+</g>
+  <line x1="32" y1="1932" x2="1547" y2="1932" stroke="#DCE5EB"/>
+  <text x="36" y="1956" font-size="12" fill="#617888">2026-10-19 코드 기준 · 상세 수치와 예외는 algorithm_and_rules.md 참조</text>
+  </svg>

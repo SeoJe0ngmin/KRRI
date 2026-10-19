@@ -1,0 +1,254 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1237" height="1001" viewBox="0 0 1237 1001" role="img" aria-label="오차·드리프트·관성 보정 개요">
+  <style>text{font-family:'Apple SD Gothic Neo','Noto Sans CJK KR',sans-serif}</style>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <rect x="32" y="28" width="5" height="56" rx="2" fill="#087E8B"/>
+  <text x="52" y="43" font-size="13" font-weight="600" fill="#537487">FORKLIFT DOCKING · DIAGRAM 03</text>
+  <text x="52" y="78" font-size="28" font-weight="700" fill="#16394F">오차·드리프트·관성 보정 개요</text>
+  <g transform="translate(32,112)"><g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(12.96 799.56)">
+<title>G</title>
+<!-- RGB&#45;&gt;TAG -->
+<g id="edge1" class="edge">
+<title>RGB&#45;&gt;TAG</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M146.52,-743.04C146.52,-734.72 146.52,-724.98 146.52,-715.92"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="148.97,-715.93 146.52,-708.93 144.07,-715.93 148.97,-715.93"/>
+</g>
+<!-- TAG&#45;&gt;CHECK -->
+<g id="edge3" class="edge">
+<title>TAG&#45;&gt;CHECK</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M193.34,-662.64C215.26,-652.73 241.53,-640.85 264.41,-630.51"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="265.37,-632.77 270.74,-627.65 263.35,-628.3 265.37,-632.77"/>
+</g>
+<!-- DEP&#45;&gt;CHECK -->
+<g id="edge2" class="edge">
+<title>DEP&#45;&gt;CHECK</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M348.8,-662.84C344.36,-654.17 339.14,-643.96 334.34,-634.58"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="336.6,-633.62 331.23,-628.5 332.24,-635.85 336.6,-633.62"/>
+</g>
+<!-- CHECK&#45;&gt;TIME -->
+<g id="edge7" class="edge">
+<title>CHECK&#45;&gt;TIME</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M330.51,-582.64C335.06,-573.97 340.41,-563.76 345.33,-554.38"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="347.44,-555.63 348.52,-548.29 343.1,-553.35 347.44,-555.63"/>
+</g>
+<!-- IR&#45;&gt;VIO -->
+<g id="edge4" class="edge">
+<title>IR&#45;&gt;VIO</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M558.17,-743.04C569.21,-733.66 582.35,-722.5 594.08,-712.52"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="595.44,-714.59 599.18,-708.19 592.26,-710.85 595.44,-714.59"/>
+</g>
+<!-- VIO&#45;&gt;LOCAL -->
+<g id="edge6" class="edge">
+<title>VIO&#45;&gt;LOCAL</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M625.52,-662.84C625.52,-654.52 625.52,-644.78 625.52,-635.72"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="627.97,-635.73 625.52,-628.73 623.07,-635.73 627.97,-635.73"/>
+</g>
+<!-- IMU&#45;&gt;VIO -->
+<g id="edge5" class="edge">
+<title>IMU&#45;&gt;VIO</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M692.87,-743.04C681.83,-733.66 668.69,-722.5 656.96,-712.52"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="658.78,-710.85 651.86,-708.19 655.6,-714.59 658.78,-710.85"/>
+</g>
+<!-- LOCAL&#45;&gt;TIME -->
+<g id="edge8" class="edge">
+<title>LOCAL&#45;&gt;TIME</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M553.81,-582.44C518.9,-572.14 476.8,-559.71 440.82,-549.1"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="441.73,-546.81 434.32,-547.18 440.34,-551.51 441.73,-546.81"/>
+</g>
+<!-- LOCAL&#45;&gt;POSE -->
+<g id="edge12" class="edge">
+<title>LOCAL&#45;&gt;POSE</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M619.94,-582.57C608.52,-539.48 583.52,-445.2 583.52,-445.2 583.52,-445.2 583.52,-445.2 583.52,-352.2 583.52,-352.2 583.52,-261.51 583.52,-212.92"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="585.97,-213.21 583.52,-206.21 581.07,-213.21 585.97,-213.21"/>
+</g>
+<!-- LOCAL&#45;&gt;SPEED -->
+<g id="edge16" class="edge">
+<title>LOCAL&#45;&gt;SPEED</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M665.84,-582.44C684.48,-572.66 706.75,-560.97 726.27,-550.72"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="727.23,-552.99 732.29,-547.56 724.95,-548.65 727.23,-552.99"/>
+</g>
+<!-- TIME&#45;&gt;WINDOW -->
+<g id="edge9" class="edge">
+<title>TIME&#45;&gt;WINDOW</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M360.52,-502.44C360.52,-494.12 360.52,-484.38 360.52,-475.32"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="362.97,-475.33 360.52,-468.33 358.07,-475.33 362.97,-475.33"/>
+</g>
+<!-- WINDOW&#45;&gt;OFFSET -->
+<g id="edge10" class="edge">
+<title>WINDOW&#45;&gt;OFFSET</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M360.52,-422.11C360.52,-413.93 360.52,-404.27 360.52,-394.85"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="362.97,-395.06 360.52,-388.06 358.07,-395.06 362.97,-395.06"/>
+</g>
+<!-- OFFSET&#45;&gt;ANCHOR -->
+<g id="edge11" class="edge">
+<title>OFFSET&#45;&gt;ANCHOR</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M368.4,-320.32C370.6,-311.44 372.97,-301.82 375.14,-293.06"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="377.49,-293.74 376.8,-286.36 372.74,-292.56 377.49,-293.74"/>
+</g>
+<!-- ANCHOR&#45;&gt;POSE -->
+<g id="edge13" class="edge">
+<title>ANCHOR&#45;&gt;POSE</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M436.91,-240.04C462.83,-229.95 493.98,-217.84 520.88,-207.37"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="521.47,-209.77 527.11,-204.95 519.7,-205.2 521.47,-209.77"/>
+</g>
+<!-- POSE&#45;&gt;FORK -->
+<g id="edge14" class="edge">
+<title>POSE&#45;&gt;FORK</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M583.52,-160.04C583.52,-151.72 583.52,-141.98 583.52,-132.92"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="585.97,-132.93 583.52,-125.93 581.07,-132.93 585.97,-132.93"/>
+</g>
+<!-- FORK&#45;&gt;CONTROL -->
+<g id="edge15" class="edge">
+<title>FORK&#45;&gt;CONTROL</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M583.52,-79.84C583.52,-71.52 583.52,-61.78 583.52,-52.72"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="585.97,-52.73 583.52,-45.73 581.07,-52.73 585.97,-52.73"/>
+</g>
+<!-- SPEED&#45;&gt;BRAKE -->
+<g id="edge17" class="edge">
+<title>SPEED&#45;&gt;BRAKE</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M784.44,-502.44C788.54,-493.77 793.37,-483.56 797.81,-474.18"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="799.89,-475.5 800.67,-468.13 795.46,-473.41 799.89,-475.5"/>
+</g>
+<!-- BRAKE&#45;&gt;REST -->
+<g id="edge18" class="edge">
+<title>BRAKE&#45;&gt;REST</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M802.99,-422.11C798.36,-410.66 792.56,-396.33 787.49,-383.79"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="789.81,-382.98 784.91,-377.41 785.26,-384.82 789.81,-382.98"/>
+</g>
+<!-- REST&#45;&gt;POSE -->
+<g id="edge21" class="edge">
+<title>REST&#45;&gt;POSE</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M751.59,-331.11C716.86,-300.51 652.47,-243.76 614.26,-210.09"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="615.91,-208.28 609.04,-205.49 612.67,-211.95 615.91,-208.28"/>
+</g>
+<!-- REST&#45;&gt;LEARN -->
+<g id="edge19" class="edge">
+<title>REST&#45;&gt;LEARN</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M815.81,-331.11C840.19,-318.34 871.43,-301.99 897.14,-288.53"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="897.99,-290.85 903.06,-285.43 895.72,-286.51 897.99,-290.85"/>
+</g>
+<!-- LEARN&#45;&gt;BRAKE -->
+<g id="edge20" class="edge">
+<title>LEARN&#45;&gt;BRAKE</title>
+<path fill="none" stroke="#688397" stroke-width="1.4" d="M944.66,-284.24C943.23,-319.24 940.52,-385.6 940.52,-385.6 940.52,-385.6 902.05,-402.78 867.13,-418.37"/>
+<polygon fill="#688397" stroke="#688397" stroke-width="1.4" points="866.15,-416.12 860.76,-421.22 868.15,-420.6 866.15,-416.12"/>
+</g>
+<!-- RGB -->
+<g id="node1" class="node">
+<title>RGB</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M189.96,-786.6C189.96,-786.6 103.08,-786.6 103.08,-786.6 97.08,-786.6 91.08,-780.6 91.08,-774.6 91.08,-774.6 91.08,-755.4 91.08,-755.4 91.08,-749.4 97.08,-743.4 103.08,-743.4 103.08,-743.4 189.96,-743.4 189.96,-743.4 195.96,-743.4 201.96,-749.4 201.96,-755.4 201.96,-755.4 201.96,-774.6 201.96,-774.6 201.96,-780.6 195.96,-786.6 189.96,-786.6"/>
+<text xml:space="preserve" text-anchor="middle" x="146.52" y="-759.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">컬러 영상</text>
+</g>
+<!-- TAG -->
+<g id="node2" class="node">
+<title>TAG</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M281.04,-706.4C281.04,-706.4 12,-706.4 12,-706.4 6,-706.4 0,-700.4 0,-694.4 0,-694.4 0,-675.2 0,-675.2 0,-669.2 6,-663.2 12,-663.2 12,-663.2 281.04,-663.2 281.04,-663.2 287.04,-663.2 293.04,-669.2 293.04,-675.2 293.04,-675.2 293.04,-694.4 293.04,-694.4 293.04,-700.4 287.04,-706.4 281.04,-706.4"/>
+<text xml:space="preserve" text-anchor="middle" x="146.52" y="-679.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">AprilTag·IPPE: 방향각·거리</text>
+</g>
+<!-- DEP -->
+<g id="node3" class="node">
+<title>DEP</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M386.76,-706.4C386.76,-706.4 332.28,-706.4 332.28,-706.4 326.28,-706.4 320.28,-700.4 320.28,-694.4 320.28,-694.4 320.28,-675.2 320.28,-675.2 320.28,-669.2 326.28,-663.2 332.28,-663.2 332.28,-663.2 386.76,-663.2 386.76,-663.2 392.76,-663.2 398.76,-669.2 398.76,-675.2 398.76,-675.2 398.76,-694.4 398.76,-694.4 398.76,-700.4 392.76,-706.4 386.76,-706.4"/>
+<text xml:space="preserve" text-anchor="middle" x="359.52" y="-679.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">Depth</text>
+</g>
+<!-- CHECK -->
+<g id="node4" class="node">
+<title>CHECK</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M417.68,-626.2C417.68,-626.2 221.36,-626.2 221.36,-626.2 215.36,-626.2 209.36,-620.2 209.36,-614.2 209.36,-614.2 209.36,-595 209.36,-595 209.36,-589 215.36,-583 221.36,-583 221.36,-583 417.68,-583 417.68,-583 423.68,-583 429.68,-589 429.68,-595 429.68,-595 429.68,-614.2 429.68,-614.2 429.68,-620.2 423.68,-626.2 417.68,-626.2"/>
+<text xml:space="preserve" text-anchor="middle" x="319.52" y="-599.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">태그 거리 일관성 검사</text>
+</g>
+<!-- IR -->
+<g id="node5" class="node">
+<title>IR</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M600.72,-786.6C600.72,-786.6 466.32,-786.6 466.32,-786.6 460.32,-786.6 454.32,-780.6 454.32,-774.6 454.32,-774.6 454.32,-755.4 454.32,-755.4 454.32,-749.4 460.32,-743.4 466.32,-743.4 466.32,-743.4 600.72,-743.4 600.72,-743.4 606.72,-743.4 612.72,-749.4 612.72,-755.4 612.72,-755.4 612.72,-774.6 612.72,-774.6 612.72,-780.6 606.72,-786.6 600.72,-786.6"/>
+<text xml:space="preserve" text-anchor="middle" x="533.52" y="-759.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">좌·우 IR 영상</text>
+</g>
+<!-- VIO -->
+<g id="node6" class="node">
+<title>VIO</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M774.08,-706.4C774.08,-706.4 476.96,-706.4 476.96,-706.4 470.96,-706.4 464.96,-700.4 464.96,-694.4 464.96,-694.4 464.96,-675.2 464.96,-675.2 464.96,-669.2 470.96,-663.2 476.96,-663.2 476.96,-663.2 774.08,-663.2 774.08,-663.2 780.08,-663.2 786.08,-669.2 786.08,-675.2 786.08,-675.2 786.08,-694.4 786.08,-694.4 786.08,-700.4 780.08,-706.4 774.08,-706.4"/>
+<text xml:space="preserve" text-anchor="middle" x="625.52" y="-679.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">OpenVINS: 영상 특징점·IMU 융합</text>
+</g>
+<!-- IMU -->
+<g id="node7" class="node">
+<title>IMU</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M782.92,-786.6C782.92,-786.6 652.12,-786.6 652.12,-786.6 646.12,-786.6 640.12,-780.6 640.12,-774.6 640.12,-774.6 640.12,-755.4 640.12,-755.4 640.12,-749.4 646.12,-743.4 652.12,-743.4 652.12,-743.4 782.92,-743.4 782.92,-743.4 788.92,-743.4 794.92,-749.4 794.92,-755.4 794.92,-755.4 794.92,-774.6 794.92,-774.6 794.92,-780.6 788.92,-786.6 782.92,-786.6"/>
+<text xml:space="preserve" text-anchor="middle" x="717.52" y="-759.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">자이로·가속도</text>
+</g>
+<!-- LOCAL -->
+<g id="node8" class="node">
+<title>LOCAL</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M782.72,-626.2C782.72,-626.2 468.32,-626.2 468.32,-626.2 462.32,-626.2 456.32,-620.2 456.32,-614.2 456.32,-614.2 456.32,-595 456.32,-595 456.32,-589 462.32,-583 468.32,-583 468.32,-583 782.72,-583 782.72,-583 788.72,-583 794.72,-589 794.72,-595 794.72,-595 794.72,-614.2 794.72,-614.2 794.72,-620.2 788.72,-626.2 782.72,-626.2"/>
+<text xml:space="preserve" text-anchor="middle" x="625.52" y="-599.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">상대 이동·회전 / 바이어스·공분산</text>
+</g>
+<!-- TIME -->
+<g id="node9" class="node">
+<title>TIME</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M501.52,-546C501.52,-546 219.52,-546 219.52,-546 213.52,-546 207.52,-540 207.52,-534 207.52,-534 207.52,-514.8 207.52,-514.8 207.52,-508.8 213.52,-502.8 219.52,-502.8 219.52,-502.8 501.52,-502.8 501.52,-502.8 507.52,-502.8 513.52,-508.8 513.52,-514.8 513.52,-514.8 513.52,-534 513.52,-534 513.52,-540 507.52,-546 501.52,-546"/>
+<text xml:space="preserve" text-anchor="middle" x="360.52" y="-519" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">태그 촬영 시각의 과거 VIO 조회</text>
+</g>
+<!-- WINDOW -->
+<g id="node10" class="node">
+<title>WINDOW</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M493.6,-465.8C493.6,-465.8 227.44,-465.8 227.44,-465.8 221.44,-465.8 215.44,-459.8 215.44,-453.8 215.44,-453.8 215.44,-434.6 215.44,-434.6 215.44,-428.6 221.44,-422.6 227.44,-422.6 227.44,-422.6 493.6,-422.6 493.6,-422.6 499.6,-422.6 505.6,-428.6 505.6,-434.6 505.6,-434.6 505.6,-453.8 505.6,-453.8 505.6,-459.8 499.6,-465.8 493.6,-465.8"/>
+<text xml:space="preserve" text-anchor="middle" x="360.52" y="-438.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">최근 0.5초 태그 창: 최소 3개</text>
+</g>
+<!-- OFFSET -->
+<g id="node11" class="node">
+<title>OFFSET</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M530.32,-385.6C530.32,-385.6 190.72,-385.6 190.72,-385.6 184.72,-385.6 178.72,-379.6 178.72,-373.6 178.72,-373.6 178.72,-332.8 178.72,-332.8 178.72,-326.8 184.72,-320.8 190.72,-320.8 190.72,-320.8 530.32,-320.8 530.32,-320.8 536.32,-320.8 542.32,-326.8 542.32,-332.8 542.32,-332.8 542.32,-373.6 542.32,-373.6 542.32,-379.6 536.32,-385.6 530.32,-385.6"/>
+<text xml:space="preserve" text-anchor="middle" x="360.52" y="-358.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">방향 기준: 첫 창 초기화 / 정차 중 5%</text>
+<text xml:space="preserve" text-anchor="middle" x="360.52" y="-337" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">보정</text>
+</g>
+<!-- ANCHOR -->
+<g id="node12" class="node">
+<title>ANCHOR</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M508.76,-283.8C508.76,-283.8 256.28,-283.8 256.28,-283.8 250.28,-283.8 244.28,-277.8 244.28,-271.8 244.28,-271.8 244.28,-252.6 244.28,-252.6 244.28,-246.6 250.28,-240.6 256.28,-240.6 256.28,-240.6 508.76,-240.6 508.76,-240.6 514.76,-240.6 520.76,-246.6 520.76,-252.6 520.76,-252.6 520.76,-271.8 520.76,-271.8 520.76,-277.8 514.76,-283.8 508.76,-283.8"/>
+<text xml:space="preserve" text-anchor="middle" x="382.52" y="-256.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">점프 검사 → 위치 앵커 갱신</text>
+</g>
+<!-- POSE -->
+<g id="node13" class="node">
+<title>POSE</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M676.64,-203.6C676.64,-203.6 490.4,-203.6 490.4,-203.6 484.4,-203.6 478.4,-197.6 478.4,-191.6 478.4,-191.6 478.4,-172.4 478.4,-172.4 478.4,-166.4 484.4,-160.4 490.4,-160.4 490.4,-160.4 676.64,-160.4 676.64,-160.4 682.64,-160.4 688.64,-166.4 688.64,-172.4 688.64,-172.4 688.64,-191.6 688.64,-191.6 688.64,-197.6 682.64,-203.6 676.64,-203.6"/>
+<text xml:space="preserve" text-anchor="middle" x="583.52" y="-176.6" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">현재 내부 위치·방향</text>
+</g>
+<!-- FORK -->
+<g id="node14" class="node">
+<title>FORK</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M713.72,-123.4C713.72,-123.4 453.32,-123.4 453.32,-123.4 447.32,-123.4 441.32,-117.4 441.32,-111.4 441.32,-111.4 441.32,-92.2 441.32,-92.2 441.32,-86.2 447.32,-80.2 453.32,-80.2 453.32,-80.2 713.72,-80.2 713.72,-80.2 719.72,-80.2 725.72,-86.2 725.72,-92.2 725.72,-92.2 725.72,-111.4 725.72,-111.4 725.72,-117.4 719.72,-123.4 713.72,-123.4"/>
+<text xml:space="preserve" text-anchor="middle" x="583.52" y="-96.4" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">포크 끝 위치·예상 도착 좌우</text>
+</g>
+<!-- CONTROL -->
+<g id="node15" class="node">
+<title>CONTROL</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M680.96,-43.2C680.96,-43.2 486.08,-43.2 486.08,-43.2 480.08,-43.2 474.08,-37.2 474.08,-31.2 474.08,-31.2 474.08,-12 474.08,-12 474.08,-6 480.08,0 486.08,0 486.08,0 680.96,0 680.96,0 686.96,0 692.96,-6 692.96,-12 692.96,-12 692.96,-31.2 692.96,-31.2 692.96,-37.2 686.96,-43.2 680.96,-43.2"/>
+<text xml:space="preserve" text-anchor="middle" x="583.52" y="-16.2" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">계획·주행·정지 판단</text>
+</g>
+<!-- SPEED -->
+<g id="node16" class="node">
+<title>SPEED</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M877,-546C877,-546 672.04,-546 672.04,-546 666.04,-546 660.04,-540 660.04,-534 660.04,-534 660.04,-514.8 660.04,-514.8 660.04,-508.8 666.04,-502.8 672.04,-502.8 672.04,-502.8 877,-502.8 877,-502.8 883,-502.8 889,-508.8 889,-514.8 889,-514.8 889,-534 889,-534 889,-540 883,-546 877,-546"/>
+<text xml:space="preserve" text-anchor="middle" x="774.52" y="-519" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">실제 속도·각속도 추정</text>
+</g>
+<!-- BRAKE -->
+<g id="node17" class="node">
+<title>BRAKE</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M986.72,-465.8C986.72,-465.8 636.32,-465.8 636.32,-465.8 630.32,-465.8 624.32,-459.8 624.32,-453.8 624.32,-453.8 624.32,-434.6 624.32,-434.6 624.32,-428.6 630.32,-422.6 636.32,-422.6 636.32,-422.6 986.72,-422.6 986.72,-422.6 992.72,-422.6 998.72,-428.6 998.72,-434.6 998.72,-434.6 998.72,-453.8 998.72,-453.8 998.72,-459.8 992.72,-465.8 986.72,-465.8"/>
+<text xml:space="preserve" text-anchor="middle" x="811.52" y="-438.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">관성시간·관측 나이를 고려한 조기 중립</text>
+</g>
+<!-- REST -->
+<g id="node18" class="node">
+<title>REST</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M914.72,-374.8C914.72,-374.8 636.32,-374.8 636.32,-374.8 630.32,-374.8 624.32,-368.8 624.32,-362.8 624.32,-362.8 624.32,-343.6 624.32,-343.6 624.32,-337.6 630.32,-331.6 636.32,-331.6 636.32,-331.6 914.72,-331.6 914.72,-331.6 920.72,-331.6 926.72,-337.6 926.72,-343.6 926.72,-343.6 926.72,-362.8 926.72,-362.8 926.72,-368.8 920.72,-374.8 914.72,-374.8"/>
+<text xml:space="preserve" text-anchor="middle" x="775.52" y="-347.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">중립 이후 잔여 이동·되튐 관측</text>
+</g>
+<!-- LEARN -->
+<g id="node19" class="node">
+<title>LEARN</title>
+<path fill="#edf5fc" stroke="#a9bed0" stroke-width="1.3" d="M1135.48,-283.8C1135.48,-283.8 755.56,-283.8 755.56,-283.8 749.56,-283.8 743.56,-277.8 743.56,-271.8 743.56,-271.8 743.56,-252.6 743.56,-252.6 743.56,-246.6 749.56,-240.6 755.56,-240.6 755.56,-240.6 1135.48,-240.6 1135.48,-240.6 1141.48,-240.6 1147.48,-246.6 1147.48,-252.6 1147.48,-252.6 1147.48,-271.8 1147.48,-271.8 1147.48,-277.8 1141.48,-283.8 1135.48,-283.8"/>
+<text xml:space="preserve" text-anchor="middle" x="945.52" y="-256.8" font-family="Apple SD Gothic Neo" font-size="18.00" fill="#18374d">이번 run의 속도·출발 지연·관성시간 갱신</text>
+</g>
+</g>
+</g>
+  <line x1="32" y1="952" x2="1205" y2="952" stroke="#DCE5EB"/>
+  <text x="36" y="976" font-size="12" fill="#617888">2026-10-19 코드 기준 · 상세 수치와 예외는 algorithm_and_rules.md 참조</text>
+  </svg>
