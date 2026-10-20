@@ -51,6 +51,14 @@
         "rear_space_m": {
           "description": "차 뒤 빈 공간[m]; 한 번 후진 상한. 현장 입력 (v4 BACK_MAX_M 0.5, 광운대)",
           "value": 0.5
+        },
+        "target_front_x_central_m": {
+          "description": "central 모드 포크 앞끝 정지 목표[m]; 입구면 기준, 안쪽 양수. −0.5 = 입구 0.5 m 앞(실험용 여유). 비우면 −0.5",
+          "value": -0.5
+        },
+        "target_front_x_left_m": {
+          "description": "left 모드 포크 앞끝 정지 목표[m]; 입구면 기준, 안쪽 양수. 1.0 = 입구를 지나 1 m. 비우면 1.0",
+          "value": 1.0
         }
       }
     },
@@ -78,10 +86,6 @@
           "value": 180.0
         }
       }
-    },
-    "mount": {
-      "description": "preflight mount-straight가 작성. 재장착할 때 다시 측정",
-      "value": null
     }
   }
 }

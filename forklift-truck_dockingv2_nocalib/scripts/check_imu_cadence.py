@@ -11,8 +11,14 @@ pinned on the SDK/USB path or on the app.
 Options: --seconds 60 --gyro 200 --accel 100
 Prints, per stream: samples, worst host gap, number of gaps > 100 ms / > 500 ms, and the device-time gap at the
 worst host gap (continuous device time + large host gap = delivered late, not lost).
+Also the PAIRING WAIT (2026-10-20): the app only forwards a gyro sample once an accel sample with a device stamp >= the
+gyro's has arrived (docking/stream.py ImuSynchronizer.drain). If the accel stream's device clock lags the gyro's, gyro
+samples are held on the Python side even though both streams arrive on time. Reported: host wait from each gyro
+sample's arrival until its bracketing accel arrives (p50/p99/max, count > 0.3 s, when), and the accel-minus-gyro device
+stamp offset range. The first 2 s are excluded (timestamp-domain switch at start).
 """
 import argparse
+import collections
 import threading
 import time
 
@@ -30,7 +36,7 @@ def main():
     a = ap.parse_args()
     ctx = rs.context()
     stats = {k: dict(host=[], dev=[], last_host=None, last_dev=None, n=0) for k in ('gyro', 'accel')}
-    lock = threading.Lock()
+    lock = threading.Lock(); pending = collections.deque(); waits = []; offsets = []
 
     def motion(frame):
         if not frame.is_motion_frame():
@@ -43,6 +49,13 @@ def main():
             if s['last_host'] is not None:
                 s['host'].append(now - s['last_host']); s['dev'].append(dev - s['last_dev'])
             s['last_host'] = now; s['last_dev'] = dev
+            if kind == 'gyro':
+                pending.append((dev, now))
+                if stats['accel']['last_dev'] is not None:
+                    offsets.append((now, stats['accel']['last_dev'] - dev))
+            else:
+                while pending and pending[0][0] <= dev:        # this accel brackets these gyro samples
+                    g_dev, g_now = pending.popleft(); waits.append((g_now, now - g_now))
 
     ipipe = rs.pipeline(ctx); ic = rs.config()
     ic.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, a.gyro)
@@ -92,6 +105,16 @@ def main():
             burst = [(round(t, 1), round(1000 * g)) for t, g in zip(np.cumsum(h), h) if g > .3]
             if burst:
                 print('       gaps > 300 ms at (s, ms): %s' % burst[:20])
+        w = np.array([(t - t0, x) for t, x in waits if t - t0 > 2.])
+        o = np.array([(t - t0, x) for t, x in offsets if t - t0 > 2.])
+        if len(w):
+            print('pairing wait (gyro held until a later accel arrives): p50 %.1f ms p99 %.1f ms max %.0f ms | >100 ms: %d, >300 ms: %d | still unpaired at end: %d'
+                  % (1000 * np.median(w[:, 1]), 1000 * np.percentile(w[:, 1], 99), 1000 * w[:, 1].max(), int((w[:, 1] > .1).sum()), int((w[:, 1] > .3).sum()), len(pending)))
+            worst = w[w[:, 1] > .3]
+            if len(worst):
+                print('       waits > 300 ms at (s, ms): %s' % [(round(t, 1), round(1000 * x)) for t, x in worst[:20]])
+        if len(o):
+            print('accel - gyro device stamp offset: min %.1f ms max %.1f ms (negative = accel clock behind gyro)' % (1000 * o[:, 1].min(), 1000 * o[:, 1].max()))
 
 
 if __name__ == '__main__':

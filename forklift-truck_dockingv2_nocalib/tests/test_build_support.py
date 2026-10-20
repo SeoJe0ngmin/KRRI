@@ -47,7 +47,7 @@ class BuildRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'경로'):build.quarantine_generated(ws)
 
     def test_failed_build_blocks_runtime_until_rebuilt(self):
-        with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{'DOCK_V6_WS':d}):
+        with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{'DOCK_WS':d}):
             marker=Path(d)/'.docking_rebuild_pending';marker.touch()
             with self.assertRaisesRegex(RuntimeError,'재빌드가 완료되지'):check_build_ready()
             marker.unlink();check_build_ready()

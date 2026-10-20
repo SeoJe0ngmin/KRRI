@@ -10,7 +10,7 @@ from docking.vio_quality import quality,check_message_schema
 
 
 def packet(t):
-    return dict(quality_version=2,stamp=t,state_stamp=t,epoch=1,arrival=t+1,imu_arrival=t+1,
+    return dict(quality_version=3,stamp=t,state_stamp=t,epoch=1,arrival=t+1,imu_arrival=t+1,
         initialized=True,tracking_valid=True,features=50,continued_features=45,
         correction_applied=True,correction_age_s=0.,msckf_update_features=5,slam_update_features=0,
         zero_velocity_update=False,transport_lag_s=.01,gyro_norm=0.,

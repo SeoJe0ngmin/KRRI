@@ -5,11 +5,13 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 
-HTML='''<!doctype html><html lang="ko"><meta charset="utf-8"><title>Docking v6</title>
-<style>body{background:#101923;color:#e5ecf5;font:16px system-ui;margin:24px}.grid{display:flex;gap:20px;flex-wrap:wrap}img{width:640px;max-width:60vw}pre{white-space:pre-wrap;font-size:13px;max-width:520px}canvas{background:#172634}#status{color:#ffcf75}#fusion{color:#9fd8ff}small{color:#94a4b8}</style>
-<h1>Docking v6 · 관측 기반 재계획</h1><p>준비 완료 후 SSH 터미널 Enter · 정지 s+Enter / Ctrl+C · 읽기 전용 화면</p><p id="status"></p><p id="measures"></p><p id="fusion"></p>
-<div class="grid"><div><img src="/image"><br><canvas id="map" width="640" height="400"></canvas><br><small>입구 기준 평면도: 파란 상자=지금 추정 차량 · 하늘색 궤적=최근 추정 위치 · 흰 점=태그 창으로 앵커 갱신 · 자홍 고리=불가능한 점프를 1초 넘게 고집해 태그를 채택 · 초록 고리=첫 앵커 · 회색 점선=중심선 · 노란 선=계획 후보. 실제 정확도 보장 아님.</small></div>
-<div><canvas id="odom" width="320" height="320"></canvas><br><small>OpenVINS 자기 기준(odom 원점) 궤적 · 화살표=지금 자세 · 추적이 끊겨 원점이 바뀌면 지워짐</small><pre id="info"></pre></div></div>
+HTML='''<!doctype html><html lang="ko"><meta charset="utf-8"><title>Docking</title>
+<style>body{background:#101923;color:#e5ecf5;font:16px system-ui;margin:24px}.grid{display:flex;gap:20px;align-items:flex-start}.grid>div{flex:1 1 0;min-width:0}.grid>div:first-child{flex:2 1 0}img{display:block;width:100%;height:auto}canvas{max-width:100%;height:auto}pre{white-space:pre-wrap;font-size:13px}canvas{background:#172634}#status{color:#ffcf75}#fusion{color:#9fd8ff}small{color:#94a4b8}</style>
+<h1>Docking · 관측 기반 재계획</h1><p>준비 완료 후 SSH 터미널 Enter · 정지 s+Enter / Ctrl+C · 읽기 전용 화면</p><p id="status"></p><p id="measures"></p><p id="fusion"></p>
+<img src="/image">
+<div class="grid"><div><canvas id="map" width="640" height="400"></canvas><br><small>입구 기준 평면도: 파란 상자=지금 추정 차량 · 하늘색 궤적=최근 추정 위치 · 흰 점=태그 창으로 앵커 갱신 · 자홍 고리=불가능한 점프를 1초 넘게 고집해 태그를 채택 · 초록 고리=첫 앵커 · 회색 점선=중심선 · 노란 선=계획 후보. 실제 정확도 보장 아님.</small></div>
+<div><canvas id="odom" width="320" height="320"></canvas><br><small>OpenVINS 자기 기준(odom 원점) 궤적 · 화살표=지금 자세 · 추적이 끊겨 원점이 바뀌면 지워짐</small></div></div>
+<pre id="info"></pre>
 <script>
 let canvas=document.getElementById('map'),c=canvas.getContext('2d'),oc=document.getElementById('odom').getContext('2d');
 let trail=[],events=[],vtrail=[],lastAnchor=null,lastCapture=null,lastEpoch=null;

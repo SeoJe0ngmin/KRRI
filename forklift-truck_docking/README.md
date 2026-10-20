@@ -1,7 +1,7 @@
 # forklift-truck_docking
 
 AprilTag + OpenVINS(IR 스테레오·IMU) 로 지게차를 탑재부에 자동 도킹하는 코드. Jetson Orin Nano 에서 돈다.
-상세: [실행 순서](run.md) · [알고리즘](algorithm.md) · [검사 기록](VALIDATION.md)
+상세: [화면·로그 읽는 법과 주행 흐름](run.md) · [알고리즘](algorithm.md) · [검사 기록](VALIDATION.md)
 
 ## 연결
 
@@ -19,10 +19,18 @@ Host jetson-kw           # 광운대 핫스팟
 
 ## 맥 → Jetson 코드 보내기
 
+명령은 하나. 연결에 따라 `--host` 만 바꾼다.
+
 ```bash
-bash /Users/seojeongmin/krri/forklift-truck_docking/update_jetson.sh --host jetson-wired   # 바뀐 파일만, work/와 common.json 은 안 건드림
-bash /Users/seojeongmin/krri/forklift-truck_docking/update_jetson.sh --host jetson-wired --with-common   # 맥 common.json 으로 덮어쓸 때만
+bash /Users/seojeongmin/krri/forklift-truck_docking/update_jetson.sh --host jetson-wired            # USB 직결
+bash /Users/seojeongmin/krri/forklift-truck_docking/update_jetson.sh --host jetson-kw               # 광운대 핫스팟
+bash /Users/seojeongmin/krri/forklift-truck_docking/update_jetson.sh --host jetson-wired --dry-run  # 바뀔 파일·common.json 차이만 보기
 ```
+
+- 바뀐 파일만 보낸다. `configs/common.json` 은 **맥 것으로 덮는다**(주인은 맥). 덮기 전에 Jetson 것과 다른 줄을 보여 준다.
+- `work/`(로그)와 `configs/mount.json`(Jetson 에서 잰 장착각)은 보내지도 지우지도 않는다.
+- 파이썬·설정만 바뀌었으면 이걸로 끝. C++ 브리지가 바뀐 날만 아래 "브리지 재빌드".
+- Jetson 시계가 1970 년이면(배터리 없음, 인터넷 없이 켰을 때) 배포 중에 맥 시간으로 맞춘다(sudo 비밀번호 한 번). 주행엔 영향 없고 로그 폴더 이름과 빌드에만 관계.
 
 ## Jetson 설치 (한 번)
 
@@ -44,39 +52,84 @@ bash scripts/rebuild_openvins.sh          # 우리 패키지 둘만 다시 컴�
 
 안 하고 돌리면 "OpenVINS 브리지 업데이트 필요" 로 스스로 멈춘다.
 
-## 실행 (Jetson, VS Code Remote-SSH 터미널)
+## 실행 — 현장 5단계 (Jetson, VS Code Remote-SSH 터미널)
+
+화면은 VS Code 에서 8765 포트 전달 → 맥 브라우저 `http://127.0.0.1:8765`. 모든 명령은 `cd /home/jetson/krri/forklift-truck_docking` 에서. 끝낼 땐 Ctrl+C 한 번.
+
+### 0. 맥 — 현장 값 넣고 배포
+
+`configs/common.json` 의 `site` 를 줄자 값으로: 태그 크기(0.3)·태그 중심 높이·카메라 높이·차폭·탑재부 내부 폭·뒤 공간·**좌측 태그 거리 `left_tag_offset_m`**(없으면 left 모드 출발 거부)·카메라→포크 끝. 그 뒤 위 "맥 → Jetson 코드 보내기" 로 배포(common.json 은 맥 것이 Jetson 을 덮는다).
+
+### 1. 점검
 
 ```bash
-cd /home/jetson/krri/forklift-truck_docking
-bash scripts/preflight.sh check --sensor-only                 # 설치·장치 점검, CAN 안 엶
-bash scripts/run_nano.sh measure --view                       # 센서·융합만, CAN 안 엶. 화면 = IR 흑백 + OpenVINS 점. Ctrl+C 로 끝
-bash scripts/run_nano.sh measure --camera-only --view         # OpenVINS 없이 카메라만. 화면 = 컬러 + 태그 사각형
-bash scripts/preflight.sh mount --folder work/<폴더> --write      # 장착각: 태그 정면에 눈대중으로 세우고 30초 가만히 찍은 measure 로그로 계산·저장 (v4 camyaw). CAN 안 엶
-bash scripts/run_nano.sh shadow --mode left --view            # 상태기계만, 차 안 움직임
-bash scripts/run_nano.sh drive --mode left --execute --view      # 실주행(좌측 태그). READY 뒤 Enter → 태그 탐색 → 30초 정차 → 주행. s+Enter / Ctrl+C 정지
+bash scripts/preflight.sh check --sensor-only        # 설치·장치, CAN 안 엶
+bash scripts/run_nano.sh measure --view              # 1분. 화면 = IR 흑백 + OpenVINS 점, 태그가 accepted 로 유지되는지
+grep "\[pipeline\]" $(ls -td work/*/*_measure | head -1)/openvins.log | tail -1   # dropped=0 이면 VIO 정상
+```
+OpenVINS 없이 카메라만 볼 때: `bash scripts/run_nano.sh measure --camera-only --view` (화면 = 컬러 + 태그 사각형).
+
+### 2. 장착각 (카메라를 달 때마다)
+
+차를 태그 **정면**에 세운다. 좌우 치우침은 상관없고 **차 진행축이 탑재부 축과 평행**이면 된다(탑재부 벽에 차체 옆면을 평행하게 대는 게 눈대중보다 정확). 거리 **3.3~4 m**(더 가까우면 태그 윗변이 화면에서 잘림).
+
+```bash
+bash scripts/run_nano.sh measure --view                                      # 30초 넘게 가만히, Ctrl+C
+bash scripts/preflight.sh mount --folder $(ls -td work/*/* | head -1) --write   # 방금 폴더로 장착각 계산 → configs/mount.json (--write 없으면 계산만)
+bash scripts/preflight.sh check --mode left                                  # 현장 값·장착각 서명까지 검사. 여기서 거부되면 drive 도 거부
 ```
 
-화면: VS Code 에서 8765 포트 전달 → 맥 브라우저 `http://127.0.0.1:8765`.
-실행 전 `configs/common.json` 의 태그 크기·높이·카메라 높이·차폭·탑재부 폭·뒤 공간·좌측 태그 거리를 실제 값으로. 장착 yaw 는 `mount` 값으로 시작해 주행 중 좋은 직진마다 다시 배운다.
+### 3. 리허설 (차 안 움직임)
+
+```bash
+bash scripts/run_nano.sh shadow --mode left --view   # READY 뒤 Enter → 탐색 → 30초 정차 → 계획까지 흐르는지
+```
+
+### 4. 실주행
+
+사람은 브레이크 자리. 두 번째 터미널에 `sudo jetson_clocks`(클럭 고정, 선택, 재부팅까지).
+
+```bash
+bash scripts/run_nano.sh drive --mode left --execute --view   # READY 뒤 Enter → 태그 탐색 → 30초 정차 → 주행. 정지 s+Enter / Ctrl+C
+```
+
+### 5. 끝난 뒤 — 줄자 실측 기록
+
+좌우 = (오른쪽 포크↔벽 틈 − 왼쪽 포크↔벽 틈) ÷ 2, 왼쪽 +. 방향 = 한쪽 벽과 차체 틈을 앞·뒤 두 곳에서 재서 atan(차이 ÷ 간격), 왼쪽 +. 종방향 = 입구면에서 포크 끝까지 − 목표(left 1.0 m), 더 들어감 +.
+
+```bash
+bash scripts/run_nano.sh note --folder $(ls -td work/*/* | head -1) --lateral-cm 2.5 --heading-deg -0.4 --longitudinal-cm 0 --memo "1회차"
+```
+
+장착 yaw 는 `mount.json` 값으로 시작해 주행 중 좋은 직진마다 다시 배운다. 포크 정지 목표는 `common.json` 의 `target_front_x_central_m`(−0.5) / `target_front_x_left_m`(1.0), 입구면 기준 안쪽 양수.
 
 ## 로그
 
 ```bash
-ls -t /home/jetson/krri/forklift-truck_docking/work | head -1                       # 가장 최근 판
-scp -r jetson-wired:/home/jetson/krri/forklift-truck_docking/work/<폴더> /Users/seojeongmin/krri/forklift-truck_docking/work/   # 맥으로
+ls -td /home/jetson/krri/forklift-truck_docking/work/*/* | head -1                  # 가장 최근 판
+scp -r jetson-wired:/home/jetson/krri/forklift-truck_docking/work/<날짜> /Users/seojeongmin/krri/forklift-truck_docking/work/   # 그날 전부 맥으로 (판 하나면 <날짜>/<판>)
 ```
 
-`observations.jsonl`(관측 전부), `control.jsonl`(명령·CAN), `pipeline_status.json`(1초마다 센서·GC·프레임 공백), `openvins.log`.
+판 폴더는 `work/<날짜>/<시각>_<id>_<명령>/`(2026-10-20 부터 하루 한 폴더). 안에 `observations.jsonl`(관측 전부), `control.jsonl`(명령·CAN), `pipeline_status.json`(1초마다 센서·GC·프레임 공백), `openvins.log`(브리지; 2초마다 `[pipeline]` 줄).
+
+도착 뒤 줄자 실측은 위 5단계의 `note` 명령으로 `manual_measurement.json` 에 넣는다.
+
+판이 끝나면 브리지 줄 하나로 VIO 가 멀쩡했는지 본다(2026-10-20 기준 정상: `dropped=0`, `imu_lost` 수십 이하, 도착 간격 0.1 s 아래):
+
+```bash
+F=$(ls -td /home/jetson/krri/forklift-truck_docking/work/*/*_measure | head -1)   # drive 면 *_drive
+grep "\[pipeline\]" $F/openvins.log | tail -1      # dropped(버린 영상) · imu_lost/imu_sequence_jumps(빠진 IMU) · imu/image_arrival_gap_max_s(도착 간격 최대)
+```
 
 ## CPU 보기 (Jetson 두 번째 터미널)
 
 ```bash
 tegrastats --interval 1000                                    # 코어별 %, RAM, 온도
-top -d 1 -p $(pgrep -d, -f 'python.* -m docking|docking_openvins/bridge')   # 우리 프로세스만 (%는 코어 수 × 100 이 상한)
+top -d 1 -p $(pgrep -d, -f 'python.* -m docking|multiprocessing.spawn|docking_openvins/bridge')   # 우리 프로세스 셋: 감독(python -m docking)·카메라 워커(multiprocessing.spawn)·브리지. %는 코어 수 × 100 이 상한
 sudo jetson_clocks                                            # 실주행 때 클럭 고정 (재부팅까지)
 ```
 
-## IMU 멈춤 조사 (Jetson, 앱과 무관하게 SDK 만)
+## IMU 전달 점검 (Jetson, 앱과 무관하게 SDK 만 — 2026-10-20 VIO 멈춤 추적에 쓴 도구, 원인은 브리지 수신 QoS 였고 해결됨)
 
 ```bash
 source ~/.venvs/krri/bin/activate
@@ -85,7 +138,7 @@ python scripts/check_imu_cadence.py ir     --seconds 60   # + IR 좌우 640x480@
 python scripts/check_imu_cadence.py full   --seconds 60   # + 컬러 1280x720@30 (주행 구성, depth 끔)
 ```
 
-스트림마다 호스트 도착 간격의 최대·100 ms/500 ms 초과 횟수와, 가장 큰 공백에서의 장치 시각 간격을 찍는다(장치 시각은 이어지는데 호스트 공백만 크면 "늦게 몰아서 옴").
+스트림마다 호스트 도착 간격의 최대·100 ms/500 ms 초과 횟수, 가장 큰 공백에서의 장치 시각 간격, 자이로가 가속도 짝을 기다린 시간(pairing wait)을 찍는다. 카메라·USB 쪽 의심이 생길 때만 쓴다.
 
 ## 코드 검사 (맥, 장치 불필요)
 

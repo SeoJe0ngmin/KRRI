@@ -13,9 +13,9 @@
 #include <vector>
 #include <unistd.h>
 #include <rclcpp/rclcpp.hpp>
-#include <docking_v6_msgs/msg/motion.hpp>
-#include <docking_v6_msgs/msg/stereo.hpp>
-#include <docking_v6_msgs/msg/vio_state.hpp>
+#include <docking_msgs/msg/motion.hpp>
+#include <docking_msgs/msg/stereo.hpp>
+#include <docking_msgs/msg/vio_state.hpp>
 #include <core/VioManager.h>
 #include <core/VioManagerOptions.h>
 #include <state/StateHelper.h>
@@ -26,9 +26,9 @@
 #include <types/Landmark.h>
 #include "quality.hpp"
 
-using Motion=docking_v6_msgs::msg::Motion;
-using Stereo=docking_v6_msgs::msg::Stereo;
-using Output=docking_v6_msgs::msg::VioState;
+using Motion=docking_msgs::msg::Motion;
+using Stereo=docking_msgs::msg::Stereo;
+using Output=docking_msgs::msg::VioState;
 static double seconds(const builtin_interfaces::msg::Time& t) { return t.sec+t.nanosec*1e-9; }
 class Estimator : public ov_msckf::VioManager {
 public:
@@ -68,6 +68,10 @@ class Bridge : public rclcpp::Node {
   Eigen::Matrix4d previous_T_=Eigen::Matrix4d::Identity();
   double last_received_imu_=-1,last_received_image_=-1,max_age_=.3;
   double imu_max_gap_=.05,imu_short_gap_=.1,largest_imu_gap_=0; uint64_t imu_gaps_=0,imu_sequence_jumps_=0,imu_reversals_=0;
+  // 2026-10-20 receive-side evidence: DDS message-lost events per subscription and the worst host-time gap between
+  // consecutive callbacks per 2 s window (a third subscriber saw the imu topic at <= 0.08 s while this reader stalled ~1 s).
+  uint64_t imu_lost_=0,stereo_lost_=0; double imu_arrival_gap_max_=0,image_arrival_gap_max_=0;
+  std::chrono::steady_clock::time_point last_imu_arrival_{},last_image_arrival_{}; bool have_imu_arrival_=false,have_image_arrival_=false;
   std::atomic<double> last_fed_imu_{-1};
   std::atomic<uint64_t> states_published_{0};
   std::atomic<const char*> stage_{"waiting_for_input"};
@@ -136,7 +140,7 @@ class Bridge : public rclcpp::Node {
   }
   void publish(const Stereo& m) {
     Output out;out.header=m.header;out.header.frame_id="odom";out.epoch=m.epoch;
-    out.quality_version=2;out.correction_age_s=-1;   // 2: IMU gaps counted, not fatal (2026-10-19)
+    out.quality_version=3;out.correction_age_s=-1;   // 2: IMU gaps counted, not fatal (2026-10-19); 3: imu best-effort + loss/arrival counters (2026-10-20)
     out.last_imu_stamp=last_fed_imu_;out.initialized=estimator_->filter_initialized();
     {std::lock_guard<std::mutex> lock(mutex_);out.stereo_dropped=dropped_;out.fault=fault_;}
     auto tracks=estimator_->tracks();out.features=tracks.size();out.zero_velocity_update=estimator_->zupt();
@@ -232,8 +236,22 @@ public:
       throw std::runtime_error("invalid_stereo_fej_configuration");
     estimator_=std::make_unique<Estimator>(params);
     output_=create_publisher<Output>("vio_state",rclcpp::QoS(8).reliable());
-    imu_sub_=create_subscription<Motion>("imu",rclcpp::QoS(2048).reliable(),[this](Motion::ConstSharedPtr m) {
-      std::lock_guard<std::mutex> lock(mutex_);if(!epoch_ok(m->epoch))return;
+    // 2026-10-20: BEST_EFFORT for the IMU. Desk runs showed this reader holding IMU samples ~1 s and then bursting
+    // (device stamps continuous, no sequence jumps) while a third reliable subscriber received the same topic within
+    // 0.08 s; each hold made the worker drop 25-50 images (max_input_age) and left the VIO output empty for 1-2 s.
+    // A reliable reader delivers in order and waits for a repair when a sample is missing; best-effort passes the next
+    // sample at once. A missing sample shows up in imu_sequence_jumps/imu_gaps (counted, not fatal) and the estimator
+    // integrates across the 5 ms hole. The Python publisher stays reliable (compatible).
+    rclcpp::SubscriptionOptions imu_opts;
+    imu_opts.event_callbacks.message_lost_callback=[this](rclcpp::QOSMessageLostInfo& e){std::lock_guard<std::mutex> lock(mutex_);imu_lost_+=e.total_count_change;};
+    rclcpp::SubscriptionOptions image_opts;
+    image_opts.event_callbacks.message_lost_callback=[this](rclcpp::QOSMessageLostInfo& e){std::lock_guard<std::mutex> lock(mutex_);stereo_lost_+=e.total_count_change;};
+    imu_sub_=create_subscription<Motion>("imu",rclcpp::QoS(2048).best_effort(),[this](Motion::ConstSharedPtr m) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      auto now=std::chrono::steady_clock::now();
+      if(have_imu_arrival_){double g=std::chrono::duration<double>(now-last_imu_arrival_).count();if(g>imu_arrival_gap_max_)imu_arrival_gap_max_=g;}
+      last_imu_arrival_=now;have_imu_arrival_=true;
+      if(!epoch_ok(m->epoch))return;
       double t=seconds(m->header.stamp);
       double gap=last_received_imu_>=0?t-last_received_imu_:0.;
       // 2026-10-19 (user decision, apriltag_v4 rule): IMU gaps are counted, never fatal. The vehicle stops only
@@ -244,25 +262,31 @@ public:
       sequence_=m->sequence;last_received_imu_=t;
       if(imus_.size()>=4096)fault_="native_imu_overflow";
       if(fault_.empty())imus_.push_back(m);wake_.notify_one();
-    });
+    },imu_opts);
     image_sub_=create_subscription<Stereo>("stereo",rclcpp::QoS(2).reliable(),[this](Stereo::ConstSharedPtr m) {
-      std::lock_guard<std::mutex> lock(mutex_);if(!epoch_ok(m->epoch))return;
+      std::lock_guard<std::mutex> lock(mutex_);
+      auto now=std::chrono::steady_clock::now();
+      if(have_image_arrival_){double g=std::chrono::duration<double>(now-last_image_arrival_).count();if(g>image_arrival_gap_max_)image_arrival_gap_max_=g;}
+      last_image_arrival_=now;have_image_arrival_=true;
+      if(!epoch_ok(m->epoch))return;
       double t=seconds(m->header.stamp);
       if(t<=last_received_image_)fault_="stereo_clock_reversed";
       last_received_image_=t;if(!fault_.empty())return;
       if(images_.size()>=2){images_.pop_front();dropped_++;}
       images_.push_back({m,std::chrono::steady_clock::now()});wake_.notify_one();
-    });
+    },image_opts);
     // Runs on the ROS executor, independently of the estimator worker. A stuck
     // initializer/tracker therefore leaves useful evidence instead of silence.
     health_timer_=create_wall_timer(std::chrono::seconds(2),[this]{
       std::lock_guard<std::mutex> lock(mutex_);
-      fprintf(stderr,"[pipeline] stage=%s imu_sequence=%llu imu_received=%.6f imu_fed=%.6f image_received=%.6f imu_queue=%zu image_queue=%zu dropped=%llu outputs=%llu state_subscribers=%zu imu_gaps=%llu largest_imu_gap_s=%.3f imu_sequence_jumps=%llu imu_reversals=%llu fault=%s\n",
+      fprintf(stderr,"[pipeline] stage=%s imu_sequence=%llu imu_received=%.6f imu_fed=%.6f image_received=%.6f imu_queue=%zu image_queue=%zu dropped=%llu outputs=%llu state_subscribers=%zu imu_gaps=%llu largest_imu_gap_s=%.3f imu_sequence_jumps=%llu imu_reversals=%llu imu_lost=%llu stereo_lost=%llu imu_arrival_gap_max_s=%.3f image_arrival_gap_max_s=%.3f fault=%s\n",
         stage_.load(),static_cast<unsigned long long>(sequence_),last_received_imu_,last_fed_imu_.load(),
         last_received_image_,imus_.size(),images_.size(),static_cast<unsigned long long>(dropped_),
         static_cast<unsigned long long>(states_published_.load()),output_->get_subscription_count(),
         static_cast<unsigned long long>(imu_gaps_),largest_imu_gap_,static_cast<unsigned long long>(imu_sequence_jumps_),
-        static_cast<unsigned long long>(imu_reversals_),fault_.c_str());
+        static_cast<unsigned long long>(imu_reversals_),static_cast<unsigned long long>(imu_lost_),static_cast<unsigned long long>(stereo_lost_),
+        imu_arrival_gap_max_,image_arrival_gap_max_,fault_.c_str());
+      imu_arrival_gap_max_=0;image_arrival_gap_max_=0;   // per 2 s window
     });
     worker_=std::thread([this]{work();});
   }

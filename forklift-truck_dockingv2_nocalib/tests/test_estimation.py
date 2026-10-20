@@ -30,7 +30,7 @@ class Estimation(unittest.TestCase):
     def packet(self,t,x,epoch=1):
         T=np.eye(4);T[0,3]=x
         previous=getattr(self,'last_packet',(t,x));D=np.eye(4);D[0,3]=x-previous[1];self.last_packet=(t,x)
-        return dict(quality_version=2,tracking_valid=True,continued_features=50,state_stamp=t,
+        return dict(quality_version=3,tracking_valid=True,continued_features=50,state_stamp=t,
             msckf_update_features=10,slam_update_features=0,correction_applied=True,correction_age_s=0.,zero_velocity_update=False,
             delta_valid=True,delta_from_stamp=previous[0],relative_transform=D,relative_covariance=np.eye(6)*1e-9,stamp=t,epoch=epoch,arrival=t+1,imu_arrival=t+1,features=50,initialized=True,visual_valid=True,
             T_odom_imu=T,covariance=np.eye(6)*1e-5,transport_lag_s=.01,gyro_norm=0.)

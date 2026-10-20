@@ -88,11 +88,16 @@ def load(path=COMMON, mode='central', require_mount=False):
     sensor['calibration']['mount_valid']=good
     sensor['calibration']['T_body_ir']=sensor['calibration']['T_body_camera']
     sensor['site']=copy.deepcopy(site)
-    sensor['target_front_x']=-.5 if mode=='central' else 1.
+    # Fork-tip stop target per mode (2026-10-20 moved to common.json site.target_front_x_{central,left}_m; absent/null -> the
+    # previous code constants -0.5 central / +1.0 left).
+    target=site.get('target_front_x_central_m') if mode=='central' else site.get('target_front_x_left_m')
+    if target is None:target=-.5 if mode=='central' else 1.
+    if not number(target):raise ValueError('invalid target_front_x_'+mode+'_m')
+    sensor['target_front_x']=float(target)
     sensor['tuning']=t
     from .uncertainty import covariance
     covariance(sensor['calibration']['mount_covariance'],6)
     if require_mount and not sensor['tag']['enabled']:raise ValueError('drive/shadow requires AprilTag')
     return dict(site=site,tuning=t,sensor=sensor,mode=mode,pivot=[.465,-.112],
                 pivot_source='apriltag_v4 historical estimate; candidate planning only',
-                target_front_x=-.5 if mode=='central' else 1.,common_path=str(path))
+                target_front_x=float(target),common_path=str(path))

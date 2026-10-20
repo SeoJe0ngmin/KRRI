@@ -3,7 +3,7 @@
 # Isolated RSUSB build; no kernel patch, CUDA change, or global SDK replacement.
 set -euo pipefail
 DOCK_PREFIX="${DOCK_RS_PREFIX:-$HOME/.local/share/krri/realsense}"
-DOCK_ENV="${DOCK_V6_ENV:-$HOME/.venvs/krri}"
+DOCK_ENV="${DOCK_VENV:-$HOME/.venvs/krri}"
 DOCK_SRC="$DOCK_PREFIX/source"
 [[ -x "$DOCK_ENV/bin/python" ]] || { echo 'install_jetson.sh를 먼저 실행하세요.' >&2; exit 2; }
 sudo apt-get install -y build-essential cmake git libusb-1.0-0-dev libudev-dev libssl-dev pkg-config python3-dev

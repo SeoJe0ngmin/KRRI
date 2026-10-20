@@ -1,7 +1,7 @@
 """Tracking, correction cadence and local control eligibility are separate facts."""
 import math
 
-QUALITY_VERSION=2   # 2 (2026-10-19): bridge counts IMU gaps instead of faulting; older binaries are refused
+QUALITY_VERSION=3   # 2 (2026-10-19): bridge counts IMU gaps instead of faulting; 3 (2026-10-20): imu subscription best-effort + loss/arrival counters; older binaries are refused
 QUALITY_FIELDS=('quality_version','tracking_valid','continued_features','state_stamp',
                 'msckf_update_features','slam_update_features','correction_applied','correction_age_s')
 REBUILD_MESSAGE='OpenVINS 브리지 업데이트 필요: bash scripts/rebuild_openvins.sh'

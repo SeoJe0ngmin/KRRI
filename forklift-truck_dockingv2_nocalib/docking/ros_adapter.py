@@ -16,7 +16,7 @@ def set_stamp(stamp,t):
 
 
 def check_build_ready():
-    ws=Path(os.environ.get('DOCK_V6_WS',str(Path.home()/'.local/share/krri/ros_ws')))   # environment.sh exports the resolved one
+    ws=Path(os.environ.get('DOCK_WS',str(Path.home()/'.local/share/krri/ros_ws')))   # environment.sh exports the resolved one
     if (ws/'.docking_rebuild_pending').exists():
         raise RuntimeError('OpenVINS 재빌드가 완료되지 않았습니다. 이전 실행 파일은 사용하지 않습니다. '
                            '시계·빌드 오류 해결 후 bash scripts/rebuild_openvins.sh')
@@ -29,7 +29,7 @@ class Bridge:
             import rclpy
             from rclpy.executors import SingleThreadedExecutor
             from rclpy.qos import QoSProfile,ReliabilityPolicy
-            from docking_v6_msgs.msg import Motion,Stereo,VioState
+            from docking_msgs.msg import Motion,Stereo,VioState
             from sensor_msgs.msg import Image
         except ImportError as e:
             raise RuntimeError('OpenVINS/ROS 2 설치 또는 환경 로딩 필요: scripts/install_jetson.sh, scripts/run_nano.sh. 카메라 확인은 measure --camera-only 사용.') from e

@@ -10,7 +10,7 @@ from .config import COMMON,load
 
 def check(args):
     modules=['numpy','cv2','scipy','yaml','pupil_apriltags','pyrealsense2']
-    if not args.camera_only:modules+=['rclpy','docking_v6_msgs.msg']
+    if not args.camera_only:modules+=['rclpy','docking_msgs.msg']
     if not args.sensor_only:modules+=['canlib.canlib']
     if args.profile=='mapped':modules+=['rtabmap_msgs.msg','tf2_ros']
     failed=[]
@@ -24,7 +24,7 @@ def check(args):
     if not args.camera_only:
         try:
             from .vio_quality import check_message_schema
-            from docking_v6_msgs.msg import VioState
+            from docking_msgs.msg import VioState
             check_message_schema(VioState)
             from ament_index_python.packages import get_package_prefix
             prefix=Path(get_package_prefix('docking_openvins'))

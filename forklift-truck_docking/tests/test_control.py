@@ -75,6 +75,9 @@ class Control(unittest.TestCase):
         x.step(5.1,observation(5.1,world=(-4,0,0),local=(1,0,0)))
         self.assertEqual(x.request['pose'],[-4,0,0])
         self.assertGreater(x.responses.data['forward']['coast'],.4)
+        ev=[e for e in x.status()['events'] if e['event']=='step_done'];self.assertEqual(len(ev),1)   # 2026-10-20 per-step record
+        e=ev[0];self.assertEqual(e['command'],'forward');self.assertEqual(e['unit'],'m');self.assertAlmostEqual(e['coast'],.8,places=6)
+        self.assertAlmostEqual(e['stop_progress'],.2,places=6);self.assertIsNotNone(e['stop_reserve']);self.assertTrue(e['vio_ok']);self.assertIn('learned',e)
     def test_stale_and_generation_changes_stop_without_integrating_commands(self):
         for fault in ['stale','generation','epoch','imu','unusable','nonfinite']:
             with self.subTest(fault=fault):

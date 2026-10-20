@@ -10,7 +10,7 @@ from .config import COMMON,load,save_mount
 
 def check(args):
     modules=['numpy','cv2','scipy','yaml','pupil_apriltags','pyrealsense2']
-    if not args.camera_only:modules+=['rclpy','docking_v6_msgs.msg']
+    if not args.camera_only:modules+=['rclpy','docking_msgs.msg']
     if not args.sensor_only:modules+=['canlib.canlib']
     if args.profile=='mapped':modules+=['rtabmap_msgs.msg','tf2_ros']
     failed=[]
@@ -24,7 +24,7 @@ def check(args):
     if not args.camera_only:
         try:
             from .vio_quality import check_message_schema
-            from docking_v6_msgs.msg import VioState
+            from docking_msgs.msg import VioState
             check_message_schema(VioState)
             from ament_index_python.packages import get_package_prefix
             prefix=Path(get_package_prefix('docking_openvins'))
@@ -56,8 +56,8 @@ def mount(args):
         report['yaw_left_deg'],report['pitch_down_deg'],report['roll_deg'],report['pitch_roll_source'],report['rotation_std_deg'],report['rest_s'],report['blocks']))
     if len(report['warnings'])>1:print('경고(기록만): '+', '.join(report['warnings'][1:]))
     if args.write:
-        save_mount(args.common,report,before);print('common.json 에 저장: '+args.common)
-    else:print('저장 안 함 (--write 를 주면 common.json 에 저장). 보고서: '+str(folder/'mount_report.json'))
+        out=save_mount(args.common,report,before);print('장착각 저장: '+str(out)+' (common.json 은 그대로)')
+    else:print('저장 안 함 (--write 를 주면 configs/mount.json 에 저장). 보고서: '+str(folder/'mount_report.json'))
 
 
 def parser():
@@ -65,7 +65,7 @@ def parser():
     p.add_argument('command',choices=['check','mount']);p.add_argument('--common',default=str(COMMON))
     p.add_argument('--mode',choices=['central','left'],default='central');p.add_argument('--sensor-only',action='store_true')
     p.add_argument('--camera-only',action='store_true');p.add_argument('--profile',choices=['core','mapped'],default='core')
-    p.add_argument('--folder',help='mount: 태그 정면에 세우고 30초 이상 가만히 찍은 measure 폴더');p.add_argument('--write',action='store_true',help='mount: 결과를 common.json 에 저장')
+    p.add_argument('--folder',help='mount: 태그 정면에 세우고 30초 이상 가만히 찍은 measure 폴더');p.add_argument('--write',action='store_true',help='mount: 결과를 configs/mount.json 에 저장 (common.json 은 그대로)')
     return p
 
 if __name__=='__main__':

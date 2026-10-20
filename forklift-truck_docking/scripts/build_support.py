@@ -5,7 +5,7 @@ from pathlib import Path
 import time
 import uuid
 
-PACKAGES = ('docking_v6_msgs', 'docking_openvins')
+PACKAGES = ('docking_msgs', 'docking_openvins')
 
 
 def check_clock(source, now=None):

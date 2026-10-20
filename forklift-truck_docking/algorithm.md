@@ -24,7 +24,7 @@ BASALT, VINS-Fusion, cuVSLAM, 별도 GTSAM smoother, 새 MPC/Reeds-Shepp 제어�
 한 Python 프로세스만 카메라를 소유한다. 같은 RealSense의 Motion Module과 영상 센서를 각각 SDK pipeline으로 열되 다른 프로그램이 장치를 중복 열지 않는다.
 
 - IR 좌/우 640×480, 컬러 1280×720, depth 640×480, 30Hz 요청.
-- 자이로 200Hz, 가속도 100Hz 요청. 가속도를 자이로 좌표계로 회전하고 양옆 표본으로 자이로 시각에 보간한다. 누락·역행은 세고 계속 간다(2026-10-19, v4 규칙; 3초 넘게 안 오면 정지 — `imu_age_s`, 2026-10-20 1→3 s). 큐 초과만 오류다.
+- 자이로 200Hz, 가속도 100Hz 요청. 가속도를 자이로 좌표계로 회전하고 양옆 표본으로 자이로 시각에 보간한다. 누락·역행은 세고 계속 간다(2026-10-19, v4 규칙; 3초 넘게 안 오면 정지 — `imu_age_s`, 2026-10-20 1→3 s). 브리지의 IMU 구독은 best-effort(2026-10-20, 아래 검사 기록): 빠진 표본을 기다리지 않고 다음 표본을 바로 넣는다. 큐 초과만 오류다.
 - IR stereo는 SDK extrinsics와 실제 intrinsics로 rectification한다. OpenVINS에는 rectified pinhole과 그에 맞게 회전된 camera←IMU 변환을 전달한다. 임의 D455 예제 숫자를 복사하지 않는다.
 - 프레임 hardware clock을 검사하고 dt는 device seconds로 계산한다. host monotonic은 지연/신선도 검사에만 쓴다. 장치 벽시계가 1970년이어도 적분 시간축을 대체하지 않는다.
 - stereo 쌍의 실제 시각 차가 2ms를 넘으면 거부한다. 컬러 측정은 별도 촬영 시각에 맞춰 VIO 이력에서 보간한다. depth와 컬러 시간 차가 큰 경우 depth 보조 검사는 생략한다.

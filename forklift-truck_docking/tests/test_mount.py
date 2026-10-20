@@ -39,7 +39,7 @@ class MountTests(unittest.TestCase):
             (folder/'device.json').write_text(json.dumps(dict(T_left_color=np.eye(4).tolist(),raw_models=dict(color=dict(serial='SIM'),left=dict(serial='SIM')))))
             common=Path(d)/'common.json';shutil.copy(COMMON,common)
             mount(SimpleNamespace(folder=str(folder),common=str(common),mode='central',write=True))
-            saved=json.loads(common.read_text())['fields']['mount']['value']
+            saved=json.loads((Path(d)/'mount.json').read_text());self.assertNotIn('mount',json.loads(common.read_text())['fields'])
             self.assertAlmostEqual(saved['yaw_left_deg'],7.,places=3);self.assertEqual(saved['measured_stream'],'color_converted_to_raw_left_ir')
             self.assertTrue(load(common,'central',require_mount=True)['sensor']['calibration']['mount_valid'])
 

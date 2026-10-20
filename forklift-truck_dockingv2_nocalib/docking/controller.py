@@ -107,6 +107,18 @@ class Controller:
         delta=p[:2]-start[:2];signed=float(delta @ [math.cos(start[2]),math.sin(start[2])])
         return -signed if a['command']=='backward' else signed
 
+    def step_event(self,now,b,end,vio_ok):
+        """One line per executed step (2026-10-20): what was commanded, what the stop decision saw, what the vehicle
+        actually did after the stop command. Record only; the learned response (planner.Responses) is unchanged."""
+        turn='rotate' in b['command'];learned=self.responses.get(b['command'])
+        self.events.append(dict(t=now,event='step_done',command=b['command'],after=b.get('after'),unit='rad' if turn else 'm',
+            target=b.get('target'),stop_progress=b.get('stop_progress'),end_progress=end,
+            coast=None if end is None or b.get('stop_progress') is None else end-b['stop_progress'],
+            active_s=b['stop_time']-b['started'],dead_s=(b['motion_start']-b['started']) if b.get('motion_start') else None,
+            settle_s=now-b['stop_time'],stop_reserve=b.get('stop_reserve'),stop_remaining_m=b.get('stop_remaining_m'),
+            stop_obs_age_s=b.get('stop_obs_age_s'),stop_coast_est=b.get('stop_coast_est'),speed_est=b.get('speed'),
+            timed=bool(b.get('timed')),vio_ok=bool(vio_ok),learned=dict(speed=learned['speed'],coast=learned['coast'],startup=learned['startup'],n=learned['n'])))
+
     def stop(self,now,post='PLAN'):
         self.command='stop';self.state='SETTLE';self.stop_at=now;self.post_settle=post
         if self.action:self.brake=dict(self.action,stop_progress=self.action['progress'],stop_time=now,motion_start=self.motion_start)
@@ -220,7 +232,11 @@ class Controller:
             # only after motion has actually been observed, never before the vehicle starts.
             reached=(not search and not turn and a['command']!='backward' and remaining(o['pose'],self.cfg)<=reserve)
             if a.get('blind'):reached=False   # the blind leg ends on VIO progress only; the dock-frame pose is not re-judged
-            if self.motion_start is not None and (a['progress']>=a['target']-reserve or reached):self.stop(now,a['after'] if a['after'] in ('SEARCH','COMPLETE') else 'PLAN')
+            if self.motion_start is not None and (a['progress']>=a['target']-reserve or reached):
+                # Stop-decision inputs travel with the brake record into the step_done event (2026-10-20 post-run analysis).
+                a.update(stop_reserve=float(reserve),stop_obs_age_s=float(now-o['arrival']),stop_coast_est=float(response['coast']),
+                         stop_remaining_m=float(remaining(o['pose'],self.cfg)) if o.get('usable') and o.get('pose') is not None else None)
+                self.stop(now,a['after'] if a['after'] in ('SEARCH','COMPLETE') else 'PLAN')
             return self.status()
         self.command='stop'
         if self.state=='SETTLE':
@@ -233,6 +249,7 @@ class Controller:
                     end=self.progress(o)
                     self.responses.observe(b['command'],max(0,b['stop_progress']),b['stop_time']-b['started'],max(0,end-b['stop_progress']),
                         dead_s=(b['motion_start']-b['started']) if b.get('motion_start') else None)
+                if b:self.step_event(now,b,self.progress(o) if vio_ok else None,vio_ok)
                 self.final_report=dict(ended_by='timed_fallback' if b.get('timed') else 'vio_progress',target_m=b.get('target'),
                     vio_progress_m=self.progress(o) if vio_ok else None,
                     remaining_m=float(remaining(o['pose'],self.cfg)) if usable else None,
@@ -247,6 +264,8 @@ class Controller:
                     if b['after']=='SEARCH':self.sweep+=max(0,end)
                     self.responses.observe(b['command'],max(0,b['stop_progress']),b['stop_time']-b['started'],max(0,end-b['stop_progress']),
                         dead_s=(b['motion_start']-b['started']) if b.get('motion_start') else None)
+                    self.step_event(now,b,end,True)
+                elif self.brake:self.step_event(now,self.brake,None,False)   # tracking reset during the settle: no measured coast
                 self.brake=None
                 self.action=None
                 if self.post_settle=='SEARCH_LIMIT':return self.fault('search_360_exhausted')

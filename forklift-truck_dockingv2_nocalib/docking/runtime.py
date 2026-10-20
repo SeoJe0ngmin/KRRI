@@ -51,7 +51,18 @@ def advance_capture(previous,update):
     if previous is not None and update['capture_id']<=previous:raise RuntimeError('nonmonotonic observation')
     return update['capture_id']
 
+def note(args):
+    """Attach a tape-measured result to a run folder (2026-10-20): work/<run>/manual_measurement.json, one entry per call."""
+    folder=Path(args.folder)
+    if not (folder/'observations.jsonl').exists():raise SystemExit('판 폴더가 아닙니다 (observations.jsonl 없음): '+str(folder))
+    path=folder/'manual_measurement.json'
+    entries=json.loads(path.read_text()) if path.exists() else []
+    entries.append(dict(written_at=time.strftime('%Y-%m-%dT%H:%M:%S'),fork_lateral_cm=args.lateral_cm,heading_deg=args.heading_deg,
+                        longitudinal_cm=args.longitudinal_cm,memo=args.memo,sign='좌우 왼쪽 +, 방향 왼쪽 +, 종방향 더 들어감 +'))
+    path.write_text(json.dumps(entries,ensure_ascii=False,indent=2)+'\n');print('기록: '+str(path));return 0
+
 def run(args,cfg_override=None,stop_when=None):
+    if getattr(args,'command',None)=='note':return note(args)
     """Retry only recoverable IMU acquisition faults in measurement mode.
 
     Each attempt owns new processes/queues and an independent output directory.
@@ -90,7 +101,8 @@ def _run_once(args,cfg_override=None,stop_when=None):
         check_build_ready()
     if live and (not args.execute or not sys.stdin.isatty()):raise ValueError('실주행은 --execute와 대화형 SSH 터미널이 필요합니다')
     cut=None
-    output=Path(args.output) if args.output else WORK/(time.strftime('%Y%m%d_%H%M%S')+'_'+uuid.uuid4().hex[:6]+'_'+args.command)
+    # work/<YYYYMMDD>/<HHMMSS>_<id>_<command>/ (2026-10-20 user request: one folder per day)
+    output=Path(args.output) if args.output else WORK/time.strftime('%Y%m%d')/(time.strftime('%H%M%S')+'_'+uuid.uuid4().hex[:6]+'_'+args.command)
     output.mkdir(parents=True,exist_ok=False)
     (output/'config_used.json').write_text(json.dumps(cfg,ensure_ascii=False,indent=2))
     ctx=mp.get_context('spawn');stop=ctx.Event();results=ctx.Queue(1);previews=ctx.Queue(1);setup=ctx.Queue(1)
@@ -189,11 +201,13 @@ def _run_once(args,cfg_override=None,stop_when=None):
                         lateral_m=p[1],heading_deg=p[2]*180/3.141592653589793,
                         fork_tip=front(p,cfg).tolist(),predicted_arrival_y_m=float(arrival_y(p,cfg)))
                     if not math.isfinite(geometry['predicted_arrival_y_m']):geometry['predicted_arrival_y_m']=None
-                dash.update(dict(mode=args.command,controller=status,observation=obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x']),control_recording=rec.status()),drain(previews))
+                dash.update(dict(mode=args.command,controller=status,observation=obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x'],mode=cfg['mode']),control_recording=rec.status()),drain(previews))
             if now-last_print>=2:
                 perf=(obs or {}).get('performance',{})
                 odom=(obs or {}).get('odom',{})
-                console.write('%s | %s | camera %.1f / process %.1f fps | odom %s: %s | %s'%(status['state'],status['command'],perf.get('camera_fps',0),perf.get('processed_fps',0),odom.get('ok',False),odom.get('reason','sensor_starting'),status.get('reason','')));last_print=now
+                tag=(obs or {}).get('tag') or {};tf=(obs or {}).get('tag_fusion') or {}
+                tag_text=(tag.get('reason') or 'no_tag')+(' %.2fm'%tf['range_m'] if isinstance(tf.get('range_m'),(int,float)) else '')   # 2026-10-20: tag state on the terminal too
+                console.write('%s | %s | camera %.1f / process %.1f fps | odom %s: %s | tag %s | %s'%(status['state'],status['command'],perf.get('camera_fps',0),perf.get('processed_fps',0),odom.get('ok',False),odom.get('reason','sensor_starting'),tag_text,status.get('reason','')));last_print=now
             if status['state'] in ('FAULT','COMPLETE'):terminal=status.get('reason',status['state']);break
             if update is not None and stop_when and stop_when(update):terminal='measurement_complete';break
             if args.seconds and now-t0>=args.seconds:terminal='requested_duration';break
@@ -228,7 +242,9 @@ def _run_once(args,cfg_override=None,stop_when=None):
 
 def parser():
     p=argparse.ArgumentParser(description='v6 OpenVINS IR stereo/IMU + color AprilTag docking')
-    p.add_argument('command',choices=['measure','shadow','drive'])
+    p.add_argument('command',choices=['measure','shadow','drive','note'])
+    p.add_argument('--folder',help='note: 판 폴더 (work/<시각>_drive)');p.add_argument('--lateral-cm',type=float,help='note: 줄자로 잰 포크 끝 좌우 [cm], 왼쪽 +')
+    p.add_argument('--heading-deg',type=float,help='note: 잰 방향 [deg], 왼쪽 +');p.add_argument('--longitudinal-cm',type=float,help='note: 목표 대비 종방향 [cm], 더 들어감 +');p.add_argument('--memo',default='')
     p.add_argument('--common',default=str(COMMON));p.add_argument('--mode',choices=['central','left'],default='central')
     p.add_argument('--seconds',type=float,default=0);p.add_argument('--view',action='store_true');p.add_argument('--port',type=int,default=8765)
     p.add_argument('--execute',action='store_true');p.add_argument('--output')

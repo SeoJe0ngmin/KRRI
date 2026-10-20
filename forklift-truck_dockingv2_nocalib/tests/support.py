@@ -46,7 +46,7 @@ class VioSource:
         if self.previous is None:D=np.eye(4);delta_from=t-.1
         else:D=inverse(self.previous[1])@T;delta_from=self.previous[0]
         self.previous=(t,T)
-        p=dict(quality_version=2,tracking_valid=True,continued_features=50,state_stamp=t,
+        p=dict(quality_version=3,tracking_valid=True,continued_features=50,state_stamp=t,
             msckf_update_features=10,slam_update_features=0,correction_applied=True,correction_age_s=0.,zero_velocity_update=False,
             delta_valid=True,delta_from_stamp=delta_from,relative_transform=D,relative_covariance=np.eye(6)*1e-8,stamp=t,epoch=self.epoch,
             arrival=t+.02,imu_arrival=t+.02,features=50,initialized=True,visual_valid=True,

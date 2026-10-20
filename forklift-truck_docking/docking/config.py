@@ -9,6 +9,7 @@ from .frames import R_REFERENCE_TAG
 
 ROOT=Path(__file__).resolve().parents[1]
 COMMON=ROOT/'configs/common.json'
+MOUNT=ROOT/'configs/mount.json'   # measured on the Jetson by preflight mount --write; deploys never touch it (2026-10-20)
 WORK=ROOT/'work'   # logs stay inside this folder; update_jetson.sh excludes work/ from --delete
 
 TUNING=dict(preparation_s=5.,preparation_timeout_s=180.,mission_timeout_s=600.,   # before Enter: OpenVINS up + gyro still 5 s (user choice 2026-10-19; the floor would be ~2 s = OpenVINS init window); the 30 s baseline (baseline_s) comes after Enter and after the tag search
@@ -37,6 +38,16 @@ def decode(node):
     if set(node)=={'description','value'}: return node['value']
     if set(node)=={'description','fields'}: return {k:decode(v) for k,v in node['fields'].items()}
     raise ValueError('설정은 description/value 또는 description/fields 형식이어야 합니다')
+
+def mount_path(common_path):
+    return Path(common_path).with_name('mount.json')
+
+def read_mount(common_path, decoded):
+    """configs/mount.json beside common.json (2026-10-20); falls back to the pre-split 'mount' field inside common.json."""
+    p=mount_path(common_path)
+    if p.exists():
+        m=json.loads(p.read_text());return m if isinstance(m,dict) and m else None
+    return decoded.get('mount') or None
 
 def mount_signature(site):
     keys=('tag_id','tag_size_m','tag_height_m','camera_height_m','camera_lateral_m')
@@ -75,7 +86,7 @@ def load(path=COMMON, mode='central', require_mount=False):
     sensor['tag'].update(id=site['tag_id'],size_m=site['tag_size_m'])
     sensor['calibration']={}
     sensor['rig']=dict(tag_height_m=site['tag_height_m'],camera_height_m=site['camera_height_m'],camera_to_fork_tip_m=site['camera_to_fork_tip_m'])
-    mount=c['mount']
+    mount=read_mount(path,c)
     good=bool(mount and mount.get('usable') and mount.get('input_signature')==mount_signature(site))
     if require_mount and not good:raise ValueError('새 장착 기준 측정 필요: preflight.sh mount')
     if good:
@@ -101,14 +112,19 @@ def load(path=COMMON, mode='central', require_mount=False):
     sensor['calibration']['mount_valid']=good
     sensor['calibration']['T_body_ir']=sensor['calibration']['T_body_camera']
     sensor['site']=copy.deepcopy(site)
-    sensor['target_front_x']=-.5 if mode=='central' else 1.
+    # Fork-tip stop target per mode (2026-10-20 moved to common.json site.target_front_x_{central,left}_m; absent/null -> the
+    # previous code constants -0.5 central / +1.0 left).
+    target=site.get('target_front_x_central_m') if mode=='central' else site.get('target_front_x_left_m')
+    if target is None:target=-.5 if mode=='central' else 1.
+    if not number(target):raise ValueError('invalid target_front_x_'+mode+'_m')
+    sensor['target_front_x']=float(target)
     sensor['tuning']=t
     from .uncertainty import covariance
     covariance(sensor['calibration']['mount_covariance'],6)
     if require_mount and not sensor['tag']['enabled']:raise ValueError('drive/shadow requires AprilTag')
     return dict(site=site,tuning=t,sensor=sensor,mode=mode,pivot=[.465,-.112],
                 pivot_source='apriltag_v4 historical estimate; candidate planning only',
-                target_front_x=-.5 if mode=='central' else 1.,common_path=str(path))
+                target_front_x=float(target),common_path=str(path))
 
 def save_mount(path, report, expected):
     path=Path(path)
@@ -116,5 +132,7 @@ def save_mount(path, report, expected):
     doc=json.loads(expected);site=decode(doc)['site']
     if not report.get('usable'):raise ValueError('mount measurement failed')
     report=dict(report,input_signature=mount_signature(site))
-    doc['fields']['mount']['value']=report
-    tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(doc,ensure_ascii=False,indent=2)+'\n');tmp.replace(path)
+    # 2026-10-20: written beside common.json, never into it, so deploys can overwrite common.json (the Mac is its only
+    # author) while the Jetson's measured mount survives (update_jetson.sh excludes configs/mount.json).
+    out=mount_path(path);tmp=out.with_suffix('.tmp');tmp.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n');tmp.replace(out)
+    return out
