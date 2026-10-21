@@ -80,9 +80,10 @@ def fork_uncertainty(p, P, length, length_std_m=0.):
     return np.asarray(p[:2])+length*v, covariance(C, 2)
 
 
-def target_lateral_uncertainty(p, P, target_x):
-    if math.cos(p[2]) <= .2:
+def target_lateral_uncertainty(p, P, target_x, bias=0.):
+    h = p[2]+bias                     # measured straight-drive drift (geometry.path_bias), 2026-10-21
+    if math.cos(h) <= .2:
         return None, None
-    value = p[1]+(target_x-p[0])*math.tan(p[2])
-    J = np.array([-math.tan(p[2]), 1., (target_x-p[0])/math.cos(p[2])**2])
+    value = p[1]+(target_x-p[0])*math.tan(h)
+    J = np.array([-math.tan(h), 1., (target_x-p[0])/math.cos(h)**2])
     return float(value), float(max(0., J @ covariance(P, 3) @ J))

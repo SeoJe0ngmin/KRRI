@@ -58,16 +58,19 @@ bash scripts/rebuild_openvins.sh          # 우리 패키지 둘만 다시 컴�
 
 ### 0. 맥 — 현장 값 넣고 배포
 
-`configs/common.json` 의 `site` 를 줄자 값으로: 태그 크기(0.3)·태그 중심 높이·카메라 높이·차폭·탑재부 내부 폭·뒤 공간·**좌측 태그 거리 `left_tag_offset_m`**(없으면 left 모드 출발 거부)·카메라→포크 끝. 그 뒤 위 "맥 → Jetson 코드 보내기" 로 배포(common.json 은 맥 것이 Jetson 을 덮는다).
+`configs/common.json` 의 `site` 를 줄자 값으로(카메라를 옮겼으면 **렌즈 위치 셋**만 다시: `camera_to_fork_tip_m` = 렌즈→포크 앞끝 앞뒤 거리, `camera_lateral_m` = 차 중심선(차폭 정가운데)→렌즈, 왼쪽 + 오른쪽 −, `camera_height_m` = 바닥→렌즈. 렌즈는 좌측 IR(컬러 바로 오른쪽). `rear_extent_m` 은 비워 두면 전장 `vehicle_length_m` 으로 계산되고, 회전중심은 차에 붙은 값이라 그대로. 옮긴 뒤엔 장착각 재측정):
+   - 눈 감고 들어간 뒤 한쪽 벽에 붙으면 `forward_path_bias_deg` 에 흐른 각을 넣는다(왼쪽 +; 오른쪽 9 cm/3.1 m = −1.7°). 비우면 보정 없음. 태그 크기(0.3)·태그 중심 높이·카메라 높이·차폭·탑재부 내부 폭·뒤 공간·**좌측 태그 거리 `left_tag_offset_m`**(없으면 left 모드 출발 거부)·카메라→포크 끝. 그 뒤 위 "맥 → Jetson 코드 보내기" 로 배포(common.json 은 맥 것이 Jetson 을 덮는다).
 
 ### 1. 점검
 
 ```bash
 bash scripts/preflight.sh check --sensor-only        # 설치·장치, CAN 안 엶
 bash scripts/run_nano.sh measure --view              # 1분. 화면 = IR 흑백 + OpenVINS 점, 태그가 accepted 로 유지되는지
+#   OpenVINS 점이 포크·마스트 등 차체에 찍히면 안 된다(카메라와 같이 움직여 VIO 가 '정지' 로 봄). 바닥·벽에 찍혀야 한다
 grep "\[pipeline\]" $(ls -td work/*/*_measure | head -1)/openvins.log | tail -1   # dropped=0 이면 VIO 정상
 ```
 OpenVINS 없이 카메라만 볼 때: `bash scripts/run_nano.sh measure --camera-only --view` (화면 = 컬러 + 태그 사각형).
+depth 를 볼 때: `bash scripts/run_nano.sh measure --view --preview depth` — 흑백 depth(가까울수록 흰색, 검정 = 값 없음)에 **입구 골 지점**을 겹쳐 그린다: 가운데 띠(회색 선)에서 depth 경계를 찾아(초록 = 가까움→멂, 하늘 = 멂→가까움) 입구 양쪽 벽 끝(노랑)과 그 가운데 골(빨강), 아래에 골 좌우(왼쪽 +)·입구 폭·벽까지 거리. 표시·기록 전용(`observations.jsonl` 의 `kind: depth_goal`), 태그·주행 판단엔 안 쓴다. IR 프로젝터가 꺼져 있어 매끈한 면은 구멍이 많고 4 m 밖은 depth 오차가 커진다.
 
 ### 2. 장착각 (카메라를 달 때마다)
 

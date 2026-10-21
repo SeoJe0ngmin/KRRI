@@ -117,7 +117,7 @@ function render(){
  set('odom-note',(odom.reason||'위치 수신 대기')+' · 추적 기준이 바뀌면 VIO 궤적을 새로 시작합니다.');
  set('fps','카메라 '+fmt(perf.camera_fps,1)+' / 처리 '+fmt(perf.processed_fps,1)+' fps');
  // Preview pixels are supplied by the existing image encoder; no camera work happens here.
- set('camera-type',(data.cfg_view||{}).camera_only?'Color · 컬러 + 태그 사각형':'IR · 흑백 + OpenVINS 점');
+ set('camera-type',(data.cfg_view||{}).preview==='depth'?'Depth · 흑백(가까울수록 흰색, 검정 = 값 없음) + 입구 경계·골 (표시 전용)':(data.cfg_view||{}).camera_only?'Color · 컬러 + 태그 사각형':'IR · 흑백 + OpenVINS 점');
  const stage=stageFor(s,o);
  set('stage-label',stage==='end'?(s.state==='FAULT'?'오류·중단':'완료'):(STAGES.find(v=>v[0]===stage)||[null,s.state||'상태 대기'])[1]);
  set('stage-reason',REASONS[s.reason]||s.reason||((s.state==='MEASURE')?'측정 전용 · CAN을 열지 않습니다.':'상태 수신 대기'));
@@ -230,6 +230,32 @@ def encode_preview(image,obs,cfg):
     if out.ndim==2:out=cv2.cvtColor(out,cv2.COLOR_GRAY2BGR)
     import numpy as np
     stream=obs.get('preview_stream','infrared')
+    if stream=='depth':
+        # Depth preview (2026-10-21): greyscale, near = white -> depth_max_m = dark grey, black = no data. Overlays: the centre
+        # band used for the goal (grey lines), depth edges (green = near->far, cyan = far->near), the chosen opening
+        # (yellow) and the goal (red). See docking/depth_goal.py.
+        d=image.astype(np.float32)*float(obs.get('depth_scale',.001));top=float(cfg.get('depth_max_m',6.))
+        valid=(d>0)&np.isfinite(d)
+        g=(255-215*np.clip(d,0,top)/top).astype(np.uint8);g[~valid]=0
+        out=cv2.cvtColor(g,cv2.COLOR_GRAY2BGR)
+        h,w=d.shape;goal=obs.get('depth_goal') or {}
+        if goal.get('band_rows'):
+            r0,r1=goal['band_rows'];cv2.line(out,(0,r0),(w-1,r0),(120,120,120),1);cv2.line(out,(0,r1),(w-1,r1),(120,120,120),1)
+            for e in goal.get('edges',[]):
+                u=int(round(e['u']));cv2.line(out,(u,r0),(u,r1),(0,220,0) if e['kind']=='rise' else (220,220,0),1)
+        if goal.get('ok'):
+            ul,ur,ug=(int(round(goal[k])) for k in ('u_left','u_right','u_goal'));cy=h//2
+            cv2.line(out,(ul,0),(ul,h-1),(0,220,255),2);cv2.line(out,(ur,0),(ur,h-1),(0,220,255),2)
+            cv2.line(out,(ug,0),(ug,h-1),(0,0,255),2);cv2.circle(out,(ug,cy),9,(0,0,255),2)
+            gl=goal.get('goal_lateral_vehicle_m',goal['goal_lateral_m'])
+            txt='goal %+.3f m from vehicle centre (left+) | width %.2f m | walls at %.2f / %.2f m'%(gl,goal['width_m'],goal['z_left_m'],goal['z_right_m'])
+        else:
+            txt='goal: %s'%goal.get('reason','not computed')
+        cv2.rectangle(out,(0,h-52),(w-1,h-1),(0,0,0),-1)   # dark strip so the text stays readable on noisy depth
+        cv2.putText(out,txt,(10,h-34),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,0,255) if goal.get('ok') else (0,165,255),1)
+        cy,cx=h//2,w//2;patch=d[cy-4:cy+5,cx-4:cx+5];pv=patch[(patch>0)&np.isfinite(patch)]
+        cv2.drawMarker(out,(cx,cy),(255,255,255),cv2.MARKER_CROSS,14,1)
+        cv2.putText(out,'centre %s | valid %d%% | white near -> dark %.0f m, black = none'%('%.2f m'%float(np.median(pv)) if len(pv) else 'no data',int(100*valid.mean()),top),(10,h-12),cv2.FONT_HERSHEY_SIMPLEX,.5,(255,255,255),1)
     # Tag corners are colour-image coordinates: draw them only on the colour preview (camera-only mode).
     if stream=='color' and obs['tag'].get('stream')=='color' and obs['tag'].get('corners'):cv2.polylines(out,[np.array(obs['tag']['corners'],int)],True,(0,255,0) if obs['tag']['ok'] else (0,200,255),2)
     if stream=='infrared':

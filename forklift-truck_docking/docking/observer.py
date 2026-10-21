@@ -7,7 +7,7 @@ import numpy as np
 from .stationary import StationaryDetector
 from .history import PoseHistory,State
 from .fusion import Fusion,tag_bearing_range,pnp_dock_pose
-from .geometry import pose
+from .geometry import pose,path_bias
 from .vio_quality import quality
 from .uncertainty import (transform,inverse,perturb,jacobian,covariance,se3_planar,
     fork_uncertainty,target_lateral_uncertainty)
@@ -118,7 +118,7 @@ class Observer:
             age=max(0.,state.stamp-self.fusion.anchor_stamp)
             # Diagnostic at the controlled point, not only the camera origin.
             site=self.cfg['site'];f,F=fork_uncertainty(world,P,site['camera_to_fork_tip_m'],self.u['fork_length_std_m'])
-            y,Y=target_lateral_uncertainty(world,P,self.cfg['target_front_x'])
+            y,Y=target_lateral_uncertainty(world,P,self.cfg['target_front_x'],path_bias(self.cfg))
             fork_report=dict(position=f.tolist(),covariance=F.tolist(),std_m=np.sqrt(np.diag(F)).tolist(),
                 predicted_arrival_y_m=y,predicted_arrival_std_m=None if Y is None else math.sqrt(Y),
                 certified_error_bound=False)

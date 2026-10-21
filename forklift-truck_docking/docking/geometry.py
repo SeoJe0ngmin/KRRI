@@ -37,12 +37,19 @@ def front(p, cfg):
 def remaining(p, cfg):
     return cfg['target_front_x']-front(p,cfg)[0]
 
+def path_bias(cfg):
+    """Measured drift of a straight drive, radians, left +. apriltag/KWU FORWARD_PATH_BIAS_DEG (2026-10-21): the vehicle
+    does not track its heading exactly (2026-10-20 blind legs: 1-2 deg to the right, every run). Empty/0 = no compensation."""
+    v = (cfg.get('site') or {}).get('forward_path_bias_deg')
+    return math.radians(float(v)) if v is not None and math.isfinite(float(v)) else 0.
+
 def arrival_y(p, cfg):
-    c = math.cos(p[2])
+    h = p[2]+path_bias(cfg)          # direction the vehicle actually travels when driven straight
+    c = math.cos(h)
     if c <= .2:
         return math.inf
     # Forward projection to target plane, including the fork lever arm.
-    return p[1]+(remaining(p,cfg)/c+cfg['site']['camera_to_fork_tip_m'])*math.sin(p[2])
+    return p[1]+(remaining(p,cfg)/c+cfg['site']['camera_to_fork_tip_m'])*math.sin(h)
 
 def inside_bay(p, cfg):
     """Only bay side walls are constrained; outside approach is operator-cleared."""

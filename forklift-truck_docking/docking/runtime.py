@@ -94,6 +94,10 @@ def _run_once(args,cfg_override=None,stop_when=None):
         raise ValueError('--no-tag은 measure에서만 사용 가능합니다')
     if getattr(args,'no_tag',False):sensor['tag']['enabled']=False
     sensor['camera_only']=bool(getattr(args,'camera_only',False))
+    # Depth preview (2026-10-21): opens the depth stream for DISPLAY only. The tag detector does not get it, because with the
+    # IR projector off the passive depth has holes and its consistency gate would reject good tags ('depth_disagrees').
+    sensor['preview']=getattr(args,'preview','ir') or 'ir'
+    if sensor['preview']=='depth':sensor['camera']['depth_enabled']=True;sensor['camera']['depth_for_tag']=False
     sensor['mapping']['enabled']=getattr(args,'profile','core')=='mapped'
     if active and sensor['camera_only']:raise ValueError('camera-only는 measure에서만 가능합니다')
     if not sensor['camera_only']:
@@ -201,7 +205,7 @@ def _run_once(args,cfg_override=None,stop_when=None):
                         lateral_m=p[1],heading_deg=p[2]*180/3.141592653589793,
                         fork_tip=front(p,cfg).tolist(),predicted_arrival_y_m=float(arrival_y(p,cfg)))
                     if not math.isfinite(geometry['predicted_arrival_y_m']):geometry['predicted_arrival_y_m']=None
-                dash.update(dict(mode=args.command,controller=status,observation=obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x'],camera_only=sensor['camera_only'],mode=cfg['mode']),control_recording=rec.status()),drain(previews))
+                dash.update(dict(mode=args.command,controller=status,observation=obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x'],camera_only=sensor['camera_only'],preview=sensor.get('preview','ir'),mode=cfg['mode']),control_recording=rec.status()),drain(previews))
             if now-last_print>=2:
                 perf=(obs or {}).get('performance',{})
                 odom=(obs or {}).get('odom',{})
@@ -251,4 +255,5 @@ def parser():
     p.add_argument('--no-tag',action='store_true',help='measure only; skip tag detection')
     p.add_argument('--camera-only',action='store_true',help='measure only; no OpenVINS, no driving')
     p.add_argument('--profile',choices=['core','mapped'],default='core')
+    p.add_argument('--preview',choices=['ir','depth'],default='ir',help='--view 화면: ir = IR 흑백 + OpenVINS 점(기본), depth = depth 컬러맵(표시 전용, 판단에 안 씀)')
     return p

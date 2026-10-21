@@ -10,8 +10,9 @@ def config(mode='central'):
     c=load(mode=mode)
     # Pin every field number the geometry uses: the live common.json differs per machine (Jetson had tag 0.2 m).
     c['site'].update(vehicle_width_m=1.3,bay_width_m=1.5,left_tag_offset_m=.9,tag_size_m=.3,tag_height_m=1.58,camera_height_m=.57,
-                     camera_to_fork_tip_m=1.5,rear_extent_m=1.,rear_space_m=.5,tag_plane_offset_m=0.,camera_lateral_m=0.)
-    c['sensor']['tag']['size_m']=.3;c['tuning']['backward_max_m']=.5
+                     camera_to_fork_tip_m=1.5,rear_extent_m=1.,rear_space_m=.5,tag_plane_offset_m=0.,camera_lateral_m=0.,
+                     rotation_center_behind_fork_tip_m=1.035,rotation_center_lateral_m=-.112)   # pivot stays [.465,-.112] for the pinned 1.5 m camera (2026-10-20)
+    c['sensor']['tag']['size_m']=.3;c['tuning']['backward_max_m']=.5;c['pivot']=[.465,-.112]
     c['tuning']['baseline_s']=0.   # controller flow tests skip the 30 s post-search baseline; test_startup_flow covers it
     T=np.eye(4);T[:3,:3]=[[0,0,1],[-1,0,0],[0,-1,0]];T[:3,3]=[0,0,.57]
     D=np.eye(4);D[:3,:3]=[[0,0,-1],[-1,0,0],[0,1,0]];D[:3,3]=[0,.9 if mode=='left' else 0,1.58]

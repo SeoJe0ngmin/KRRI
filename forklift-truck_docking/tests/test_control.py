@@ -66,18 +66,18 @@ class Control(unittest.TestCase):
         x.step(2,observation(2,stationary=False),True)
         self.assertEqual(x.state,'PREPARING');self.assertEqual(x.command,'stop')
     def test_coasting_distance_retained_and_actual_pose_replans(self):
-        x=self.started();x.begin_drive(2,observation(2),.2,False)   # explicit 0.2 m leg (the first-motion clip is gone, 2026-10-19)
-        self.assertEqual(x.action['target'],.2)
-        x.step(2.5,observation(2.5,world=(-4.8,0,0),local=(.2,0,0),stationary=False))
+        x=self.started();x.begin_drive(2,observation(2),.8,False)   # 0.8 m leg: a cruising leg the learner accepts (2026-10-20)
+        self.assertEqual(x.action['target'],.8)
+        x.step(5.5,observation(5.5,world=(-4.2,0,0),local=(.8,0,0),stationary=False))   # 3.5 s of motion: a cruising leg (the learner ignores shorter ones)
         self.assertEqual(x.state,'SETTLE');self.assertEqual(x.command,'stop')
-        # Command was 0.2m; observed displacement is 1m including unexpected coast.
-        x.step(5,observation(5,world=(-4,0,0),local=(1,0,0)))
-        x.step(5.1,observation(5.1,world=(-4,0,0),local=(1,0,0)))
-        self.assertEqual(x.request['pose'],[-4,0,0])
+        # Command was 0.8 m; observed displacement is 1.6 m including unexpected coast.
+        x.step(8,observation(8,world=(-3.4,0,0),local=(1.6,0,0)))
+        x.step(8.1,observation(8.1,world=(-3.4,0,0),local=(1.6,0,0)))
+        self.assertEqual(x.request['pose'],[-3.4,0,0])
         self.assertGreater(x.responses.data['forward']['coast'],.4)
         ev=[e for e in x.status()['events'] if e['event']=='step_done'];self.assertEqual(len(ev),1)   # 2026-10-20 per-step record
         e=ev[0];self.assertEqual(e['command'],'forward');self.assertEqual(e['unit'],'m');self.assertAlmostEqual(e['coast'],.8,places=6)
-        self.assertAlmostEqual(e['stop_progress'],.2,places=6);self.assertIsNotNone(e['stop_reserve']);self.assertTrue(e['vio_ok']);self.assertIn('learned',e)
+        self.assertAlmostEqual(e['stop_progress'],.8,places=6);self.assertIsNotNone(e['stop_reserve']);self.assertTrue(e['vio_ok']);self.assertIn('learned',e)
     def test_stale_and_generation_changes_stop_without_integrating_commands(self):
         for fault in ['stale','generation','epoch','imu','unusable','nonfinite']:
             with self.subTest(fault=fault):
@@ -111,7 +111,11 @@ class Control(unittest.TestCase):
     def test_planner_timeout_and_old_reply_do_not_move(self):
         x=self.started();x.step(2,observation(2));self.assertEqual(x.state,'PLANNING')
         x.accept_plan(dict(id=0,plan=dict(actions=[dict(turn=0,distance=.8,fine=False)])),2.1,observation(2.1))
-        self.assertEqual(x.command,'stop');x.step(6,observation(6));self.assertEqual(x.state,'FAULT')
+        self.assertEqual(x.command,'stop')
+        # 2026-10-20: a late reply re-requests (planner_retries times) before it is a fault
+        for n in range(3):
+            x.await_plan['at']=0.;x.step(20.+2*n,observation(20.+2*n));self.assertEqual(x.state,'PLAN');x.step(20.1+2*n,observation(20.1+2*n));self.assertEqual(x.state,'PLANNING')
+        x.await_plan['at']=0.;x.step(40.,observation(40.));self.assertEqual(x.state,'FAULT')
     def test_plan_invalidated_by_actual_pose_change(self):
         x=self.started();x.step(2,observation(2))
         x.accept_plan(dict(id=x.plan_id,plan=dict(actions=[dict(turn=0,distance=.8,fine=False)])),2.1,observation(2.1,world=(-4,0,0)))

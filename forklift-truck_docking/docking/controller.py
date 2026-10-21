@@ -1,7 +1,7 @@
 """Nonblocking mission state machine. All motion requires fresh measured feedback."""
 import math
 import numpy as np
-from .geometry import wrap,remaining,arrival_y,inside_bay,path_clear,front,finite,tag_margin,moved
+from .geometry import wrap,remaining,arrival_y,inside_bay,path_clear,front,finite,tag_margin,moved,path_bias
 from .planner import Responses
 
 class Controller:
@@ -22,6 +22,9 @@ class Controller:
         self.baseline_done=False;self.baseline_seconds=0.;self.baseline_last=None   # 30 s at rest with the tag in view, after Enter and after any search
         self.mount_yaw_unlearned=False   # entered the blind leg without any good straight leg (record only)
         self.baseline_lost_since=None;self.overshoot_backed=False
+        self.sidestepped=False;self.sidestep_legs=[];self.sidesteps=0   # sidestep(s) per run: first + at most one retry (2026-10-21)
+        self.last_resort_backed=False                   # one backward step when the final zone has no feasible candidate (2026-10-20)
+        self.planner_timeouts=0
 
     def fault(self,reason):
         self.state='FAULT';self.reason=reason;self.command='stop';self.request=None
@@ -51,8 +54,14 @@ class Controller:
         old=self.await_plan
         if not self.fresh(now,o) or not o.get('usable') or not o.get('stationary'):
             self.recover(now,'observation_changed_during_plan');return
-        if o['motion_epoch']!=old['epoch'] or np.linalg.norm(np.array(o['pose'][:2])-old['pose'][:2])>.01 or abs(wrap(o['pose'][2]-old['pose'][2]))>math.radians(.5):
+        # 2026-10-20 KW: at 8 m the fused pose wobbles 19 cm / 1.3 deg while standing (PnP heading noise x range), so a fixed
+        # 1 cm / 0.5 deg 'same spot' check re-planned for 20-30 s. Scale it with the measured spread (confidence_radius = 2 sigma).
+        cr=o.get('confidence_radius') or [0.,0.,0.]
+        tol_m=max(.01,float(max(cr[0],cr[1])) if len(cr)>1 and all(math.isfinite(v) for v in cr[:2]) else .01)
+        tol_rad=max(math.radians(.5),float(cr[2]) if len(cr)>2 and math.isfinite(cr[2]) else 0.)
+        if o['motion_epoch']!=old['epoch'] or np.linalg.norm(np.array(o['pose'][:2])-old['pose'][:2])>tol_m or abs(wrap(o['pose'][2]-old['pose'][2]))>tol_rad:
             self.state='PLAN';return
+        self.planner_timeouts=0
         result=reply['plan'];self.route=result['actions']
         point=np.array(o['pose']);self.route_points=[point.tolist()]
         for action in self.route:
@@ -60,6 +69,13 @@ class Controller:
             self.route_points.append(point.tolist())
         if not self.route:
             if result.get('complete'):self.state='PLAN'
+            elif (result.get('reason')=='no_feasible_progress' and not self.last_resort_backed and
+                  self.t['backward_max_m']>=self.t['minimum_translation_m'] and path_clear(o['pose'],0,-self.t['backward_max_m'],self.cfg)):
+                # 2026-10-20 KW (run 160536, user decision): the final zone has no backward candidate, so a lateral error
+                # left at the tag cut ended the run. Back out ONCE by the rear space and plan again; a second time is a fault.
+                self.last_resort_backed=True
+                self.events.append(dict(t=now,event='no_feasible_progress_backing_once',back_m=float(self.t['backward_max_m']),pose=[float(v) for v in o['pose']]))
+                self.begin(now,o,'backward',float(self.t['backward_max_m']),'SETTLE')
             else:self.fault(result['reason'])
             return
         a=self.route[0];self.pending_distance=(a['distance'],a['fine']) if a['turn'] else None
@@ -71,10 +87,25 @@ class Controller:
             self.begin(now,o,cmd,target,'SETTLE')
         else:self.begin_drive(now,o,a['distance'],a['fine'])
 
+    def next_sidestep_leg(self,now,o):
+        """Sidestep legs: ('turn', absolute heading) / ('drive', metres). Tag visibility is not required (the fused pose is
+        propagated by the VIO for the ~20 s this takes); the planner takes over when the list is empty."""
+        while self.sidestep_legs:
+            kind,value=self.sidestep_legs.pop(0)
+            if o.get('pose') is None:break
+            if kind=='turn':
+                turn=wrap(value-o['pose'][2])
+                if abs(turn)<math.radians(self.t['minimum_turn_deg']):continue
+                self.begin(now,o,'rotate_left_slow' if turn>0 else 'rotate_right_slow',abs(turn),'SIDESTEP');return
+            if value>=self.t['minimum_translation_m']:
+                self.begin(now,o,'forward',float(value),'SIDESTEP');return
+        self.state='PLAN';self.reason='sidestep_done'
+
     def begin_drive(self,now,o,distance,fine):
         # 2026-10-19 user decision: byte 67 everywhere. 97 (forward_slow) was never driven on the truck.
         cmd='backward' if distance<0 else 'forward'
-        target=min(abs(distance),self.t['backward_max_m'] if distance<0 else self.t['forward_max_m'])
+        fwd_cap=self.t.get('forward_max_far_m',self.t['forward_max_m']) if self.cut-o['pose'][0]>self.t.get('far_from_cut_m',0.) else self.t['forward_max_m']
+        target=min(abs(distance),self.t['backward_max_m'] if distance<0 else fwd_cap)
         if distance>0:target=min(target,max(0.,remaining(o['pose'],self.cfg)/max(.2,math.cos(o['pose'][2]))))
         signed=-target if distance<0 else target
         if not path_clear(o['pose'],0,signed,self.cfg):self.fault('bay_side_clearance');return
@@ -85,7 +116,10 @@ class Controller:
 
     def begin(self,now,o,cmd,target,after):
         self.action=dict(command=cmd,target=target,start_local=o['local_pose'][:],generation=o['tracking_generation'],
-                         epoch=o['motion_epoch'],started=now,after=after,speed=0.,progress=0.,previous=0.,last=now,blind=False)
+                         epoch=o['motion_epoch'],started=now,after=after,speed=0.,progress=0.,previous=0.,last=now,blind=False,
+                         # 2026-10-20 KW (user decision after runs 142426/155618): the tag-anchored dock-frame pose is a second
+                         # ruler for straight steps. The VIO alone froze twice (0.005 m / 0.07 m over 3.5 m / 1.7 m) and the step ran on.
+                         start_world=list(o['pose']) if o.get('usable') and o.get('pose') is not None else None,progress_parts=None)
         self.state='MOVING';self.command=cmd;self.reason='measured_motion_feedback';self.motion_start=None
 
     def begin_blind(self,now,o,distance):
@@ -105,7 +139,15 @@ class Controller:
         if 'rotate' in a['command']:
             return wrap(p[2]-start[2])*(1 if 'left' in a['command'] else -1)
         delta=p[:2]-start[:2];signed=float(delta @ [math.cos(start[2]),math.sin(start[2])])
-        return -signed if a['command']=='backward' else signed
+        local=-signed if a['command']=='backward' else signed
+        world=None
+        if a.get('start_world') is not None and o.get('usable') and o.get('pose') is not None and finite(o['pose']):
+            w=np.array(o['pose']);s0=np.array(a['start_world']);dw=w[:2]-s0[:2]
+            sw=float(dw @ [math.cos(s0[2]),math.sin(s0[2])]);world=-sw if a['command']=='backward' else sw
+        a['progress_parts']=(local,world)
+        # Whichever ruler says the step is done, stop (early rather than late). The tag ruler exists only while the tag
+        # is in view; a lost tag leaves the VIO alone (the propagated pose then equals the VIO).
+        return local if world is None else max(local,world)
 
     def step_event(self,now,b,end,vio_ok):
         """One line per executed step (2026-10-20): what was commanded, what the stop decision saw, what the vehicle
@@ -116,7 +158,7 @@ class Controller:
             coast=None if end is None or b.get('stop_progress') is None else end-b['stop_progress'],
             active_s=b['stop_time']-b['started'],dead_s=(b['motion_start']-b['started']) if b.get('motion_start') else None,
             settle_s=now-b['stop_time'],stop_reserve=b.get('stop_reserve'),stop_remaining_m=b.get('stop_remaining_m'),
-            stop_obs_age_s=b.get('stop_obs_age_s'),stop_coast_est=b.get('stop_coast_est'),speed_est=b.get('speed'),
+            stop_obs_age_s=b.get('stop_obs_age_s'),stop_coast_est=b.get('stop_coast_est'),speed_est=b.get('speed'),progress_parts_vio_tag=b.get('progress_parts'),
             timed=bool(b.get('timed')),vio_ok=bool(vio_ok),learned=dict(speed=learned['speed'],coast=learned['coast'],startup=learned['startup'],n=learned['n'])))
 
     def stop(self,now,post='PLAN'):
@@ -205,16 +247,27 @@ class Controller:
                     elif now-a['started']>=min(self.t['translation_timeout_s'],2*a['hold_s']):
                         self.command='stop';return self.fault('motion_time_limit')
                     return self.status()
+                # 2026-10-20 KW (user decision): once moving, 3 s without VIO progress means the vehicle is being held
+                # (e-stop, obstacle). Record it and finish the leg here; do not push for the whole time limit, do not fault.
+                if self.motion_start is not None and new:
+                    if a['progress']>a.get('stall_progress',-1.)+.01:a['stall_progress']=a['progress'];a['stall_since']=now
+                    elif now-a.get('stall_since',now)>=3.:
+                        self.events.append(dict(t=now,event='blind_entry_stalled_recorded',progress_m=float(a['progress']),target_m=float(a['target'])))
+                        self.stop(now,'COMPLETE');return self.status()
             elif lost:
                 self.recover(now,'tracking_lost_during_motion');return self.status()
-            search=a['after']=='SEARCH'
-            if not search and not a.get('blind') and not o.get('usable'):
+            search=a['after']=='SEARCH';side=a['after']=='SIDESTEP'
+            if not search and not side and not a.get('blind') and not o.get('usable'):
                 self.recover(now,'pose_untrusted');return self.status()
             if o.get('usable') and not inside_bay(o['pose'],self.cfg):return self.fault('bay_side_clearance')
             if new:
                 p=self.progress(o);dt=now-a['last']
-                if dt>0:a['speed']=.65*a['speed']+.35*(p-a['previous'])/dt
-                a.update(progress=p,previous=p,last=now)
+                # Rate from the VIO ruler alone (the tag ruler refreshes in 0.5 s windows and jumps a few cm -> rate spikes of
+                # 0.8 m/s inflated the braking reserve, run 174331); clamped to 1.5 x the nominal cruise speed.
+                parts=a.get('progress_parts');rate_src=parts[0] if parts and parts[0] is not None else p
+                prev_src=a.get('previous_src',rate_src)
+                if dt>0:a['speed']=float(min(.45 if 'rotate' not in a['command'] else .6,max(0.,.65*a['speed']+.35*(rate_src-prev_src)/dt)))
+                a.update(progress=p,previous=p,previous_src=rate_src,last=now)
                 if p>.005 and self.motion_start is None:self.motion_start=now
                 if p<(-math.radians(2) if 'rotate' in a['command'] else -.03):return self.fault('motion_direction_mismatch')
             if search and o['tag'].get('detected'):
@@ -222,7 +275,7 @@ class Controller:
             if search and self.sweep+max(0,a['progress'])>=2*math.pi:
                 self.stop(now,'SEARCH_LIMIT');return self.status()
             turn='rotate' in a['command']
-            cap=self.t['search_turn_timeout_s'] if search else self.t['rotation_timeout_s'] if turn else self.t['translation_timeout_s']
+            cap=self.t['search_turn_timeout_s'] if (search or (side and turn)) else self.t['rotation_timeout_s'] if turn else self.t['translation_timeout_s']
             if now-a['started']>=cap:
                 self.command='stop';return self.fault('motion_time_limit')
             response=self.responses.get(a['command']);reserve=max(0.,a['speed'])*(response['coast']+max(0,now-o['arrival']))
@@ -230,13 +283,13 @@ class Controller:
             # half its target and then coast past it (v5 lesson, 2026-10-19: a 1° request executed as
             # 1.6° and the transition correction oscillated for 600 s). Predictive stopping applies
             # only after motion has actually been observed, never before the vehicle starts.
-            reached=(not search and not turn and a['command']!='backward' and remaining(o['pose'],self.cfg)<=reserve)
+            reached=(not search and not side and not turn and a['command']!='backward' and o.get('usable') and remaining(o['pose'],self.cfg)<=reserve)
             if a.get('blind'):reached=False   # the blind leg ends on VIO progress only; the dock-frame pose is not re-judged
             if self.motion_start is not None and (a['progress']>=a['target']-reserve or reached):
                 # Stop-decision inputs travel with the brake record into the step_done event (2026-10-20 post-run analysis).
                 a.update(stop_reserve=float(reserve),stop_obs_age_s=float(now-o['arrival']),stop_coast_est=float(response['coast']),
                          stop_remaining_m=float(remaining(o['pose'],self.cfg)) if o.get('usable') and o.get('pose') is not None else None)
-                self.stop(now,a['after'] if a['after'] in ('SEARCH','COMPLETE') else 'PLAN')
+                self.stop(now,a['after'] if a['after'] in ('SEARCH','COMPLETE','SIDESTEP') else 'PLAN')
             return self.status()
         self.command='stop'
         if self.state=='SETTLE':
@@ -269,6 +322,7 @@ class Controller:
                 self.brake=None
                 self.action=None
                 if self.post_settle=='SEARCH_LIMIT':return self.fault('search_360_exhausted')
+                if self.post_settle=='SIDESTEP':self.next_sidestep_leg(now,o);return self.status()
                 if self.pending_distance and o.get('usable'):
                     d,fine=self.pending_distance;self.pending_distance=None;self.begin_drive(now,o,d,fine)
                 else:self.state='PLAN'
@@ -303,7 +357,10 @@ class Controller:
         if not still:
             self.recover(now,'need_stopped_observation');return self.status()
         if self.state=='PLANNING':
-            if now-self.await_plan['at']>self.t['planning_timeout_s']:return self.fault('planner_timeout')
+            if now-self.await_plan['at']>self.t['planning_timeout_s']:
+                self.planner_timeouts+=1
+                if self.planner_timeouts>self.t.get('planner_retries',0):return self.fault('planner_timeout')
+                self.events.append(dict(t=now,event='planner_late_rerequest',n=self.planner_timeouts));self.state='PLAN';self.reason='planner_late_rerequest'
             return self.status()
         if self.state=='PLAN':
             if not o.get('usable'):
@@ -362,8 +419,24 @@ class Controller:
                 if self.blind:
                     if not self.lateral_within_tolerance(o,arrival=True):
                         return self.fault('blind_predicted_lateral_outside_tolerance')
-                    self.begin_blind(now,o,rem/max(.2,math.cos(p[2])))   # whole remaining distance, one leg
+                    self.begin_blind(now,o,rem/max(.2,math.cos(p[2]+path_bias(self.cfg))))   # whole remaining distance, one leg, along the real drift direction
                     return self.status()
+            first=self.sidesteps==0;retry=self.sidesteps>=1 and self.reason=='sidestep_done'
+            need=self.t['sidestep_min_lateral_m'] if first else self.t.get('sidestep_retry_lateral_m',self.t['sidestep_min_lateral_m'])
+            if ((first or retry) and self.sidesteps<self.t.get('sidestep_max_count',1) and abs(p[1])>=need
+                    and self.cut-p[0]>=self.t['sidestep_min_room_m']):
+                # Far off the centreline with room ahead: face the centreline (+-90 deg), drive across, face the bay (0 deg).
+                # Both in-place turns swing the body origin on the pivot arc (pivot 0.78 m behind the fork-front camera), and the
+                # swings cancel only when the start heading is 0: the net shift is pivot_x*sin(h0) + pivot_y*(cos(h0)-1)
+                # (runs 162223-174331: 40-70 % of the wanted move). Predict the end lateral without driving, then drive the rest.
+                self.sidestepped=True;self.sidesteps+=1
+                face=-math.pi/2 if p[1]>0 else math.pi/2;side=1. if face>0 else -1.
+                q1=moved(p,wrap(face-p[2]),0,self.cfg['pivot']);y_turns=moved(q1,wrap(0.-q1[2]),0,self.cfg['pivot'])[1]
+                d=float(np.clip(self.t['sidestep_fraction']*(-side*y_turns),0.,self.t['sidestep_max_m']))
+                self.sidestep_legs=[('turn',face),('drive',d),('turn',0.)]
+                self.events.append(dict(t=now,event='sidestep',n=self.sidesteps,lateral_m=float(p[1]),heading_deg=float(math.degrees(p[2])),
+                    turn_swing_m=float(y_turns-p[1]),drive_m=float(d),predicted_end_lateral_m=float(y_turns+side*d),pose=[float(v) for v in p]))
+                self.next_sidestep_leg(now,o);return self.status()
             self.plan_id+=1;self.await_plan=dict(at=now,pose=np.array(p),epoch=o['motion_epoch'])
             self.request=dict(id=self.plan_id,pose=p,cut=self.cut,responses=self.responses.data.copy())
             self.state='PLANNING';self.reason='six_step_beam_search'

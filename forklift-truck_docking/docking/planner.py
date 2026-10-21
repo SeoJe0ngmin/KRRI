@@ -23,7 +23,11 @@ class Responses:
         speed=progress/moving_s
         # Learned estimates are bounded for numerical health, not certified.
         if speed>1 or speed<.002:return
-        coast=min(2.,max(0.,residual/speed))
+        # 2026-10-20 KW run 174331: short legs (0.17-0.4 m) never reach cruise, so progress/moving_s under-reads the speed
+        # (0.24 -> 0.10 m/s over the run) and residual/speed over-reads the coast (0.5 -> 1.36 s); the braking reserve then
+        # stopped 0.76 m legs after 0.17 m. Learn only from legs that cruised; keep the coast time within [0, 0.8] s.
+        if 'rotate' not in command and (progress<.4 or moving_s<1.):return
+        coast=min(.8,max(0.,residual/speed))
         startup=old['startup'] if dead_s is None else .5*old['startup']+.5*min(5.,max(0.,dead_s))
         self.data[command]=dict(speed=.5*old['speed']+.5*speed,coast=.5*old['coast']+.5*coast,startup=startup,n=old['n']+1)
     def seconds(self,turn,distance,fine=False):
@@ -41,16 +45,20 @@ def plan(cfg,p,cut,estimates=None):
     limit=min(cfg['target_front_x']-cfg['site']['camera_to_fork_tip_m'],cut)
     def metric(q):
         if math.cos(q[2])<=.2:return 1e6
-        lat=abs(arrival_y(q,cfg)) if last_alignment else abs(q[1])
-        return max(0.,limit-q[0])/.29+lat*25+(0 if last_alignment else abs(q[2])*15)
+        # 2026-10-20 KW: at the last alignment the old score looked at the predicted arrival only, so '12 cm right + 1.5 deg
+        # left' scored as zero and the 4 m blind leg ended 9 cm right (the heading was not known that well). Keep the actual
+        # lateral and the heading in the score everywhere: centre first, then straighten, and only then go blind.
+        lat=abs(q[1])+(abs(arrival_y(q,cfg)) if last_alignment else 0.)
+        return max(0.,limit-q[0])/.29+lat*25+abs(q[2])*15
     def terminal(q):
-        return q[0]>=limit-.05 and abs(arrival_y(q,cfg))<=t['position_tolerance_m'] and (last_alignment or abs(q[2])<=math.radians(2))
+        return (q[0]>=limit-.05 and abs(arrival_y(q,cfg))<=t['position_tolerance_m'] and abs(q[1])<=t['position_tolerance_m']
+                and abs(q[2])<=math.radians(2))
     if terminal(p):return dict(actions=[],reason='at_transition',complete=True,expanded=0)
     frontier=[(p,[],0.)];best=None;partial=None;expanded=0
     for depth in range(int(t['depth'])):
         children=[]
         for q,path,cost in frontier:
-            if expanded>=t['expansions'] or time.monotonic()-start>=t['planning_timeout_s']*.8:break
+            if expanded>=t['expansions'] or time.monotonic()-start>=t.get('planner_budget_s',t['planning_timeout_s']*.8):break
             expanded+=1
             aim=math.atan2(-q[1],max(.15,limit-q[0]))
             cap=math.radians(t['turn_max_deg'])
@@ -68,7 +76,8 @@ def plan(cfg,p,cut,estimates=None):
                 if path and not path[-1]['distance'] and path[-1]['turn']*turn<0:continue
                 a=moved(q,turn,0,cfg['pivot']);c=math.cos(a[2])
                 if c<=.2:continue
-                maximum=min(t['forward_max_m'],max(0.,(limit-a[0])/c))
+                step_cap=t.get('forward_max_far_m',t['forward_max_m']) if cut-a[0]>t.get('far_from_cut_m',0.) else t['forward_max_m']
+                maximum=min(step_cap,max(0.,(limit-a[0])/c))
                 if maximum and tag_margin(a,cfg)>=t['cut_margin_px'] and tag_margin(moved(a,0,maximum,cfg['pivot']),cfg)<t['cut_margin_px']:
                     lo,hi=0.,maximum
                     for _ in range(8):

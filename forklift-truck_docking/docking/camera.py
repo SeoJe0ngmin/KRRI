@@ -81,6 +81,10 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
             except Exception as exc:errors.put(str(exc))
         ipipe.start(ic,motion);pipes.append(ipipe);vpipe.start(vc);pipes.append(vpipe)
         depth_scale=vp.get_device().first_depth_sensor().get_depth_scale() if c['depth_enabled'] else 1.
+        depth_intr=None
+        if c['depth_enabled']:
+            di=vp.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+            depth_intr=dict(fx=float(di.fx),fy=float(di.fy),cx=float(di.ppx),cy=float(di.ppy),width=int(di.width),height=int(di.height))
         deadline=VideoDeadline(time.monotonic(),c['startup_timeout_s']);delivery=deque(maxlen=12)
         def capture():
             # 2026-10-19 hand-held runs: 1-2 s holes in the VIO output with no Python stall and no frame backlog ->
@@ -119,7 +123,7 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     item=tags.get()
                     if item is None:stop.wait(.005);continue
                     fs,stamp=item;cf=fs.get_color_frame();depth=None
-                    if c['depth_enabled']:
+                    if c['depth_enabled'] and c.get('depth_for_tag',True):
                         df=fs.get_depth_frame()
                         if df and abs(timestamp(df)-stamp)<=c['depth_color_skew_s']:
                             aligned=align.process(fs).get_depth_frame()
@@ -134,6 +138,17 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     item=preview_tasks.get()
                     if item is None:stop.wait(.01);continue
                     image,obs=item
+                    if obs.get('preview_stream')=='depth' and depth_intr:
+                        # Bay-opening goal from the depth image (display + log only, 2026-10-21). A failure here must never stop the run.
+                        try:
+                            from .depth_goal import find_goal
+                            goal=find_goal(image.astype(np.float32)*float(obs.get('depth_scale',.001)),depth_intr,cfg.get('depth_goal'))
+                        except Exception as exc:
+                            goal=dict(ok=False,reason='error: '+str(exc))
+                        if goal.get('ok'):   # depth origin = left IR lens, which sits camera_lateral_m from the vehicle centreline
+                            goal['goal_lateral_vehicle_m']=float(goal['goal_lateral_m'])+float((cfg.get('site') or {}).get('camera_lateral_m',0.))
+                        obs['depth_goal']=goal
+                        rec.put(dict(kind='depth_goal',value=dict(goal,capture_id=obs.get('capture_id'),t=time.monotonic())))
                     publish_latest(previews,(obs['capture_id'],encode_preview(image,obs,cfg['view'])))
             except Exception as exc:errors.put('preview: '+str(exc))
         enabled.set()
@@ -186,6 +201,10 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 # Preview: IR left with OpenVINS points normally; the colour frame with the tag outline in camera-only
                 # mode, where there is no VIO and the colour image is what the tag detector sees (2026-10-19).
                 latest_image=(color_stamp,np.asanyarray(cf.get_data())) if cfg.get('camera_only') else (stamp,left)
+                if cfg.get('preview')=='depth' and view and time.monotonic()-last_view>=1/cfg['view']['fps']:
+                    # Depth preview (2026-10-21): copy the raw z16 frame now (the SDK recycles its buffer) only when a preview is due.
+                    dfr=fs.get_depth_frame()
+                    if dfr:latest_image=(timestamp(dfr),np.array(dfr.get_data(),copy=True))
                 stage('remap')
                 if imu.begin(stamp,time.monotonic()):
                     # The first image cannot enter OpenVINS until its clean
@@ -273,7 +292,9 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 rec.put(record);publish_latest(results,last_obs);stage('record_publish')
                 if view and latest_image and time.monotonic()-last_view>=1/cfg['view']['fps']:
                     # Only overlay features from a sufficiently close stereo frame.
-                    picture=copy.deepcopy(last_obs);picture['preview_stream']='color' if cfg.get('camera_only') else 'infrared'
+                    picture=copy.deepcopy(last_obs)
+                    picture['preview_stream']='depth' if cfg.get('preview')=='depth' and latest_image[1].dtype==np.uint16 else ('color' if cfg.get('camera_only') else 'infrared')
+                    picture['depth_scale']=float(depth_scale)
                     if abs(latest_image[0]-picture['capture_id'])>.05:picture['odom']['tracked_points']=[]
                     preview_tasks.put((latest_image[1].copy(),picture));last_view=time.monotonic();stage('preview_put')
                 last_obs=None
