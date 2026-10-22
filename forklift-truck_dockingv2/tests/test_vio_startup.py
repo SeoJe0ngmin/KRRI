@@ -16,7 +16,6 @@ class VioStartupTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'streaming'):d.check(14.1)
 
     def test_imu_gap_is_recorded_with_device_and_host_time_but_not_fatal(self):
-        # 2026-10-19 (v4 rule): gaps and reversals are counted and described, never a fault.
         for stamp,reason,field in ((.99,'clock_reversed','reversals'),(1,'duplicate_timestamp','reversals'),(1.06,'sample_gap','gaps')):
             imu=ImuSynchronizer();imu.add('accel',1,[0,9.8,0],10)
             imu.add('accel',stamp,[0,9.8,0],10.1)
@@ -24,7 +23,7 @@ class VioStartupTests(unittest.TestCase):
             self.assertIn('stream=accel reason='+reason,status['last_gap'])
             self.assertIn('host_arrival_gap_s=0.100000',status['last_gap'])
             self.assertEqual(status[field],1);imu.drain()
-            self.assertEqual(status['counts'],{'accel':1 if field=='reversals' else 2})   # a backwards sample is skipped
+            self.assertEqual(status['counts'],{'accel':1 if field=='reversals' else 2})
 
     def test_ros_decode_exception_reaches_supervisor(self):
         b=Bridge.__new__(Bridge);b.receive_error=None

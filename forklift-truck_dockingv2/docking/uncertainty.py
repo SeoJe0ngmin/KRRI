@@ -1,4 +1,4 @@
-"""Geometry and uncertainty conventions used by the v6 adapters.
+"""Geometry and uncertainty conventions used by the adapters.
 
 SE3 errors: [dx,dy,dz,rx,ry,rz], translation and small LEFT rotation in
 the parent frame (metres/radians). SE2 errors: [x,y,yaw]. Unknown cross

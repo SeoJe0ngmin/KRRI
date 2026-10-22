@@ -1,4 +1,4 @@
-"""Supervisor: bounded queues; independent camera/CAN processes (v2: no planner process).
+"""Supervisor: bounded queues; independent camera/CAN processes (no planner process).
 
 Blocking SDK reads, disk I/O, JPEG and route search never run in this loop.
 This is deadline-monitored soft real time, not a hard real-time guarantee.
@@ -107,7 +107,7 @@ def _run_once(args,cfg_override=None,stop_when=None):
         raise ValueError('--no-tag은 measure에서만 사용 가능합니다')
     if getattr(args,'no_tag',False):sensor['tag']['enabled']=False
     sensor['camera_only']=bool(getattr(args,'camera_only',False))
-    # v2 (2026-10-22): the depth stream feeds the entrance measurement (depth_goal) and the dashboard; the tag detector does
+    # 2026-10-22: the depth stream feeds the entrance measurement (depth_goal) and the dashboard; the tag detector does
     # not get it (passive depth has holes and the consistency gate would reject good tags, 'depth_disagrees').
     sensor['camera']['depth_for_tag']=False
     sensor['view']['panels']=view_panels(getattr(args,'panels','all'))
@@ -119,8 +119,8 @@ def _run_once(args,cfg_override=None,stop_when=None):
         check_build_ready()
     if live and (not args.execute or not sys.stdin.isatty()):raise ValueError('실주행은 --execute와 대화형 SSH 터미널이 필요합니다')
     cut=None
-    # work/<YYYYMMDD>/<HHMMSS>_<id>_<command>/ (2026-10-20 user request: one folder per day)
-    output=Path(args.output) if args.output else WORK/time.strftime('%Y%m%d')/(time.strftime('%H%M%S')+'_'+uuid.uuid4().hex[:6]+'_'+args.command)
+    # work/<YYYYMMDD>/<command>/<HHMMSS>_<id>_<command>/ (2026-10-20: one folder per day; 2026-10-23 user request: measure/shadow/drive apart)
+    output=Path(args.output) if args.output else WORK/time.strftime('%Y%m%d')/args.command/(time.strftime('%H%M%S')+'_'+uuid.uuid4().hex[:6]+'_'+args.command)
     output.mkdir(parents=True,exist_ok=False)
     (output/'config_used.json').write_text(json.dumps(cfg,ensure_ascii=False,indent=2))
     ctx=mp.get_context('spawn');stop=ctx.Event();results=ctx.Queue(1);previews=ctx.Queue(1);setup=ctx.Queue(1)
@@ -151,7 +151,7 @@ def _run_once(args,cfg_override=None,stop_when=None):
                 cfg['sensor']['calibration']=prepared['calibration']
                 (output/'config_used.json').write_text(json.dumps(cfg,ensure_ascii=False,indent=2))
                 if active:
-                    cut=cut_position(cfg)   # v2: no planner process; decisions are closed-form (controller.py / fine.py)
+                    cut=cut_position(cfg)   # no planner process; decisions are closed-form (controller.py / fine.py)
                     controller=Controller(cfg,cut,now)
                     if live:
                         from .canbus import Can
@@ -210,14 +210,15 @@ def _run_once(args,cfg_override=None,stop_when=None):
                         fork_tip=front(p,cfg).tolist(),predicted_arrival_y_m=float(arrival_y(p,cfg)),
                         depth_lateral_error_m=((status.get('depth') or {}).get('lateral_error_m') if status else None))
                     if not math.isfinite(geometry['predicted_arrival_y_m']):geometry['predicted_arrival_y_m']=None
-                dash.update(dict(mode=args.command,controller=status,observation=obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x'],camera_only=sensor['camera_only'],mode=cfg['mode'],final_check_distance_m=final_check_distance(cfg),panels=sensor['view'].get('panels')),control_recording=rec.status()),drain(previews))
+                dash_obs=None if obs is None else dict(obs,odom={k:v for k,v in (obs.get('odom') or {}).items() if k!='tracked_points'})
+                dash.update(dict(mode=args.command,controller=status,observation=dash_obs,geometry=geometry,cfg_view=dict(site=cfg['site'],target=cfg['target_front_x'],camera_only=sensor['camera_only'],mode=cfg['mode'],final_check_distance_m=final_check_distance(cfg),panels=sensor['view'].get('panels')),control_recording=rec.status()),drain(previews))
             if now-last_print>=2:
                 perf=(obs or {}).get('performance',{})
                 odom=(obs or {}).get('odom',{})
                 tag=(obs or {}).get('tag') or {};tf=(obs or {}).get('tag_fusion') or {}
                 tag_text=(tag.get('reason') or 'no_tag')+(' %.2fm'%tf['range_m'] if isinstance(tf.get('range_m'),(int,float)) else '')   # 2026-10-20: tag state on the terminal too
                 depth_txt=((obs or {}).get('depth') or {});depth_txt=('depth %.2fm %+.3f'%(depth_txt['x_body_m'],depth_txt['lateral_body_m'])) if depth_txt.get('ok') else 'depth -'
-                console.write('%s%s | %s | camera %.1f / process %.1f fps | odom %s: %s | tag %s | %s | %s'%(status['state'],('/'+status['phase']) if status.get('phase') else '',status['command'],perf.get('camera_fps',0),perf.get('processed_fps',0),odom.get('ok',False),odom.get('reason','sensor_starting'),tag_text,status.get('reason',''),depth_txt))
+                console.write('%s%s | %s | camera %.1f / process %.1f fps | odom %s: %s | tag %s | %s | %s'%(status['state'],('/'+status['phase']) if status.get('phase') else '',status['command'],perf.get('camera_fps',0),perf.get('processed_fps',0),odom.get('ok',False),odom.get('reason','sensor_starting'),tag_text,status.get('reason',''),depth_txt));last_print=now   # throttle 2 s (lost in the 2026-10-22 rewrite: the terminal printed every tick)
             if status['state'] in ('FAULT','COMPLETE'):terminal=status.get('reason',status['state']);break
             if update is not None and stop_when and stop_when(update):terminal='measurement_complete';break
             if args.seconds and now-t0>=args.seconds:terminal='requested_duration';break
@@ -253,7 +254,7 @@ def _run_once(args,cfg_override=None,stop_when=None):
 def parser():
     p=argparse.ArgumentParser(description='v6 OpenVINS IR stereo/IMU + color AprilTag docking')
     p.add_argument('command',choices=['measure','shadow','drive','note'])
-    p.add_argument('--folder',help='note: 판 폴더 (work/<시각>_drive)');p.add_argument('--lateral-cm',type=float,help='note: 줄자로 잰 포크 끝 좌우 [cm], 왼쪽 +')
+    p.add_argument('--folder',help='note: 판 폴더 (work/<날짜>/drive/<시각>_<id>_drive)');p.add_argument('--lateral-cm',type=float,help='note: 줄자로 잰 포크 끝 좌우 [cm], 왼쪽 +')
     p.add_argument('--heading-deg',type=float,help='note: 잰 방향 [deg], 왼쪽 +');p.add_argument('--longitudinal-cm',type=float,help='note: 목표 대비 종방향 [cm], 더 들어감 +');p.add_argument('--memo',default='')
     p.add_argument('--common',default=str(COMMON));p.add_argument('--mode',choices=['central','left'],default='central')
     p.add_argument('--seconds',type=float,default=0);p.add_argument('--view',action='store_true');p.add_argument('--port',type=int,default=8765)

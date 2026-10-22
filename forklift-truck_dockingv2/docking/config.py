@@ -46,9 +46,9 @@ TUNING=dict(preparation_s=5.,preparation_timeout_s=180.,mission_timeout_s=600., 
     # there shifts the camera sideways (pivot 0.78 m behind it) -> 'no_feasible_progress' (run 160536).
     # 2026-10-21: the drive distance accounts for both in-place turns (pivot arc, see controller); fraction 1.0 = aim for the
     # centreline; one retry if the re-measured lateral is still > sidestep_retry_lateral_m right after a sidestep.
-    # v2 (2026-10-22): sidestep whenever the lateral is at least one real step (user: 'always'); room 1 m is what the two turns need.
+    # 2026-10-22: sidestep whenever the lateral is at least one real step (user: 'always'); room 1 m is what the two turns need.
     sidestep_min_lateral_m=.17,sidestep_min_room_m=1.,sidestep_fraction=1.,sidestep_max_m=1.5,sidestep_retry_lateral_m=.17,sidestep_max_count=2,
-    # v2 flow: rough approach (heading straight, sidestep, one long drive to rough_stop_before_cut_m before the tag cut) ->
+    # flow: rough approach (heading straight, sidestep, one long drive to rough_stop_before_cut_m before the tag cut) ->
     # heading re-zero from the tag -> fine stage on the depth-measured entrance (bundles of turn/drive/turn-back, straight
     # legs <= fine_step_max_m) -> final check at final_check_distance_m (computed from the depth HFOV unless set) ->
     # entry on VIO + forward_path_bias_deg. Tolerances are editable in common.json 'operation'.
@@ -102,8 +102,9 @@ def load(path=COMMON, mode='central', require_mount=False):
     b=site.get('forward_path_bias_deg');site['forward_path_bias_deg']=0. if b is None else float(b)
     if not number(site['forward_path_bias_deg']) or abs(site['forward_path_bias_deg'])>10:raise ValueError('invalid forward_path_bias_deg')
     if type(site['tag_id']) is not int or not 0<=site['tag_id']<587:raise ValueError('invalid tag36h11 tag_id')
-    if site['left_tag_offset_m'] is not None and (not number(site['left_tag_offset_m']) or site['left_tag_offset_m']<0):
-        raise ValueError('left_tag_offset_m은 왼쪽 양수[m]입니다')
+    # Tag side = sign (2026-10-22): left +, right -, same convention as camera_lateral_m / forward_path_bias_deg.
+    if site['left_tag_offset_m'] is not None and not number(site['left_tag_offset_m']):
+        raise ValueError('left_tag_offset_m은 숫자[m]입니다 (왼쪽 +, 오른쪽 −)')
     if mode=='left' and site['left_tag_offset_m'] is None and require_mount:
         raise ValueError('common: left_tag_offset_m 미입력')
     rear=site.get('rear_space_m')

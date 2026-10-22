@@ -1,4 +1,3 @@
-"""Calibration validity and run-mode guards, without devices or ROS."""
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch

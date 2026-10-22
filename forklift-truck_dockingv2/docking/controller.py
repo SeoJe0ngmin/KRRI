@@ -1,4 +1,4 @@
-"""Nonblocking mission state machine (v2, 2026-10-22). All motion requires fresh measured feedback.
+"""Nonblocking mission state machine (2026-10-22). All motion requires fresh measured feedback.
 
 Flow (user decisions 2026-10-21/22):
   ROUGH       heading straight (one fine turn), sidestep whenever |lateral| >= one real step (at most twice), then ONE
@@ -13,7 +13,7 @@ Flow (user decisions 2026-10-21/22):
               turn, or back out (never behind the tag cut) and bundle again; fine_corrections_max in all -> stop, record,
               COMPLETE without entering.
   ENTRY       one VIO leg to the fork-tip target along heading -forward_path_bias_deg; timed fallback if the VIO is lost.
-  FALLBACK    no depth measurement at all: v1 blind entry on the fused pose (bounded aim turns on the predicted arrival).
+  FALLBACK    no depth measurement at all: tag-pose blind entry on the fused pose (bounded aim turns on the predicted arrival).
 The six-step beam planner (planner.plan) is no longer called; planner.Responses only tunes the braking reserve.
 """
 import math
@@ -30,7 +30,7 @@ class Controller:
         self.state='PREPARING';self.reason='stationary_preparation';self.command='stop'
         self.mission_start=None;self.stable_start=None;self.last_capture=None
         self.prep_seconds=0.;self.prep_last=None;self.prep_anchor=None;self.prep_pause=None
-        self.responses=Responses();self.request=None   # request stays None: no planner process in v2 (runtime checks it)
+        self.responses=Responses();self.request=None   # request stays None: no planner process (runtime checks it)
         self.action=None;self.brake=None;self.blind=False
         self.search_start=None;self.sweep=0.;self.motion_start=None;self.stop_at=None
         self.recovery_at=None;self.post_settle='PLAN'
@@ -39,7 +39,7 @@ class Controller:
         self.last_lateral_check=None    # the last |arrival| <= tolerance decision with its σ (record only, 2026-10-19)
         self.baseline_done=False;self.baseline_seconds=0.;self.baseline_last=None   # 30 s at rest with the tag in view, after Enter and after any search
         self.baseline_lost_since=None;self.overshoot_backed=False
-        # ---- v2 flow state ----
+        # ---- flow state ----
         self.phase='ROUGH';self.legs=[];self.route_points=[];self.route=[]
         self.sidesteps=0;self.heading_turns=0;self.no_progress_stops=0
         self.depth_samples=[];self.depth_collect_since=None;self.depth_last_stamp=None
@@ -79,7 +79,7 @@ class Controller:
         return wrap(-path_bias(self.cfg))
 
     def accept_plan(self,reply,now,o):
-        return   # kept for the runtime contract; v2 issues no planner requests
+        return   # kept for the runtime contract; no planner requests are issued
 
     # ---------------------------------------------------------------- motion primitives
     def set_legs(self,now,o,legs,label):
@@ -546,7 +546,7 @@ class Controller:
         self.state='COMPLETE';self.reason='final_no_room_recorded_no_entry';return self.status()
 
     def plan_fallback(self,now,o,p):
-        """v1 blind entry on the fused pose: aim the predicted fork-tip arrival at the centreline (bounded fine turns), then one leg."""
+        """Tag-pose blind entry (no depth): aim the predicted fork-tip arrival at the centreline (bounded fine turns), then one leg."""
         rem=remaining(p,self.cfg);h=p[2]+path_bias(self.cfg)
         L=rem/max(.2,math.cos(h))+self.cfg['site']['camera_to_fork_tip_m']
         if abs(arrival_y(p,self.cfg))>self.t['position_tolerance_m'] and self.fallback_corrections<self.t['transition_corrections_max'] and L>0 and abs(p[1])<L:

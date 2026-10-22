@@ -32,3 +32,6 @@ apriltag/offline_wheels/
 project_backup_lean_20260921_174252/
 # v5 학습 파일(장소마다 config/learned/<장소>.json) — 주행 기록에서 매번 다시 만들 수 있다. 판마다 바뀌어 VM 작업트리를 더럽히지 않게 git 에서 뺀다
 apriltag_v5/config/learned/
+
+# 참고용 외부 코드 사본 (reference/README.md)
+reference/

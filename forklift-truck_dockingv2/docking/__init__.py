@@ -1,1 +1,1 @@
-"""Observation-driven receding-horizon docking, v5."""
+"""Observation-driven receding-horizon docking."""

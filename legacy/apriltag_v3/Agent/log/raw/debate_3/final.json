@@ -1,0 +1,83 @@
+{
+ "issues": [
+  {
+   "num": 1,
+   "name": "Controller state machine — 진입/탈출 조건과 STOPPING·SETTLE 반대명령 금지",
+   "verdict": "compromise",
+   "conclusion": "전이표(enum) OBSERVE→DECIDE→EXECUTE→STOPPING→SETTLE→VERIFY(+REACQUIRE·FALLBACK) 를 골격으로, 명령은 DECIDE→EXECUTE 전이에서만 래치하고 EXECUTE 이후 상태는 stop 만 낼 수 있게 한다; OBSERVE 탈출 = 하드 플래그(heading/lateral_valid·gyro_alive·¬AMBIGUOUS) ∧ 최소 프레임(코드 내부) ∧ 직전 프리미티브 사후 일관성(쟁점 5 ⓪) 통과이고 σ 수렴은 연장 조건만, EXECUTE 중단 술어 = 종료식(plan 2-1 발령식·2-4 ω 규칙) + stale>150 ms(plan 1-6) + 블라인드 중 gyro dead + 가시성 픽셀 여유(쟁점 4) + 하드캡 emergency(plan 2-3). CAN 상태 소유자는 TX 스레드 1개(IMU 스레드·프레임 루프는 stop 요청만 — plan 2-4 의 'IMU 스레드 직접 플립' 은 TX 10 ms 틱 경유로 구현, 8°/s×10 ms=0.08° 지터라 양립, A/B 실험 유지); REACQUIRE 는 DECIDE 경유로 KF 예측 β 방향 ≤반화각 회전 1회만(360° 탐색 `next_set3_step`·FINAL 중 `recover_backup` 폐기); heading 축 판정 입력은 σ_ψ̂,eff(oblique 앵커 b ⊕ 자이로 드리프트×앵커 나이) 이고 heading_valid 는 '카메라 갱신 가능' 의미로 축소; KPI 는 'VERIFY 후 반전 ≤1/도킹'·'T 구역 회전 ≤2'(새 config 0, 삭제 SETTLE_SEC(이미)·HOLD_MAX_CONSEC·MAX_STEPS → 쟁점 7 예산으로).",
+   "decisive_evidence": "181437 rotation.jsonl #7 ts …550.24(settle 포함) → decision #9 ts …551.46 = 30프레임 뒤: 8→9→10 반전(−6.7°→+6.1°→−3.7°)은 rot_control.py:128-134 settle 통과 후 정지 상태 측정에서 나왔다 — Failure 3(관성 중 반전)이 아니라 측정 문제이므로 STOPPING/SETTLE 만으론 못 막고 '정지 후 2 s 반전 0' 은 공허한 KPI(critic 양 렌즈, judge 재계산 일치). 코드: `_hold`(control_from_pose.py:611-622) 는 SETTLE_SEC 시간 대기만·정지 확인 없음; `plan_step` 은 `stable`/`reliable_angle` 을 읽지 않음(185709 decision #2 'lateral 흔들림 123.9 mm·17.6배' stable:false, #3 reliable_angle:false 로 sidestep·aim_drive 실행); `next_set3_step` 360°(:41-49)·`recover_backup`(:177-180) 은 추정기가 있는 도킹에서 위험. plan 1-3 이 T(정면)를 heading_valid=False 로 정의하므로 'heading_valid=False → 축 hold' 는 T 에서 매 VERIFY hold 의 자기모순(critic 정밀). plan 1-6 stale·2-2 데드맨·2-3 emergency 는 확정 결론인데 전이표 예외에 없었음. critic.md §14·§25, autodock A11 상태기계.",
+   "verification": "3.5 m·tilt 25° 정지 → β_px 조준 회전 ×10: VERIFY 가 hold 없이 판정(σ_ψ̂ 표시)되고 VERIFY 후 반전 ≤1/10; 같은 세션에서 검출 스레드에 300 ms 인위 부하 주입 → EXECUTE 가 stale 술어로 stop 하는지(CAN 로그 stop 프레임 시각 vs 부하 시각).",
+   "unresolved": "SETTLE 정지 판별 문턱이 97 크립 진동 통계와 겹치면(plan 2-3 미확정) SETTLE 이 매번 캡으로 끝나 시간 기반 settle 로 회귀(느리지만 안전측) — 캡 발화율을 KPI 로 기록.",
+   "needs_research": false
+  },
+  {
+   "num": 2,
+   "name": "회전중심(pivot) 좌표 decouple — lateral↔heading coupling 을 어디서 끊나",
+   "verdict": "critic",
+   "conclusion": "결합은 plan 1-1 `T_tag←pivot` 에서 한 번 끊고, A 는 회피가 아니라 실시간 도출한다: precheck 회전(tilt≥20°, 3.5/6 m ×5)으로 자이로 스케일 s 와 A 를 분리한 Â 를 초기값으로 두고 도킹 중 매 회전마다 프레임 회귀 `Δβ_px = s·(1+Â·cosβ/d)·Δψ_gyro` 로 갱신(잡음 미분 아님), σ_A 는 KF P 로 전파. 결정 배치 규칙은 'A-민감도 최소' 로 격하해 유지 — 태그 겨냥은 β_px = δ̂(CAM_YAW_OFFSET, A 무관), 축 위 J 겨냥은 게이트 σ_A·sinβ/d ≤ HEAD_TOL/k 통과 시만(미달이면 태그 직접 겨냥으로 d 를 줄인 뒤 재평가), 정지는 카메라 forward(plan 2-1); x_off(카메라↔포크 중심 횡오프셋)는 줄자 1회 물리 상수. 새 config 0(A_M·X_OFF_M·CAM_YAW_OFFSET_DEG 는 plan 1 캘리브 항목), 삭제 CAM_TO_PIVOT_M.",
+   "decisive_evidence": "기하 재계산: tan β_piv = d·sinβ/(d·cosβ+A) 에서 d_J 3 m·β 20°·A=±0.4 → 17.7°/23.0°(Δ 5.3° > HEAD_TOL), 다리 끝 lateral 오차 ≈ A·sinβ = 13 cm 로 d 와 무관해 재조준 반복으로도 안 줄어든다 — 'β_cam=0 ⇒ β_piv=0' 의 A-불변은 태그 자체 겨냥에만 성립(critic 안전). 정면 회전이 카메라를 A·sinα 옮기므로(σ_A 0.5·sin20° = ±17 cm) J 배치 계획에 Â 가 필요(critic 정밀). CLAUDE.md 상수 최소화 원칙이 '회전팔 A' 를 실시간 도출의 명시 예로 든다. debate_1 판정(|A|≲0.4 미확정, 1.46 철회, 검증식 그대로). δ=0 암묵 가정 지적(1°×1.5 m = 26 mm 누설). proposer 재반박이 수용.",
+   "verification": "plan 1-1 회전×5(3.5/6 m, tilt≥20°)로 Â·s 확정 후 같은 날 J 겨냥 3 m 다리 ×3 을 A=0 가정 / 추정 Â 로 각각 실행 → J 도착 lateral 차가 기하 예측 ≈ Â·sinβ 와 일치하는지; 8 m 첫 조준 회전 1회의 Δβ_px/Δψ_gyro 로 낸 Â 가 precheck Â 와 ±0.05 m.",
+   "unresolved": "8 m 에서는 A·cosβ/d ≈ 5% 라 단일 회전의 Â 분해능이 s 정밀도에 종속 — precheck 두 거리 없이 런 중 갱신만으로는 A 확정 불가; 카메라–IMU Δψ 차(0.3~2.3°) 원인 미확정이 회귀 잔차로 섞일 수 있음(β_px 는 R 무관이라 PnP 바이어스와는 분리됨).",
+   "needs_research": false
+  },
+  {
+   "num": 3,
+   "name": "candidate/cost 컨트롤러 — 1-step 한계 vs 지평 vs 가이드",
+   "verdict": "compromise",
+   "conclusion": "가이드 순서(대각 다리 → 태그 겨냥 회전 β_px=δ̂ → 블라인드 직진, x_J = T 기본, α* = atan(ℓ/(d−x_J)) 기하 도출)는 proposer 안을 채택하되 비용함수·σ_J·5후보 롤아웃은 도입하지 않고 J 는 로그만 — 실제 결정은 부등식 2개: '재조준 vs 계속'(가시성·β 재중심, 쟁점 4) 과 T-VERIFY 수용식 `|F̂|+k·σ_F ≤ T_l ∧ |atan(ℓ̂/d_T)|+kσ ≤ T_h`, 여기서 F̂ = ℓ̂·x_ref/d_T + (d_T−x_ref)·r̂(회전 후 β_px 잔차), σ_F = x_ref·σ_ψ̂,eff; 롤아웃은 가시성·정지점(plan 2-1) feasibility 검사로만. 재접근은 V-다리 식 대신 현재 heading 으로 97 후진(b ≥ 최소 신뢰 다리 ∧ 후진 후 α'' = atan((ℓ+b·sinα)/(d+b·cosα−x_J)) ≤ 가시성 해, 상한 = 직전 전진 경로길이). 기준점 x_ref 확정이 코더 선행조건: `DOCK_EXTRA_M` → `CAM_TO_REF_M`(물리, 탑재부 사양이 정한 점) + `STANDOFF_M`(운영); 삭제 AIM_FINAL_MAX_LAT_M·AIM_BACKUP_M·AIM_CHUNK_MAX_M·AIM_MAX_BACKUPS·STEP_M·FWD_SAFETY(v3 src/tools 참조 0, grep 확인).",
+   "decisive_evidence": "1-step 지평 근거였던 9/7 step 12~15 는 지평 문제가 아니다: measure #13/#14 tilt 3.91°/4.14°(정면원뿔)에서 heading −3.39→+3.63(Δcam 7.02° vs IMU 5.61°, 비 1.25 = debate_1 정면쌍 1.14~1.25 바이어스 서명) → lateral −11→−135 mm — plan 1-3 게이트가 고칠 오차를 controller 근거로 쓴 이중해석(critic 정밀, judge 재계산 일치) → N-step 필요 증거 소멸, CLAUDE.md '필요 증명 후' 원칙. V-다리 식 `ℓ/tanα*−(d−x_T)` 는 lateral 불변 후진을 가정한 기하 오류(직선 후진은 축 교점 불변; step 15 1.5 m 후진에 lateral −0.196→−0.918 = b·sinα 항). 허용식 기준점: config `DOCK_EXTRA_M` 주석(카메라 정지 2.02 m = 포크 끝 0.5 m, 포크 중심 ≈1.05 m) → 두 레버(앵커 바이어스 δ → x_ref, 조준 잔차 r → d_T−x_ref, 대수 검산: L̂=L−dδ 와 주행 −(d_T−x_ref)δ 상쇄)로 `AIM_FINAL_MAX_LAT_M=0.10` 위반 단정은 철회(포크 중심 기준 허용 ℓ = 0.03·3.5/1.05 = 100 mm). Poreski A10·autodock A11 고정 순서+문턱 성공 선례; Yasunobu C11 은 연속 노치 문제라 유추 약함. backward 67 은 후방 무관측+코스팅 14 cm(drive #3 6.80 s 풀속 후진) → 97 전용(plan 2-5 안전속도 논리).",
+   "verification": "포락선 안 동일 시작자세(ℓ≈1.5 m, d≈7 m) ×5 에서 '가이드+부등식' 의 프리미티브 수·T 도착 lateral 분포 — 8 이하·반전 0 이면 비용함수 도입 근거 없음 확정; 정면 회전 직후 F̂(x_ref 기준) 예측 → 최종 정지 후 외부 줄자 포크 기준 lateral ×10 → |F̂−실측| σ ≤ x_ref·σ_ψ̂ 이면 식 확정(카메라 기준이면 예측이 실측의 2~4배 = 기준점 검정).",
+   "unresolved": "x_ref 는 탑재부 사양(사용자 확정 항목); (d_T−x_ref)·σ_θ = 2.45 m×0.5° ≈ 21 mm, θ_min,inc/2 0.65° 면 28 mm 라 r-레버가 lateral 예산을 거의 소진 — 대문제 4(태그 가시거리·depth 정지로 d_T−x_ref 단축) 없이는 99% 불가.",
+   "needs_research": false
+  },
+  {
+   "num": 4,
+   "name": "태그 가시성 제약 — cost 항 vs 하드 제약, 소각 대각 규칙",
+   "verdict": "compromise",
+   "conclusion": "가시성은 cost 항이 아닌 하드 제약(허용집합): 롤아웃 전 구간 `|β_tag| ≤ β_vis(d)` 와 상단 컷 예측을 만족하는 프리미티브만 후보이고, 실행 중 중단 술어는 관측값 `margin_px − v̂·(τ_eff + t_now−t_capture)·∂margin/∂x − pitch_px ≤ 0`(pitch_px = precheck 67 정지 n=20 의 태그 상단 픽셀 최대 상승량)으로 실시간 도출하며 해석식 β_vis·x_cut(h, VFOV, pitch) 은 로그 대조용. '태그 화면 중앙 유지' 는 이 하드 제약 + β 재중심 회전으로 구현하고 β=0 을 문자 그대로 유지하는 건 직접 겨냥 모드만; α* = atan(ℓ/(d−x_J)) 은 기하 도출(선택 상수 아님), θ_min 하한은 σ_ψ̂,eff(앵커 나이×드리프트) 가 σ_F 예산을 넘을 때만 x_J 를 뒤로 물리는 파생 조건(축 잔여 ≥ 최소 신뢰 다리 ∧ σ_F 개선 ≥ kσ). 포락선 밖(`|ℓ| > (d−x_J)·tanβ_vis`) 은 FAR 한정 자이로 dog-leg 1회(97, 블라인드 길이 ≤ 최종 블라인드 다리급 ≈2 m/≤10 s, 재획득 후 30프레임 branch 재초기화 전 NEAR 결정 금지), 그래도 밖이면 출발 거부; 시작 포락선(8 m 에서 |ℓ| ≲ 2.8 m) 은 운영 요구사항으로 대문제 4 이관. 삭제 TAG_CUT_MARGIN_PX·AIM_MAX_BEARING_DEG·AIM_MAX_TAG_OFF_DEG·SIDESTEP_BACKWARD_GAIN_DEG·SEARCH_BACKUP_M.",
+   "decisive_evidence": "`detection_tag.py:25-37` docstring '화면을 직접 보는 쪽이 무조건 맞다' + h 미확정(config 1.1 vs 로그 0.85~1.2, debate_1) → 해석식은 검출 한계가 아니다(가장자리 왜곡·decision_margin·블러가 더 안쪽에서 끊음). abort.jsonl 56/58 px @ forward 3.30/3.26 m 는 주행 중 값이고 제동 노즈다운 1° ≈ +24 px(fy≈1.4k) 는 STOPPING 중 컷 가능(critic 안전). 포락선: 9/7 시작 ℓ/(d−x_T) = 4.58/4.65 = 0.98 > tan31° = 0.62 → 태그를 보며 축에 닿는 경로가 없다(두 critic 일치); v2 는 step 4 bearing 48.6° 를 3 m 다리 2개 뒤에 발견. dog-leg 길이(10 s vs 25 s)는 자이로 정밀이 아니라 블라인드 주행 안전이 제약 → 짧은 쪽(2 m 뒤 4.58−2.0 = 2.58 < 2.80 으로 포락선 안, 다만 α* 29° 로 β_vis 근접). Nav2 A12 staging·Walter A1(7.5 m/횡 3 m 실패) 포락선 선례, Richter A9 정면 회피는 heading 을 쓰는 구간에만 필요.",
+   "verification": "3.5/6 m 정지 상태 저속 회전으로 검출이 끊기는 β 를 좌우 각 3회 기록(해석식과 >3° 차면 관측값 채택) + 67 정지 20건의 태그 상단 픽셀 최대 상승량 → pitch_px; 9/7 시작자세에서 dog-leg 1회 → β_px 재획득 회전 정지·30프레임 후 heading_valid 복귀 ≤5 s·포락선 안 판정 → 통상 접근, 포락선 안 시작 20회 태그 손실 0.",
+   "unresolved": "상단 컷 3.3 m(h≈1.1 m) 자체는 규칙으로 못 없앤다 — 대문제 4 하드웨어(태그 높이·depth 정지) 미해소면 마지막 1.28 m 는 이 제약과 무관하게 블라인드; dog-leg 은 사이드스텝의 부분 부활(맹목 lateral 보정은 안 함)이라 운영 포락선이 1차 해법.",
+   "needs_research": false
+  },
+  {
+   "num": 5,
+   "name": "행동 게이트 — persistence·uncertainty threshold·expected improvement·reversal guard",
+   "verdict": "critic",
+   "conclusion": "게이트는 5항: ⓪ 프리미티브 사후 일관성(교차센서 중재) — 회전 후 |Δψ_cam−Δψ_IMU| 와 |Δlat| ≤ Â_max·sinΔψ + k·σ_random(b 미포함) 대조, 초과면 카메라 재앵커·반전 금지, ψ̂ 는 자이로 증분 전파로 lateral = d·sin(β_px−ψ̂) 재계산 후 판정(카메라 재앵커는 innovation < kσ_random 이거나 앵커 나이 한도(쟁점 7 도출값) 도달 시 30프레임 다수결만; 불일치 반복 → heading 축 판정불가 → Tier 1); ① 지속성(프레임 잡음용, N 코드 내부); ② 3분할 — 행동 `|e| > max(k·σ_eff, δ_q)`, 수용 `|e|+k·σ_eff ≤ T`, 판정불가 `k·σ_eff > T/2 → Tier 1 즉시`, 겹치면 수용 우선, δ_q = 최소 신뢰 증분의 결과공간 값(회전 θ_min,inc·(d_T−x_ref), 직진 97 최소 증분); ③ 최소 기대개선은 F̂ 공간에서; ④ 반전 가드(정지 후 오차가 T+kσ 를 넘어 0 을 지났을 때만, 구역당 1회) 는 ⓪ 뒤에 둔다. 회전 데드밴드는 HEAD_TOL 이 아니라 결과공간(LAT_TOL/(2·(d_T−x_ref)))·θ_min,inc·kσ_θ 에서 도출. 새 config 0(k·N 코드 내부), 삭제 AIM_TOL_DEG·AIM_FINAL_TOL_DEG·AIM_ABORT_WINDOW·AIM_DRIFT_ABORT_DEG(직진 중단 술어는 `fwd_abort_deg` 하나, 레버 = x_cam_now−x_ref).",
+   "decisive_evidence": "critic 안전의 재생(judge 재계산 일치): proposer 4항 AND 를 181437 8→9 에 적용하면 전부 통과한다 — 30프레임 부호 일정(spread lateral 2.7 mm·heading 0.05°), |e| 6.14° > 3+2·0.05, 6° 회전 기대개선 ≫ σ_θ, −6.7→+6.1 '0 통과' 1회 허용 → 같은 반전, 9→10 은 '구역당 1회' 로만 막혀 abort. 실제 기구: tilt 23.6→28.0°(oblique, θ_min 통과)에서 Δψ_cam −4.53° vs IMU −6.74°, +3.06° vs +5.09°(비 0.67/0.60, 차 2.2°/2.0°) → lateral 0.423→0.319(−104 mm; 제자리 회전이면 |A|≤0.4 로 ≤47 mm 만 가능) → 정지마다 새 바이어스 표본으로 재앵커하는 것이 반전 원천이고 σ̂(점프/spread 38×)는 못 본다 = critic.md Failure 2. critic 정밀의 공백: 행동 `>T+kσ` 와 수용 `+kσ≤T` 사이 (T−kσ, T+kσ) 는 항상 비어 있지 않음(σ 12 mm·k 2 → (6, 54) mm 는 고치지도 받지도 못함 → hold→캡→abort) — MERL C12 양자화 불변집합(T ≥ kσ + δ_q/2). 데드밴드 max(HEAD_TOL, θ_min,inc, kσ_θ) 는 9/7 σ_θ 1.27° 로 ≈2.5° → (d_T−x_ref)·2.5° ≈ 107 mm ≫ LAT_TOL. Poreski 스윕은 잡음 아래 문턱 문제라 바이어스·'허용치+잡음 위에서만 행동' 을 정당화하지 않음. plan 1-5 교차센서 일관성이 이미 1차 방어선.",
+   "verification": "3.5 m·tilt 25° 정지에서 IMU 회전 ±5° ×10 → Δψ_cam/Δψ_IMU·Δlateral 분포; |Δψ_cam−Δψ_IMU| > k·σ_random 비율 >10% 면 '정지마다 재앵커' 금지 확정, 자이로 전파 lateral 의 회전 전후 차 ≤ Â·sinΔψ+2σ 확인; 프레임별 bag 재생으로 T 구역 VERIFY 표본 (|e|,σ) 산점도에 세 영역을 그려 공백 표본 0.",
+   "unresolved": "불일치 시 어느 센서가 옳은지는 미확정(카메라–IMU Δψ 차 0.3~2.3° 원인, plan 1 미확정) — ⓪ 는 '반전 금지·전파' 이지 '자이로가 진실' 이 아니며, 카메라가 옳은 경우 바이어스를 안고 다음 다리를 달려 재관측으로 고친다; σ_random·b(d,tilt)·σ_floor 는 정적 격자 전엔 없어 그 전엔 heading/lateral_valid 하드 플래그만.",
+   "needs_research": false
+  },
+  {
+   "num": 6,
+   "name": "Zone(far/near/final) 전환 hysteresis 와 zone 별 목표",
+   "verdict": "compromise",
+   "conclusion": "구역은 거리 상수가 아니라 결정 유의성 + 이벤트: FAR = `|ℓ̂| > k·σ_lat`(방향 결정만 유의; 67; β 재중심·대각 다리 진행, 30 mm급 lateral/heading 판정 금지) · NEAR = `σ_F = x_ref·σ_ψ̂,eff ≤ T_l/2`(기준점 최종 lateral 판정 유의; heading_valid 인 oblique 다리에서 진입; σ_ψ̂,eff 의 입력 b(d,tilt)·σ_floor·θ_min(d)·Â·s·x_off·δ̂·h·β_vis 는 `perception_calib.json` 으로 묶고 부재/불일치 → dynamics_calib 과 같은 출발 거부, 임시 거리 규칙 없음) · FINAL = '태그 겨냥 회전 완료 + T-VERIFY 수용식 통과' 이벤트로만 진입(회전 전면 금지, 97, heading 은 자이로 짧은 다리, gyro dead → stop·ABORT). 전환 판정은 VERIFY(정지)에서만, 거리 성분 hysteresis = 다음 다리 계획 속도의 D̂(v_level, dynamics_calib) + 2σ_x, T 파생 여유 = q95⁺(dynamics_calib) + 제동피치 px. 새 config 0, 삭제 AIM_NEAR_T_M·AIM_AT_T_M·AIM_STANDOFF_M(파생), `DOCK_EXTRA_M` 은 쟁점 3 대로 분리.",
+   "decisive_evidence": "measure.jsonl #1: 8.15 m 에서 lateral −4.58 m 의 30프레임 spread 2.9 mm → σ̂ 만으로 lateral_valid 를 정하면 8 m 에 NEAR 진입 = v1 유령 추종 부활(critic 안전; σ_floor(d,tilt) 는 정적 격자 전엔 없음, '3.5 m 이하·oblique 제한' 은 거리 상수의 위장) — 반면 SNR 30 이라 β_J 방향 결정(오차 ≈1°)은 가능해 'FAR 에서 lateral 결정 금지' 는 가이드와 자기모순(critic 정밀). NEAR 진입을 d 레버(3.5 m → 61 mm/°)로 재면 실제 레버 x_ref(1.05~2.02 m)보다 1.7~3.3배 엄격 → '태그 컷 전 True 안 됨' 이 정의상 거의 확정이고 그때의 'T+1 m' 은 상수 부활. hysteresis 'τ_eff·v̂' 는 정지 평가라 v̂≈0, '여유' 는 새 상수, FINAL gyro dead 누락 — 전부 재반박에서 수용. plan 2-6 캘리브 부재 → 출발 거부와 대칭; Wang 2021 A14 switching region(관측성 기준), Yilmaz & Temeltas(전환 시 추정 점프 → 정지에서 전환), critic.md §20·Failure 7.",
+   "verification": "oblique 5→3.5 m 직진(plan 1 실험 3) ×10 의 σ_ψ̂,eff 시계열로 NEAR 진입 거리 분포 — 3.5 m 이전 진입 ≥9/10 이면 정의 확정, 미달이면 대문제 4(태그 높이·T); 정적 격자 후 5 m·tilt 20° 정지 lateral 10회 std 로 표가 NEAR 거리를 정하는지(사람 상수 0); 경계 ±2σ_x 잡음 주입 시뮬 FAR↔NEAR 왕복 0.",
+   "unresolved": "perception_calib 전엔 도킹 자체가 불가(의도된 보수성) — 정적 격자가 실차 2일차라 그 전 시연은 dry-run 만; 태그 컷 전 σ_F ≤ T_l/2 가 한 번도 안 되면 정렬 불가로 대문제 4 하드웨어 결정 대상.",
+   "needs_research": false
+  },
+  {
+   "num": 7,
+   "name": "\"불확실하면 기다림\" deadlock 의 timeout·fallback·수동전환",
+   "verdict": "compromise",
+   "conclusion": "카운트 상수 5개를 진행도 예산 + 시간 예산 1개로 대체: 진행도 = 단계 완료 이벤트 카운트(다리 종료·태그 겨냥 회전 완료·T-VERIFY 통과; J 는 로그만), 시간 = `DOCK_TIME_BUDGET_S`(운영자 값, 유일 신설 config). Tier 0 WAIT = 판정불가 플래그 ∧ σ 가 아직 줄어드는 중(캡 코드 내부) · Tier 1 REPOSITION = 관측성 개선 프리미티브(원거리 → 대각 진행, 정면 → 자이로 앵커; 한도는 σ_ψ̂(t)·x_ref ≤ T_l/2 가 깨지는 시각 = LAT_TOL/(2·x_ref) ÷ b_g 재추정 후 실측 랜덤워크 — 고정 60 s 아님) · Tier 2 원인 분기 1회 = T-VERIFY 수용식 초과 → 97 재접근 / 태그 실종(FINAL 제외) → REACQUIRE / 블라인드 직진 중 자이로 Δψ > fwd_abort_deg(x_cam_now−x_ref) → stop → 97 후진 → 재VERIFY / 양자화 공백(|F̂| 수용 밖 ∧ < δ_q) → 즉시 Tier 3 + '저속 회전 단 필요' 로그(plan 2-4 조건부 항목 승격 근거) · Tier 3 ABORT = stop 프레임 + heartbeat 지속 송신(버스 침묵 금지) + 운영자 알림; 집합 = gyro dead(블라인드)·추정기 재초기화 ≥2·calib 부재·포락선 위반·응답 부재(plan 2-3)·하드캡·시간 예산 초과. FINAL 은 대문제 4 해소 전 DONE-unverified(DR) 로 로그 표기(검증은 외부 줄자). 삭제 HOLD_MAX_CONSEC·MAX_STEPS·AIM_MAX_BACKUPS·SEARCH_MAX_ROUNDS·SEARCH_AFTER_MISSES(태그 실종 타임아웃 코드 내부).",
+   "decisive_evidence": "181437 measure.jsonl #21 ts …619.19 뒤 drive.jsonl #5 final 5.97 s — 최종 pose 기록 0: 태그 컷 3.3 m → 정지 2.02 m 라 'FINAL VERIFY 실패' 는 카메라로 관측 불가, 그 위에 VERIFY 3조건·RETRY·DONE 을 세우면 '눈 감고 DONE'(critic 안전; debate_2 top risk 블라인드 1.28 m). 진행도를 J 로 재면 정면 회전 직후 A·sinα 카메라 이동(≤17 cm)으로 J 가 일시 증가 → 정상 수렴을 정체로 오판(critic 정밀; proposer 가 리스크로 적은 것이 기본 경로). 'HEAD_TOL/2 까지 60 s' 는 새 시간상수이자 틀린 레버 — 최종 lateral 은 x_ref·σ_ψ̂ 이므로 한도 = LAT_TOL/(2x_ref)/드리프트(카메라 기준 0.43°→26 s, 포크 중심 0.8°→48 s @1°/min). Tier 2 일괄 재접근은 원인이 회전 양자화면 같은 레버·같은 양자화로 재현(critic 정밀). ABORT 가 버스 침묵이면 차량 워치독 미확인(plan 2-7(1), Curtis PDO Timeout 0 = 마지막 명령 유지)에 위험 → stop 프레임 지속(IEC 62745). 181437 step 15 후진 1회 → 16~21 성공 = 재시도 예산 1 현실적; autodock A11·Nav2 A12 후퇴 재시도; critic.md §19·Failure 6.",
+   "verification": "고장주입 4종(AMBIGUOUS 10 s 강제·lateral_valid False 강제·자이로 표류 2° 주입·양자화 공백 케이스: 정면 회전 뒤 F̂∈(T−kσ, θ_min,inc·(d_T−x_ref))) 각각 캡 안에 해당 Tier 도달·반전 0 + CAN 로그에 stop 프레임 연속 확인; 최종 정지 ×10 외부 줄자(plan 2-7(6)) — σ > T_f/3 이면 DONE-unverified 표기 유지; 정지 60 s 자이로 랜덤워크 실측으로 Tier 1 한도 갱신.",
+   "unresolved": "재접근 1회의 성공률은 조준 잔차 r 의 재추첨 확률 — σ_θ 0.5°·레버 2.45 m 에서 |r| ≤ 0.7°(30 mm) 는 회당 ≈84%, 2회로 ≈97% 라 99% 는 σ_θ 축소(저속 회전 단) 또는 레버 단축(대문제 4) 없이는 불가(judge 추정); σ_J 과소평가 리스크는 J 를 로그로 내려 소멸.",
+   "needs_research": false
+  }
+ ],
+ "key_conclusions": [
+  "컨트롤러 = 전이표 상태기계(명령 래치는 DECIDE→EXECUTE 만, 이후는 stop 전용, CAN 소유자 TX 스레드 1개) + 가이드(대각 다리 → 태그 겨냥 β_px=δ̂ → 블라인드 직진) + 부등식 게이트 2개; 비용함수·N-step 지평은 근거 소멸(9/7 step 12~15 는 정면 heading 바이어스, 8→9→10 반전은 관성이 아니라 정지마다 카메라 재앵커 Δψ_cam/IMU 0.67·0.60)이라 J 는 로그만이고, 교차센서 사후 일관성 ⓪ 없이는 v2 반전이 v3 에서 그대로 재생된다.",
+  "모든 문턱은 기준점 x_ref 두 레버(앵커 바이어스 δ → x_ref, 조준 잔차 r → d_T−x_ref)에서 도출: 게이트는 3분할(행동 |e|>max(kσ,δ_q) / 수용 |e|+kσ≤T / 판정불가 kσ>T/2→Tier 1), 구역은 결정 유의성(FAR |ℓ̂|>kσ · NEAR σ_F=x_ref·σ_ψ̂,eff≤T_l/2 · FINAL 이벤트), A 는 매 회전 회귀로 실시간 도출, perception_calib.json 부재 → 출발 거부. 거리 상수 0, config 순감 ≈20(삭제 22, 신설 DOCK_TIME_BUDGET_S·STANDOFF_M, DOCK_EXTRA_M → CAM_TO_REF_M); x_ref(탑재부 사양)는 사용자 확정 선행조건.",
+  "(d_T−x_ref)·σ_θ ≈ 2.45 m×0.5° = 21 mm, θ_min,inc/2 면 28 mm 라 T 에서의 회전 양자화가 lateral 예산 30 mm 를 거의 다 먹는다 — 마지막 1.28 m 는 DONE-unverified 로 표기, Tier 2 는 관측 가능한 트리거(수용식·자이로 표류)만, 양자화 공백은 즉시 수동 + '저속 회전 단 필요' 로그; 근본 해소(블라인드 레버 단축·태그 높이·depth 정지·시작 포락선 운영 요구)는 대문제 4 몫. researcher 요청 없음(보류 0)."
+ ],
+ "top_risks": [
+  "기준점 x_ref 미확정 + 회전 양자화: x_ref 가 확정되기 전엔 허용식·lateral_valid·zone 어느 상수도 맞는지 판별 불가하고, 확정돼도 σ_θ 0.5°·레버 2.45 m 면 1회 시도 |r|≤0.7° 성공 ≈84% → 99% 도킹은 저속 회전 단(plan 2-4 조건부 항목) 또는 태그 가시거리 단축(대문제 4) 없이는 원리적으로 불가.",
+  "교차센서 중재의 방향과 캘리브 의존: 카메라–IMU Δψ 불일치(2°급, 원인 미확정) 때 '재앵커 금지·자이로 전파' 는 카메라가 옳은 경우 바이어스를 안고 다음 다리를 달리며, σ_random·b(d,tilt)·σ_floor 가 정적 격자(실차 2일차) 전엔 없어 perception_calib 부재 = 도킹 불가 — 3.5 m·tilt 25° ±5°×10 분포 실험과 정적 격자 없이는 게이트·구역이 전부 미검증 상태로 남는다."
+ ]
+}

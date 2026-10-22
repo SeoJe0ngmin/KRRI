@@ -15,9 +15,9 @@ class RecoveryPolicyTest(unittest.TestCase):
         self.assertEqual([x['stamp'] for x in samples],[0.,.005,.075])
         self.assertEqual(imu.status()['gaps'],1)
         self.assertAlmostEqual(sum((b['stamp']-a['stamp'])*.2 for a,b in zip(samples,samples[1:])),.015)
-        imu.add('gyro',.145,[0,0,.2],.145);imu.add('gyro',.5,[0,0,.2],.5)   # second and third gaps: still no fault (v4 rule)
+        imu.add('gyro',.145,[0,0,.2],.145);imu.add('gyro',.5,[0,0,.2],.5)
         self.assertIsNone(imu.fault);self.assertEqual(imu.status()['gaps'],3)
-        imu.add('gyro',.4,[0,0,.2],.6)   # backwards stamp: skipped and counted, not fatal
+        imu.add('gyro',.4,[0,0,.2],.6)
         self.assertIsNone(imu.fault);self.assertEqual(imu.status()['reversals'],1)
     def test_short_accel_gap_bracketed_interpolation(self):
         imu=ImuSynchronizer(short_gap_s=.1)

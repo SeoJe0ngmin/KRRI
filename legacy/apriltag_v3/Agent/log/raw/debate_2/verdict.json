@@ -1,0 +1,86 @@
+{
+ "issues": [
+  {
+   "num": 1,
+   "name": "정지거리 모델 — P(d_stop|v) 최소 구현",
+   "verdict": "compromise",
+   "conclusion": "정지거리는 셀 (level 67/97)×(dir fwd/bwd) 별 1-파라미터 비례 모델 D̂=τ_eff·v̂ + 잔차 경험분포 {n, median, σ_e, q95⁺, max, 보장=1−1/(n+1)}(q99 는 n≥100 전엔 '미검증' 표기)로 관리하고, D_obs = CAN 실제 write 시각의 x̂ − 정지판정 후 30프레임 중앙값을 **경로길이**(Δforward/cos ψ̂ 또는 |Δp|)로, x_rem 은 **카메라 forward**(A 무관)로 고정한다; 발령 x_rem ≤ τ_eff·v̂ + v̂·Δt_ctrl/2, m=0(한쪽 마진은 T_f < max_n(e) 일 때만), '부족분은 97 크립 1회로 복구' 조항 삭제. 이 표는 가시 T 정지만 캘리브하므로 블라인드 최종 다리(태그 컷 3.3→2.02 m, 1.28 m)와 정속 최소길이 미만 다리는 모드 ② 정지출발 S(T) 분포표(명령길이 빈별 median·σ·CV; FWD_T0/T1/A 는 모듈 상수가 아닌 캘리브 파일 값으로 존치)로 다루고, σ_S 가 T_f 를 못 만족하면 'dynamics 로 못 닫음'으로 대문제 4 에 보고한다. 삭제: AIM_STOP_LEAD_M, AIM_STOP_CONFIRM; 새 config 0; 캘리브 4셀×{τ_eff, σ_e, q95⁺, n} + S(T) 표 2레벨.",
+   "decisive_evidence": "9/7 abort.jsonl 56/58 px 컷(forward ≈3.26~3.30 m) + config/control.py:23 DOCK_EXTRA_M=−2.02 → 최종 1.28 m 카메라 블라인드(decision #21 '마지막 1.26m' 5.97 s 개루프) → 가시구간 σ_e 는 도킹 KPI 본체를 검증 못 함(critic 2). 오차보정.txt can_pulse 코스팅 forward축 0.116/0.118 vs 경로 0.139/0.141 m(ψ≈33°, 17% 차) → D_obs 경로길이. CLAUDE.md '<2 s 명령 CV 100%+' + FWD_A 0.1396 역산 97 최소증분 ≈0.12 m > 복구할 ~3 cm → 크립 복구는 자기모순·critic Failure 4(critic 1). 분포무관 P(new>max_n)=1/(n+1) → n=20 은 95% 보장. C10 Yaskawa 지연×속도형·C18 ∝v 가 비례 모델 지지; 9/7 run 간 v −11~+15% 는 v̂ 가 흡수.",
+   "verification": "3.5 m 에서 67 정속정지 n=20 을 정면(tilt<10°)·사각(30°) 두 기하로 — 경로길이 D_obs 의 τ_eff 가 두 기하에서 차 <5% 이고 σ_e ≤ 2 cm 인지(D_obs 는 CAN write 시각 기준); 같은 세션에 97 정지출발 5 s ×10 총이동 σ_S(블라인드 다리 예산).",
+   "unresolved": "T_f 미확정(대문제 4) → m=0 vs 한쪽 마진 최종 결정 불가; 블라인드 1.28 m 추측항법 ±13 cm 는 dynamics 로 못 줄임 → depth 정지/태그 높이/T 4.0 m(대문제 4); 97 셀 존재 여부는 쟁점 5 stiction 결과 종속.",
+   "needs_research": false
+  },
+  {
+   "num": 2,
+   "name": "명령 지연 분리 — start/stop/관성",
+   "verdict": "compromise",
+   "conclusion": "정속에서 서는 모든 정지는 분리 불필요(셀 τ_eff·σ_e 만). 시각 분리(τ_start, τ_d, σ_τ)는 **200 Hz 가속도 t_resp 가 1차**(제동 a≈1~2 m/s² 는 SNR 충분), 카메라 30 fps 절점 적합은 부트스트랩 σ 와 함께 교차검증만(σ_τ < 2×절점σ 면 '지터 측정 불가' 보고), 두 속도단 대수로 a 를 구하는 방법은 폐기(a 는 진단 전용, 컨트롤러 미사용); τ_start 는 분포가 아닌 보수값(q50+여유)으로 최소 명령길이(≈τ_start+t_ramp+2 s)·워치독 캡에만 쓰고, 명령버퍼 prior 는 KF 상태입력이 아닌 **Q 스케줄 창** [t_tx, t_tx+τ_start+t_ramp] / [t_stop, t_stop+τ_d+v̂/a] 로 수용(plan 1-7 정합). 9/7 꼬리 사건(8.23 s→0.66 m, rotation #14 8.97 s, 185709 #3 goal 10.7° 초과)은 dynamics 로 모델링하지 않고, 모든 사건에 (loop tick 최대간격, CAN write 간격, gyro gaps, 프레임 도착 간격, CAN RX) 를 붙여 호스트 이상을 판정·표에서 제외·별도 카운트; CAN TX 전용 스레드 + 150 ms 토큰 데드맨은 **한 묶음**(데드맨 없는 전용 스레드는 결정 루프가 멎어도 마지막 forward 를 계속 송신해 더 위험)으로 대문제 4 소유·precheck 선행조건. 삭제 SETTLE_SEC(코드 내부 캡으로 이관), FWD_SCALE·FWD_BIAS; FWD_T0/T1/A 는 캘리브 파일.",
+   "decisive_evidence": "두 단 대수 검산: v₂=v₁/2 면 D̄₁−2D̄₂=v₁²/(4a)=0.0144/a → a=1~2 에서 신호 0.7~1.4 cm vs σ≈0.63 cm(n=20) → 상대오차 45~90%·음수 가능(critic 1, proposer 인정). 30 fps 기울기 꺾임은 a≈2 면 제동 4프레임 → 절점 σ 15~30 ms ≈ 기대 σ_τ 30~80 ms(critic 2). control_forklift_v2.py:99-100 실측 회전 시작 0.85 s vs 코스팅 1.3°/7.3°/s≈0.18 s → 시작≠정지(proposer). 185709 rotation #3: goal 81.1° 를 10.7° 지나 정지·gyro-gaps — rot_control.py:110-123 10 ms 폴 루프가 ~1.3 s 안 돌았거나 자이로 유실 = 호스트/USB 사건; run.py:210-212 CAN 3루프가 결정 루프와 같은 asyncio; 오차보정.txt 프롬프트 seojeongmin@ubuntu·18:44 이후 자이로 0샘플 → 9/7 호스트 VM 추정(증명 아님). C7 Ghaffari 스텝응답 식별, C9 버퍼 적분은 판정용, C15 순수지연 모델 경고.",
+   "verification": "67 정지 n=20 에서 가속도 t_resp 와 카메라 절점 적합 τ_d 의 산포도(±30 ms 일치 여부) + 절점 σ 부트스트랩; 각 사건에 loop tick·CAN write 간격·gyro gaps 를 붙여 스톨 플래그 사건이 τ 히스토그램에서 분리되는지 확인.",
+   "unresolved": "출발 감지의 가속도 SNR(FWD_A 0.14 m/s² < 피치 1° 중력 누설 0.17) 미측정 → τ_start 는 (가속도, v̂ 교차) 중 먼저 뜨는 쪽의 보수 상한으로만; 9/7 느린 사건 원인 미상(호스트 스톨 가설 미증명 — Jetson 에서도 계측으로 배제해야 함); 감속이 회생제동+코스팅 2단이면 절점 적합 편향.",
+   "needs_research": false
+  },
+  {
+   "num": 3,
+   "name": "가속도(IMU) 의 역할 — 응답 감지·정지 판별 한정",
+   "verdict": "critic",
+   "conclusion": "가속도는 **명령 창 [t_tx, t_tx+τ_q95] 안에서만** |a_h−ā_still| > k·σ_a,still 이 ≥N 샘플 지속 → t_resp(사건 시각 계측기) + 로그 플래그로 한정하고, D 예측 입력·미래 제동 예측에는 쓰지 않는다(창 밖 오탐 0; a_h 는 중력축 제거 후 수평 성분 크기, 부호는 카메라 z 수평투영으로만). 정지 판별은 2모드 — 공통 |a_h−ā_still|<k·σ_a ∧ |ω|<k·σ_ω,still 이 ≥0.3 s(100/200 Hz) + 코드 내부 시간 캡(τ_d,q95+v̂/a+0.5 s = SETTLE_SEC 의 이관), 가시 구간은 v̂ 로 확인(블라인드에서 KF v̂ 는 측정 없는 예측이라 0 으로 안 떨어짐). 응답 부재 워치독은 **재전송·e-stop 없이** 경고+플래그+수동전환 요청만(movement_tx_loop 가 10 ms 마다 이미 반복 송신 → 재전송 무의미; emergency 0x80 은 차량측 의미·래치·해제 미확인·σ_a,still 미측정이라 자동 트리거는 매 정지 오발 또는 무효), emergency 는 하드 캡 위반(KF/DR 위치가 안전선 통과)에만 precheck 실측 후 채택. ā_still·σ_a,still·σ_ω,still 은 매 정지 실시간 도출(imu_yaw noise_dps 재사용; accel 링버퍼 노출 필요 — 현재 보정 중만 수집); 삭제 ROT_SETTLE_{MAX,MIN,POLL}_SEC·ROT_SETTLE_RATE_{K,FLOOR,CEIL} 6개, plan 1-7 GYRO_STILL_DPS 0.3 도 k·σ_ω,still 도출값으로 대체 가능(하한은 코드 내부).",
+   "decisive_evidence": "control_forklift_v2.py:413-428 movement_tx_loop 10 ms 반복 송신(코드) → 재전송 무효. :126 emergency [0x80,…,0x01] + :453-458 10회 버스트·'M' 해제 — 차량측 동작 미검증(critic 1·2 TOP1, proposer 인정). imu_yaw.py:146-149 accel 은 _calib_a 있을 때만 수집, :301-305 rate_dps 마지막 샘플 고정(코드). 블라인드 1.28 m 에서 v̂ predict-only → 정지판별 불가(논리). FWD_A 0.14 m/s² < 피치 1° 누설 0.17 → 출발 감지 SNR 불충분 vs 제동 a≈1~2 m/s² 충분(proposer 자체 정량). critic §9·§10, C21 Nav2 stall 은 경고형, B18 |r|<0.3°/s 영점, 방법론 3 §5.3.",
+   "verification": "67 정지 n=20 에서 (자이로 정지, 가속도 정지, v̂ 정지) 세 시각의 차 분포 + 명령 창 안 t_resp 검출률·창 밖 오탐률; 별도로 정지 상태에서 emergency 프레임 1회 송신 → 차량 반응·래치·해제('M') 절차 기록(사람이 제동 위치).",
+   "unresolved": "σ_a,still(마스트·적재 진동) 미측정 → k·N·0.3 s 는 실측 후 확정; emergency 0x80 의 차량측 의미; 이벤트 SETTLE 의 시간 이득은 ≈1 s/도킹 이하 — 가치는 D_obs 정의 일관성과 느린 정지 보호.",
+   "needs_research": true,
+   "research_query": "IMU 기반 차량 정지(zero-velocity/standstill) 판별 — 가속도 분산·자이로 크기 문턱 + 지속시간 창의 표준 설계(예: Skog et al. 2010 'Zero-velocity detection—an algorithm evaluation' 의 SHOE/ARED/MV 검출기), 100 Hz accel·200 Hz gyro, 0.1~0.25 m/s 저속 지상차량(진동 큰 산업차량) 적용 사례와 권장 k·N 값"
+  },
+  {
+   "num": 4,
+   "name": "회전 정지 예측 — h(ω) 좌/우 분리·소각·ROT_LEAD_DEG 대체",
+   "verdict": "compromise",
+   "conclusion": "고정 ROT_LEAD_DEG(rot_control.py:102 goal=|deg|−min(2.5,|deg|/2)) 폐기 → 실시간 규칙 θ_rem ≤ ω_pred·τ_r,dir + [가속중]·½α_up·τ_r² + ω_pred²/(2α_r,dir), ω_pred = ω̂ + [가속중]·α_up·τ_r (α_up 은 캘리브 상수, 온라인 미분 아님), (τ_r, α_r, σ_θ, θ_min,inc, τ_r,start) 는 L/R 별도 셀(9/7 CCW 1.98° vs CW 1.34°, n 4/3 — 통합은 실측 뒤); **임시값은 순수지연 τ_r=0.18 s 만(α_r=∞)** — 1점(1.3°@7.3°/s)에서 둘 다 역산하면 2.64° 로 실측의 2배. 캘리브 순서는 개루프 펄스 L/R×{1.0,1.5,2.0,3.0 s}×4 + 5 s 자이로 전용 ×2(200 Hz 원시)로 ω(t) 에서 τ_r·α_r·α_up 적합 → 폐루프 L/R×{5,15,45°}×6 검증(σ_θ≤0.5° ∧ |mean|<0.3°); 규칙 평가는 asyncio 가 아니라 **IMU 콜백 스레드**(imu_yaw._on_frame, 200 Hz)에서 CAN 상태를 직접 플립(8°/s×60 ms=0.5° 지터가 요건 전부를 먹음), asyncio 는 시간 캡(ω̂ 기준 예상 소요×2)·워치독만, 루프 안 gaps 검사 → 즉시 stop + 카메라 β 재앵커. 소각 3단: |Δθ|<θ_min,inc 안 돎 / θ_min,inc≤|Δθ|<θ_ss(≈½α_up·t_ramp², 2~3°) 캘리브 펄스 1회 / 그 위 ω 규칙; 잔차 = 자이로 Δψ−target 만(카메라–IMU 차 0.3~2.3° 는 perception, config/control.py:70,75 '회전 잔차 ±1.5°' 근거 폐기 → AIM_TOL_DEG·AIM_FINAL_TOL_DEG 는 대문제 3 이 새 σ_θ 로 재도출); 회전 편향 {10,15,20} 스윕 필수(σ_θ∝ω). 삭제 ROT_LEAD_DEG; ROT_POLL_SEC(IMU 스레드 평가로 소멸)·ROT_WATCHDOG_GAIN·ROT_WRONG_WAY_DEG 코드 내부; ROT_T0·ROT_DEG_PER_SEC 캘리브 파일(표시·dry-run); analyze_run.py:117 'ROT_LEAD=오버슈트 평균 권장' 폐기.",
+   "decisive_evidence": "181437/rotation.jsonl n=15 원본 재계산 일치: |target|≥10° 7건 overshoot 평균 −0.79°·σ 0.59·7/7 언더슛(리드 2.5 > 실코스팅 ≈1.7) vs <10° 8건 코스팅 0.39~3.49°(9배 산포) → goal 도달 시 ω 가 0~8°/s 어디든이라 고정 리드는 원리적으로 못 맞춤(proposer). 임시값 검산 0.18×7.3 + 7.3²/40 = 2.64° vs 실측 1.3°(critic 1). 185709 #3 goal 10.7° 초과 = 판정 루프/센서 ≥1.3 s 정지 → asyncio 판정으론 0.5° 불가(critic 2). 블라인드 1.28 m×sin δψ: 1°→2.2 cm, 2°→4.5 cm > LAT_TOL 0.03 → σ_θ 0.5° 는 목표가 아니라 요건(critic 2). can_pulse 15:13 온셋 0.85 s 후 0.65 s 에 7.3°/s → α_up≈11°/s²(n=1). rot_control.py:110-123 gaps 는 종료 후(138-140)만 검사(코드). C4 Hurák 자이로 내부루프, C10 형, C20 Sorensen 펄스 계획, critic §11 좌우 비대칭.",
+   "verification": "개루프 3 s 펄스 L/R×4 의 200 Hz ω(t) 로 (τ_r, α_r, α_up) 적합 → 같은 15° 회전을 (a) asyncio 루프 판정 (b) IMU 스레드 판정 각 L/R×6 — σ_θ≤0.5° ∧ |mean|<0.3° 달성 여부와 두 방식의 σ_θ 차; goal 도달 시 ω 분포와 τ_r(정속) vs τ_r(가속중)(plan 1-1 회전×5 와 같은 세션).",
+   "unresolved": "조향 유압 복귀(byte1 편향→중립)가 소각 코스팅에 섞여 τ_r 이 펄스 길이 의존일 가능성 → 펄스 격자로 판별; 편향 10·15 가 데드존 위인지; HEAD_TOL_DEG 2.0 이 블라인드 기하에서 LAT_TOL 3 cm 와 양립 불가(2°→4.5 cm) → 대문제 3·4 허용치 재도출 이관.",
+   "needs_research": false
+  },
+  {
+   "num": 5,
+   "name": "저속 크립(byte2=97) 활용",
+   "verdict": "compromise",
+   "conclusion": "안 B 채택 — 67 원거리 / 97 은 **정지출발 구간 전용**(T 뒤 마지막 직진), 주행 중 67→97 전환은 1차 금지(응답 미측정·정렬점 정지가 있어 불필요). 근거는 정밀(σ_D 절반 ≈1~2 cm — 블라인드 추측항법 ±13 cm 앞에서 무의미)이 아니라 **블라인드 1.28 m 안전속도 규칙**(0.24→0.12 m/s: 충돌 에너지 ¼·감시자 개입 시간 2배; '블라인드 시간 2배'는 그 대가). 데드밴드·최소제어량·비례 판별 순서: ① 97 정지출발 4 s×10 온셋 분포 — 2 s 초과·무이동 1건이면 B 보류(A+마진) ② 편향 {15,20,25,30,40,60}(byte2 112/107/102/97/87/67)×4 s×3 → 움직인 ≥3 레벨로 D = c₀ + τ_d·v 적합, c₀ 95% CI 가 0 포함 여부로 비례 가정 검정(C18 저속 절편 선례; 2셀 비례는 c₀ 검출 불가) ③ 97 펄스 {1.0,1.5,2.0,2.5 s}×5(0.5/0.8 s 는 τ_start 미만이라 낭비) → CV 곡선, 최소 신뢰 증분 = CV<30% 최소 펄스(쟁점 1 S(T) 표와 동일 데이터); v̂ 앵커용 T 4.0 m 셀 포함. 신설 config 1: FORWARD_SLOW(byte2=97 템플릿, 차량 종속값); 안 D(연속 램프)는 ② 뒤에만 재검토.",
+   "decisive_evidence": "9/7 run 간 속도 −11/+7/+10/+15% → 블라인드 1.28 m 추측항법 오차 (Δv/v)·L ≈ ±13 cm 는 속도 단 무관(proposer 자인) → 97 의 1~2 cm 이득은 논거 불가, stiction 발견 시 A 복귀 빌미(critic 1). Klimenda C18 50 mm/s→80±5 mm(순수지연이면 25) = 저속 절편 c₀(critic 2). control_광운대.py:78 'JOYSTICK_FORWARD_SLOW = 30 # tune above dead-band' 는 주석 1줄(값·차량·배터리 미기록) → 데드밴드 존재는 가설. fwd_time_model FWD_T0 0.51 s·can_pulse 온셋 1.03 s > 펄스 0.5/0.8 s. C16 NISTIR 8140 정밀 사례 ≤0.2 m/s, A12 Nav2 0.1~0.15 m/s, critic §12·Failure 4.",
+   "verification": "97 정지출발 4 s×10 의 온셋 시각 분포(2 s 초과·무이동 1건 이상 → B 보류) + 편향 {20,25,30,40,60}×4 s×3 → v_ss·D 표와 c₀ 의 95% CI.",
+   "unresolved": "v(97)·데드밴드·stiction·비례 여부 전부 미측정 → B 는 조건부; 태그 컷 3.3 m 전 가시 정속은 0.2 m(≈1.5 s)뿐이라 97 블라인드 다리는 사실상 S(T) 개루프 → 블라인드 DR ±13 cm 해소는 대문제 4(depth 정지/태그 높이/T 4.0 m).",
+   "needs_research": true,
+   "research_query": "광운대 FSM v3/v4 의 forward_slow(JOYSTICK_FORWARD_SLOW 30 → byte2 97) 튠 기록 — 측정 속도(m/s)·데드밴드 편향값·stiction/무이동 관찰·배터리 상태·configure_forward_slow 도입 커밋/실험 노트; 없으면 동급 전동 리치 지게차 CAN 조이스틱 스로틀의 데드밴드·속도 비례 자료"
+  },
+  {
+   "num": 6,
+   "name": "온라인 파라미터 적응(τ·a EMA/RLS) 을 넣을지",
+   "verdict": "compromise",
+   "conclusion": "고정 캘리브 파일(dynamics_calib.json) + 매 정지 잔차 e 로깅 + 드리프트 경보 + 사람이 실행하는 명시적 재캘리브; 주행 중 자동 갱신(EMA/RLS)·v̂ 이중미분 a_obs·'마진 ×1.5 자동' 전부 금지(도킹 1회=정지 2~3건이라 EMA 는 지터 추종=유령 적응; m=0 설계엔 조정 대상도 없음). 분위수는 (셀, 적재상태) 별·최근 N 세션 창(N 코드 내부)으로만 세션 시작 시 재계산하고 조건 다른 세션 혼합 금지; 경보 입력은 가시·정속·비스톨 정지만(블라인드·사각 cos 오염·호스트 정지 플래그 제외); 경보 = 사람 알림 + '재캘리브 전 도킹 금지' 플래그; 적재/비적재 = 캘리브 2세트, 선택은 임무 입력. 캘리브 파일 없으면 **출발 거부**(dry-run 만 — 코드 기본값으로 삭제 상수 부활 방지); 파일에 KF Q·τ_cam 설정 해시·호스트 종류·git·n·보장수준을 기록하고 불일치 시 로드 거부(τ_eff 가 KF 위치·속도 지연을 흡수하므로 추정기 설정과 짝). 새 config 0.",
+   "decisive_evidence": "CONTEXT 규칙(잡음 미분 적응 금지·상수 최소화). C10 Yaskawa 1회 캘리브 후 스케일; C11 Yasunobu·C13 KRRI 특허의 적응은 하루 수천 정차 전제. 9/7 run 간 v 변동 −11~+15% 는 D̂=τ_eff·v̂ 의 v̂ 가 이미 흡수 → 남는 미지수는 τ_eff 평균 이동만(proposer). τ_eff 가 KF 지연을 포함하므로 Q·τ_cam 변경 시 소리 없이 이동 = critic Failure 2 변형(critic 2). critic §1 '모델 출력=대표값' 오해, §6.",
+   "verification": "같은 적재·같은 날 세션 시작·끝 67 정지 n=10 씩 → |mean e 차| < σ_e; 이어서 Q_v 를 2배로 바꿔 n=10 재측정 → τ_eff 이동량 ≠0 이면 KF-캘리브 짝 규칙 확정; 적재 팔레트 n=10 으로 2세트 필요성 확정.",
+   "unresolved": "적재로 τ_eff 가 σ_e 이상 커지는지 미측정 → 적재 표 확보 전 적재 도킹은 보류 또는 q95⁺ 마진·97 만.",
+   "needs_research": false
+  },
+  {
+   "num": 7,
+   "name": "사전실험 설계 — precheck_forward/rotation_dynamics",
+   "verdict": "compromise",
+   "conclusion": "precheck 2종은 **원시 기록만, 판정은 오프라인**; 선행조건을 스크립트가 assert: plan 1-6 타이밍(queue=1·t_capture·timestamp_domain), 자이로 먼저 열기, snapshot_config(event_log.py:71)+캘리브 해시, 호스트 = Jetson/Windows 만(VM 금지), CAN 실제 write 시각·payload 훅(control_광운대.py:200-250 이식 — monotonic_ns 이므로 epoch−monotonic 오프셋 1회 샘플·양쪽 기록). 순서: (1) 안전 위치 저속 전진 중 CAN 송신 0.5/1/2/5 s 의도적 차단 → 차량 워치독 유무·시간·마지막 명령 유지 여부, 정지 상태 emergency 1회 → 반응·해제, 데드맨 동작(사람이 제동 위치) (2) 67 정지 n=20 @3.5 m 정면+사각 (3) 97 stiction → 편향 스윕 → 펄스 (4) 회전 개루프 격자 L/R×{1.0,1.5,2.0,3.0 s}×4 → 폐루프 L/R×{5,15,45}×6(plan 1-1 회전×5 통합) (5) 정속 장거리 8→4 m ×3 ×{67,97} → 런 내 σ_v/v(블라인드 DR 예산) (6) 정지출발 S(T) {2,3,4,5,6 s}×{67,97}×≥10 + 최종 정지 ×10 **외부 줄자**(태그면 기준) (7) 세션 시작·끝 67 n=10. 기록: 호스트 epoch, CAN write 시각·payload, **CAN RX 전량**, TX 간격 최대치, loop tick, 프레임별 t_capture·β·d_h·p̂·quality·heading_valid·도착 간격, 자이로 200 Hz·가속도 원시, gyro gaps, KF x̂ v̂ ψ̂, **직전 명령 종류**(가설을 셀 이름에 박지 않음), bag; motion_started 류 플래그는 기록 시점에 안 박음. 진입 게이트: 첫 10건 CAN write 간격 99%<20 ms ∧ gyro gaps 0; 통과: 67 σ_e≤2 cm ∧ L/R σ_θ≤0.5° ∧ 최종 정지 외부 σ ≤ T_f/3(q99 는 n=20 으로 못 검증 — '95% 보장'만 표기); 산출 dynamics_calib.json(셀별 값+n+보장수준+날짜+git+호스트+KF 해시); 예산 직진 2 h+·회전 ~40 min(복귀 포함).",
+   "decisive_evidence": "control_광운대.py:207,248 write_start_host_mono_ms = monotonic_ns vs plan 1-6 단일 시계 epoch → 변환 없이 이식하면 τ 전체 오염(critic 1, 코드). 9/7 두 느린 사건(decision #17 1.90 m→0.66 m, rotation #14 8.97 s)은 원본 재추적 결과 'bwd→fwd' 로 안 묶임(사이에 +4.6° 회전, 그 뒤 step 18 정상 속도 1.00 m/4.88 s) → 원인 미상, 호스트 계측 없이는 못 가름(양측 합의). rot_control ROT_T0 0.85 s > 회전 펄스 0.5 s. critic §21·Failure 5(큐16×0.25 m/s = 최대 12 cm 가 정지거리로 둔갑), §23(최종 오차 분포 없으면 99% 정의 불가; σ 추정 CV≈1/√(2(n−1)) → n=20 16%), §12. 예산 80건×(6 s+settle+30프레임+복귀 ~40 s) ≈ 2 h(critic 2). CLAUDE.md 'VM 에서 실차 주행 금지'.",
+   "verification": "본 실험 진입 전 첫 10건에서 CAN write 간격 히스토그램 99% < 20 ms ∧ gyro gaps 0 확인; 종료 후 통과 기준 실패 항목이 있으면 (타이밍/동역학/블라인드) 어느 층인지 로그만으로 가려지는지 — 못 가르면 '기록 항목 부족' 판정.",
+   "unresolved": "차량 자체 워치독 존재·시간 미확인(185709 #3 의 ≥1.3 s 진행은 '마지막 명령 유지'를 시사) → (1) 결과에 따라 데드맨 필수 여부; T_f 미확정이라 '외부 σ ≤ T_f/3'은 자리만; emergency 시험은 래치 시 복구 절차(M/전원) 미지 — 사람 제동 위치 필수.",
+   "needs_research": true,
+   "research_query": "이 지게차 CAN 리모컨 프로토콜(0x1E3 movement, 0x2E3 control 0x42/0x80, 0x764 heartbeat 200~250 ms) 문서 — 하트비트/movement 프레임 끊김 시 차량 동작(즉시 정지? 마지막 명령 유지? 타임아웃 ms), 0x80 emergency 제어프레임의 차량측 의미·래치·해제('M') 절차; 워드/광운대 명령체계 문서 또는 제조사 자료"
+  }
+ ],
+ "key_conclusions": [
+  "정지 예측은 점이 아니라 셀별(67/97×fwd/bwd) 비례 모델 τ_eff·v̂ + 잔차 경험분포(n·'95% 보장' 명시, q99 미검증)로, D_obs 는 CAN write 시각 기준 **경로길이**, x_rem 은 카메라 forward, 발령은 m=0·크립 복구 조항 삭제 — 단 이 표는 가시 T 정지만 캘리브하며 실제 최종 정지는 태그 컷 3.3→2.02 m 의 1.28 m 블라인드 개루프(S(T) 분포표, FWD_T0/T1/A 캘리브 파일 존치)라 dynamics 층 σ_e ≠ 도킹 정밀도; 블라인드 해소는 대문제 4.",
+  "회전은 고정 ROT_LEAD_DEG 폐기 → L/R 셀 ω 규칙(임시 순수지연 τ_r 0.18 s 만), 개루프 펄스로 τ_r·α_r·α_up 적합 후 폐루프 검증(σ_θ≤0.5° ∧ |mean|<0.3°), 판정은 IMU 스레드(200 Hz)에서 CAN 상태 직접 플립 + 루프 안 gaps 즉시 정지; σ_θ 0.5° 는 블라인드 1.28 m 기하(2°→4.5 cm > LAT_TOL 3 cm)에서 나오는 요건이라 HEAD_TOL 2.0·AIM_TOL·AIM_FINAL_TOL 은 대문제 3·4 가 재도출.",
+  "가속도·워치독은 '명령 창 안 사건 시각 계측 + 로그 플래그'로 한정, 재전송·자동 e-stop 금지(TX 루프가 이미 10 ms 반복, 0x80 의미 미확인); 온라인 적응 금지·캘리브 파일 없으면 출발 거부·KF 설정 해시 짝; 9/7 꼬리 사건은 호스트 계측(loop tick·CAN write 간격·gyro gaps·CAN RX) 없이는 dynamics 로 모델링 금지 — precheck 1순위는 CAN 차단·emergency·데드맨 안전 시험, 진입 게이트 CAN write 간격 99%<20 ms ∧ gaps 0, 호스트 Jetson/Windows 만. 상수 순감 12(config −10, 내부 3, 신설 FORWARD_SLOW 1)."
+ ],
+ "top_risks": [
+  "블라인드 최종 다리 1.28 m: 가시구간에서 σ_e 2 cm 를 달성해도 최종 정지는 추측항법 ±13 cm(런 간 Δv/v ≈10%, 속도 단 무관) + heading δψ→lateral(1°→2.2 cm) 에 지배됨 — T_f/LAT_TOL 이 이보다 작으면 dynamics 로 못 닫고 대문제 4(depth 정지·태그 높이·T 4.0 m·태그 컷 재정의)가 블라인드를 없애야 하며, 97 stiction 발견 시 안전속도 규칙(B)도 무너져 A+마진으로 후퇴한다.",
+  "호스트·CAN 안전 미지: 차량 워치독 유무·emergency 0x80 의미 미확인 상태에서 결정 루프 스톨(185709 #3 goal 10.7° 초과 = ≥1.3 s 진행)이 재현되면 차량이 마지막 명령을 유지한 채 진행 — CAN TX 전용 스레드+데드맨 없이는 IMU 스레드 판정도 안전하지 않고, 스톨 사건이 τ 분포에 섞이면 버그가 상수가 된다(VM 호스트 가설은 미증명이라 Jetson 에서도 loop tick·CAN write 간격·gyro gaps 계측으로 배제해야 함)."
+ ]
+}

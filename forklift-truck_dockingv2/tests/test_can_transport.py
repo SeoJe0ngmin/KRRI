@@ -1,4 +1,3 @@
-"""Exercise the real transport loop against an in-memory Kvaser API double."""
 import threading
 import types
 import unittest
@@ -47,7 +46,7 @@ class TransportTests(unittest.TestCase):
         class Frame:
             def __init__(self, id_, data, flags):
                 self.id_, self.data, self.flags = id_, list(data), flags
-                self.id = id_   # real canlib.Frame exposes .id; guard() reads it
+                self.id = id_
         class Channel:
             def setBusParams(self, rate):
                 self.rate = rate
@@ -55,8 +54,6 @@ class TransportTests(unittest.TestCase):
                 pass
             def write(self, frame):
                 sent.append((clock[0], frame))
-                # Simulate a producer suspended while holding its mailbox.
-                # The transmitter must keep checking the LAST lease deadline.
                 if frame.id_==0x1E3 and frame.data[2]==97 and not shared.lock.locked():
                     shared.lock.acquire()
             def writeSync(self, timeout):
@@ -105,8 +102,6 @@ if __name__ == '__main__':
 
 class WorkerFaultTests(unittest.TestCase):
     def test_write_failure_emits_neutral_only_and_never_reads_the_bus(self):
-        """Transmit-only (2026-10-18): a write failure latches abort, sends neutral immediately and at
-        shutdown, and reports bus status; the receive queue is never read."""
         import queue
         clock, sent = [10.], []
         shared, health = Shared([0., 0., 0.]), Shared([0., 0.])
@@ -131,7 +126,6 @@ class WorkerFaultTests(unittest.TestCase):
                 if frame.id == 0x1E3 and frame.data[2] == 97:
                     self.driving = True
                     raise RuntimeError('simulated driver write failure')
-            # No read(): the worker must not touch the receive queue.
         channel = Channel()
         class Close:
             def is_set(self): return clock[0] > 11.
@@ -154,7 +148,6 @@ class WorkerFaultTests(unittest.TestCase):
         self.assertEqual(failure['bus_status'], 24); self.assertIn('ERROR_ACTIVE', failure['bus_status_names'])
         self.assertEqual(failure['receive_queue'], 'not_read_by_design')
         self.assertIsNotNone(failure['worker_cpu_percent'])
-        # Immediate neutral after the failure, then three control/heartbeat/neutral bundles at shutdown.
         after = [f for _, f in sent][[i for i, (_, f) in enumerate(sent) if f.id == 0x1E3 and f.data[2] == 97][0]+1:]
         self.assertEqual(after[0].id, 0x1E3); self.assertEqual(after[0].data, [127]*8)
         self.assertEqual([f.id for f in after[-9:]], [0x2E3, 0x764, 0x1E3]*3)

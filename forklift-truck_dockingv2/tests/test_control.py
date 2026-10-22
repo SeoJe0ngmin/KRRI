@@ -26,7 +26,6 @@ class GeometryPlanning(unittest.TestCase):
         b['sensor']['calibration']['T_dock_tag'][1][3]=2.
         self.assertLess(cut_position(b),cut_position(a))
     def test_legacy_planner_still_runs_but_is_not_used(self):
-        # planner.plan is kept for offline comparison only (v2 2026-10-22: no planner process, closed-form decisions)
         c=config();p=[-10.,.2,math.radians(4)];cut=cut_position(c)
         result=plan(c,p,cut);self.assertTrue(result['actions'],result);self.assertLessEqual(len(result['actions']),6)
         x=Controller(c,cut,0.);self.assertIsNone(x.request);x.accept_plan(dict(id=1,plan=result),1.,observation(1.));self.assertIsNone(x.request)
@@ -51,24 +50,23 @@ class Control(unittest.TestCase):
         x.step(2,observation(2,stationary=False),True)
         self.assertEqual(x.state,'PREPARING');self.assertEqual(x.command,'stop')
     def test_coasting_distance_retained_and_step_recorded(self):
-        x=self.started();x.cut=-1.5;self.drive(x,2,.8)   # 0.8 m leg: a cruising leg the learner accepts (2026-10-20)
+        x=self.started();x.cut=-1.5;self.drive(x,2,.8)
         self.assertEqual(x.action['target'],.8);self.assertEqual(x.state,'MOVING')
-        x.step(5.5,observation(5.5,world=(-4.2,0,0),local=(.8,0,0),stationary=False))   # 3.5 s of motion
+        x.step(5.5,observation(5.5,world=(-4.2,0,0),local=(.8,0,0),stationary=False))
         self.assertEqual(x.state,'SETTLE');self.assertEqual(x.command,'stop')
-        # Command was 0.8 m; observed displacement is 1.6 m including unexpected coast.
         x.step(8,observation(8,world=(-3.4,0,0),local=(1.6,0,0)))
         self.assertEqual(x.state,'PLAN');self.assertGreater(x.responses.data['forward']['coast'],.4)
-        ev=[e for e in x.status()['events'] if e['event']=='step_done'];self.assertEqual(len(ev),1)   # 2026-10-20 per-step record
+        ev=[e for e in x.status()['events'] if e['event']=='step_done'];self.assertEqual(len(ev),1)
         e=ev[0];self.assertEqual(e['command'],'forward');self.assertEqual(e['unit'],'m');self.assertAlmostEqual(e['coast'],.8,places=6)
         self.assertAlmostEqual(e['stop_progress'],.8,places=6);self.assertIsNotNone(e['stop_reserve']);self.assertTrue(e['vio_ok']);self.assertIn('learned',e)
-        x.step(8.1,observation(8.1,world=(-3.4,0,0),local=(1.6,0,0)))   # the next decision at rest: the rough drive to the stop point
+        x.step(8.1,observation(8.1,world=(-3.4,0,0),local=(1.6,0,0)))
         self.assertEqual(x.state,'MOVING');self.assertEqual(x.command,'forward');self.assertEqual(x.action['label'],'rough_drive')
     def test_stale_and_generation_changes_stop_without_integrating_commands(self):
         for fault in ['stale','generation','epoch','imu','unusable','nonfinite']:
             with self.subTest(fault=fault):
                 x=Controller(self.c,-2.5,0);self.drive(x,1,.2)
                 o=observation(1.1,stationary=False)
-                if fault=='stale':o['arrival']=-2.   # 3.1 s old > motion_age_s 3.0 (2026-10-20)
+                if fault=='stale':o['arrival']=-2.
                 if fault=='generation':o['tracking_generation']=1
                 if fault=='epoch':o['motion_epoch']=1
                 if fault=='imu':o['imu_bad']=True
@@ -85,7 +83,7 @@ class Control(unittest.TestCase):
         self.assertEqual(x.state,'FAULT');self.assertEqual(x.command,'stop')
     def test_search_is_bounded_and_detected_tag_stops_now(self):
         x=self.started();o=observation(2,valid=False,usable=False,pose=None,tag=dict(reason='missing_or_duplicate_id',detected=False))
-        x.step(2,o);self.assertIsNone(x.action)  # Briefly wait after a recent tag.
+        x.step(2,o);self.assertIsNone(x.action)
         o['capture_id']=o['arrival']=4.;x.step(4,o);self.assertAlmostEqual(x.action['target'],math.radians(self.c['tuning']['search_step_deg']))
         self.assertTrue(x.status()['search_active'])
         o=observation(4.2,local=(0,0,.1),usable=False,valid=False,pose=None,stationary=False)
@@ -103,17 +101,17 @@ class Control(unittest.TestCase):
         x=self.started();x.step(2,observation(2,world=(-5,0,0)))
         self.assertEqual(x.phase,'ROUGH');self.assertEqual(x.state,'MOVING');self.assertEqual(x.command,'forward')
         self.assertEqual(x.action['label'],'rough_drive');self.assertAlmostEqual(x.action['stop_x'],-2.5-self.c['tuning']['rough_stop_before_cut_m'])
-        self.assertAlmostEqual(x.action['target'],1.5,places=6)   # from -5 to -3.5
+        self.assertAlmostEqual(x.action['target'],1.5,places=6)
         self.assertGreaterEqual(x.action['cap_s'],self.c['tuning']['translation_timeout_s'])
     def test_rough_phase_straightens_first(self):
         x=self.started();x.step(2,observation(2,world=(-5,0,math.radians(11.5))))
         self.assertEqual(x.state,'MOVING');self.assertEqual(x.command,'rotate_right_fine');self.assertAlmostEqual(x.action['target'],math.radians(11.5),places=6)
         x=Controller(self.c,-2.5,0.);x.state='PLAN';x.mission_start=0.;x.baseline_done=True
-        x.step(1,observation(1,world=(-5,0,math.radians(25))));self.assertEqual(x.command,'rotate_right_slow')   # beyond the fine range: strength 30
+        x.step(1,observation(1,world=(-5,0,math.radians(25))));self.assertEqual(x.command,'rotate_right_slow')
     def test_rough_leg_stops_on_the_dock_ruler_at_the_stop_point(self):
         x=self.started();x.step(2,observation(2,world=(-5,0,0)));stop_x=x.action['stop_x']
         t=2.;xw=-5.;xl=0.
-        for k in range(80):   # the tag ruler advances, the VIO ruler lags (frozen): the dock-frame rule still stops the leg
+        for k in range(80):
             t+=.1;xw+=.029;xl+=.01
             x.step(t,observation(t,world=(xw,0,0),local=(xl,0,0),stationary=False))
             if x.state!='MOVING':break

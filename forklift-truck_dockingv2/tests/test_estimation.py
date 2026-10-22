@@ -1,4 +1,3 @@
-"""Synthetic invariants: geometry, capture-time history, tag-main fusion through the observer (2026-10-19)."""
 import math
 import unittest
 import numpy as np
@@ -47,17 +46,15 @@ class Estimation(unittest.TestCase):
         o=self.observer();src=VioSource()
         for i in range(10):
             r=o.add_vio(src.packet(i*.1,(-5.,0.,0.)));o.add_tag(synthetic_tag(self.s,(-5.,0.,0.),i*.1))
-        for i in range(10,23):r=o.add_vio(src.packet(i*.1,(-5.+(i-9)*.1,0.,0.)))   # 1.3 m forward, no tag
+        for i in range(10,23):r=o.add_vio(src.packet(i*.1,(-5.+(i-9)*.1,0.,0.)))
         self.assertAlmostEqual(r['pose'][0],-3.7,places=6);self.assertTrue(r['usable'])
         self.assertAlmostEqual(r['distance_since_anchor_m'],1.3,places=6)
         self.assertGreater(r['sigma']['vio_since_anchor'][0],0.)
     def test_biased_pnp_heading_does_not_move_the_fused_lateral(self):
-        """2026-10-02 failure mode: after an in-place turn the PnP heading is off by 2 deg -> PnP lateral off by
-        ~10 cm at 3 m. Bearing/range + VIO-continued heading keep the fused lateral within 1 cm."""
         o=self.observer();src=VioSource();a=(-3.,0.,0.);b=(-3.,0.,math.radians(10))
         for i in range(8):
             o.add_vio(src.packet(i*.1,a));o.add_tag(synthetic_tag(self.s,a,i*.1))
-        for i in range(8,20):o.add_vio(src.packet(i*.1,(-3.,0.,math.radians(10)*(i-7)/12)))   # turning, no tag
+        for i in range(8,20):o.add_vio(src.packet(i*.1,(-3.,0.,math.radians(10)*(i-7)/12)))
         for i in range(20,28):
             r=o.add_vio(src.packet(i*.1,b));o.add_tag(synthetic_tag(self.s,b,i*.1,heading_bias_rad=math.radians(2)))
         self.assertLess(abs(r['pose'][1]),.01)
@@ -75,7 +72,7 @@ class Estimation(unittest.TestCase):
         for i in range(8):
             r=o.add_vio(src.packet(i*.1,(-4.,0.,0.)));o.add_tag(synthetic_tag(self.s,(-4.,0.,0.),i*.1))
         reasons=[]
-        for i in range(8,22):   # VIO says still, the tag says 1 m to the left: physically impossible -> skipped, then the tag wins
+        for i in range(8,22):
             r=o.add_vio(src.packet(i*.1,(-4.,0.,0.)));reasons.append(o.add_tag(synthetic_tag(self.s,(-4.,1.,0.),i*.1))['reason'])
         self.assertIn('tag_jump_skipped',reasons);self.assertIn('accepted_after_skip',reasons)
         self.assertAlmostEqual(r['pose'][1],1.,places=6)
@@ -91,7 +88,7 @@ class Estimation(unittest.TestCase):
             for k in range(7):o.add_gyro(i/30+k/200,[0.,0.,0.])
             a=o.add_vio(self.packet(i/30,0))
         self.assertTrue(a['stationary']);self.assertEqual(a['stationary_report']['gyro_source'],'raw_200hz')
-        for i in range(60,75):   # half a second of 3 deg/s: the 0.5 s window is no longer quiet
+        for i in range(60,75):
             for k in range(7):o.add_gyro(i/30+k/200,[0.,0.,math.radians(3.)])
             a=o.add_vio(self.packet(i/30,0))
         self.assertFalse(a['stationary']);self.assertEqual(a['stationary_report']['reason'],'rotating')
@@ -113,7 +110,7 @@ class Estimation(unittest.TestCase):
         for i in range(201):q.add('gyro',i*.005,[0,0,.01],i*.005+1)
         values=q.drain();self.assertEqual(len(values),201)
         for s in values:self.assertAlmostEqual(s['accel'][0],s['stamp'])
-        q.add('gyro',2,[0,0,0]);self.assertIsNone(q.fault);self.assertEqual(q.status()['gaps'],1)   # gaps are counted, not fatal (v4 rule, 2026-10-19)
+        q.add('gyro',2,[0,0,0]);self.assertIsNone(q.fault);self.assertEqual(q.status()['gaps'],1)
         self.assertIn('reason=sample_gap',q.status()['last_gap']);self.assertAlmostEqual(q.status()['largest_gap_s'],1.,places=6)
     def test_imu_queue_overflow_is_not_silent_drop(self):
         q=ImuSynchronizer(capacity=2)
@@ -130,13 +127,12 @@ class Estimation(unittest.TestCase):
         r=depth_check(image,corners,2.,self.u);self.assertFalse(r['consistent'])
         image[:]=0;self.assertFalse(depth_check(image,corners,2.,self.u)['available'])
     def test_sigma_is_recorded_but_does_not_block_blind_entry(self):
-        """2026-10-19 (apriltag_v5 rule): |predicted arrival| <= 3 cm decides; σ goes to the log."""
-        c=Controller(self.c,-2.5,0);c.state='PLAN';c.mission_start=0;c.baseline_done=True;c.phase='FALLBACK'   # v2: the tag-only entry is the fallback path
+        c=Controller(self.c,-2.5,0);c.state='PLAN';c.mission_start=0;c.baseline_done=True;c.phase='FALLBACK'
         o=observation(1,world=(-2.5,0,0));o['fork_uncertainty']['predicted_arrival_std_m']=.1;o['sigma']=dict(baseline=[.1,.1,.01])
         c.step(1,o);self.assertTrue(c.blind);self.assertEqual(c.command,'forward')
         self.assertAlmostEqual(c.status()['lateral_check']['std_m'],.1);self.assertEqual(c.status()['lateral_check']['sigma']['baseline'][0],.1)
         c=Controller(self.c,-2.5,0);c.state='PLAN';c.mission_start=0;c.baseline_done=True;c.phase='FALLBACK'
-        c.step(1,observation(1,world=(-2.5,.05,0)));self.assertFalse(c.blind);self.assertTrue(c.command.startswith('rotate'))   # 5 cm off: aim turn, not entry
+        c.step(1,observation(1,world=(-2.5,.05,0)));self.assertFalse(c.blind);self.assertTrue(c.command.startswith('rotate'))
     def test_sdk_rig_yaml_is_readable_by_opencv_and_uses_actual_extrinsics(self):
         import tempfile,json
         from pathlib import Path
@@ -156,8 +152,6 @@ class Estimation(unittest.TestCase):
             self.assertEqual(fs.getNode('cam0').getNode('T_cam_imu').size(),4);fs.release()
             self.assertAlmostEqual(np.array(bundle['T_left_imu'])[0,3],.01)
             self.assertEqual(bundle['raw_models']['color']['width'],1280)
-            # Exercise every matrix as OpenVINS' Eigen parser does. Merely
-            # opening the YAML or reading an unrelated node misses aliases.
             fs=cv2.FileStorage(folder+'/imu.yaml',cv2.FILE_STORAGE_READ)
             node=fs.getNode('imu0')
             for name in ('Tw','Ta','R_IMUtoACC','R_IMUtoGYRO','Tg'):

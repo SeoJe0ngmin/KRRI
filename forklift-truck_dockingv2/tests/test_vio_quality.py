@@ -39,8 +39,8 @@ class VioQualityTests(unittest.TestCase):
             ({'features':19},'insufficient_continuous_tracks'),
             ({'tracking_valid':False},'insufficient_continuous_tracks'),
             ({'state_stamp':.9},'state_timestamp_mismatch'),
-            ({'transport_lag_s':3.01},'vio_output_delayed'),   # motion_age_s 3.0 (2026-10-20); 0.3 s applies at rest in the controller
-            ({'imu_arrival':-1.1},'imu_stale')]:   # packet arrival 2.0: IMU 3.1 s old > imu_age_s 3.0 (2026-10-20)
+            ({'transport_lag_s':3.01},'vio_output_delayed'),
+            ({'imu_arrival':-1.1},'imu_stale')]:
             with self.subTest(reason=reason):
                 p=packet(1);p.update(change);q=quality(p,self.cfg)
                 self.assertFalse(q['ok']);self.assertEqual(q['reason'],reason)
@@ -75,14 +75,13 @@ class VioQualityTests(unittest.TestCase):
         self.assertTrue(r['stationary']);self.assertTrue(r['odom']['ok'])
         p=packet(9.);p.update(delta_from_stamp=269/30,correction_age_s=1.1,correction_applied=False)
         r=o.add_vio(p);self.assertFalse(r['local_valid']);self.assertFalse(r['usable'])
-        # Stationarity is a gyro fact (2026-10-19); the controller separately requires local_valid before acting.
         self.assertTrue(r['stationary'])
 
     def test_pose_needs_a_tag_window_and_sigma_is_recorded_not_gated(self):
         o=Observer(self.cfg)
         for i in range(12):
             r=o.add_vio(packet(i*.1))
-            if i in (3,4,5,6):o.add_tag(synthetic_tag(self.cfg,(-2.,0.,0.),i*.1))   # 4 frames inside one 0.5 s window
+            if i in (3,4,5,6):o.add_tag(synthetic_tag(self.cfg,(-2.,0.,0.),i*.1))
             if i==3:self.assertFalse(r['usable'])
         r=o.add_vio(packet(1.2))
         self.assertTrue(r['odom']['ok']);self.assertTrue(r['usable']);self.assertIsNotNone(r['pose'])
@@ -95,7 +94,7 @@ class VioQualityTests(unittest.TestCase):
             r=o.add_vio(p)
         self.assertTrue(r['imu']['ready']);self.assertTrue(r['stationary'])
         self.assertTrue(r['odom']['ok']);self.assertEqual(r['odom']['correction_source'],'zupt')
-        self.assertFalse(r['usable']) # An initialized local filter is not a dock anchor.
+        self.assertFalse(r['usable'])
 
     @unittest.skipUnless(shutil.which('c++'),'C++ compiler required for native adapter quality checks')
     def test_native_quality_tracking_and_correction_evidence(self):

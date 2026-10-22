@@ -88,10 +88,10 @@
     "minimum_loop_inliers": 20
   },
   "depth_goal": {
-    "description": "depth 스트림으로 탑재부 입구(폭 truck_inner_width_m 인 두 벽 끝)를 찾아 중심·거리를 잰다 (v2 2026-10-22). filters = RealSense 공간·시간 후처리. emitter_when_stopped = 정지 중에만 프로젝터 켜기(실험 옵션, VIO 가 움직임으로 오판하지 않도록 정지 1 s 뒤에만). bev_decay = 버드아이뷰 누적(이전 × decay + 새 프레임, 0 = 프레임마다 새로).",
+    "description": "depth 스트림으로 탑재부 입구(폭 truck_inner_width_m 인 두 벽 끝)를 찾아 중심·거리를 잰다. rate_hz = 세밀·최종·진입 단계 측정 빈도, rate_hz_idle = 측정 모드·러프 접근 때. filters = RealSense 시간 필터(spatial_filter 는 CPU 가 커서 기본 끔). bev_hz/bev_decay = 버드아이뷰 갱신·누적. emitter_when_stopped = 정지 중에만 프로젝터(실험 옵션). same_range_m = 입구 양끝의 거리 차 허용(측정 잡음분; 여기에 거리의 15 % 와 폭×|sin 방향| 을 더함 — 좌우는 같은 깊이라는 조건, 2026-10-22).",
     "enabled": true,
     "rate_hz": 10.0,
-    "bev_hz": 4.0,
+    "bev_hz": 2.0,
     "bev_cell_m": 0.05,
     "bev_forward_m": 8.0,
     "bev_half_width_m": 3.0,
@@ -105,6 +105,9 @@
     "max_gap_px": 8,
     "min_width_px": 8,
     "max_m": 6.0,
-    "bev_decay": 0.7
+    "bev_decay": 0.7,
+    "rate_hz_idle": 3.0,
+    "spatial_filter": false,
+    "same_range_m": 0.2
   }
 }

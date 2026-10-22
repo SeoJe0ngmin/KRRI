@@ -1,12 +1,12 @@
 {
-  "description": "새 v5 공통 설정. value만 수정. null은 현장 미입력이며 측정값으로 위장하지 않습니다.",
+  "description": "현장·차량 공통 설정. value 만 수정. null 은 현장 미입력(측정값으로 위장하지 않음).",
   "fields": {
     "site": {
       "description": "사용자가 확인할 차량·현장 값",
       "fields": {
         "vehicle_width_m": {
           "description": "실제 차폭[m]; 현장 입력",
-          "value": 1.28
+          "value": 1.285
         },
         "truck_inner_width_m": {
           "description": "탑재부 안쪽 폭[m]: 두 옆판(벽) 안쪽 사이. 차폭 1.28 + 양쪽 여유. 벽 충돌 검사와 depth 입구 찾기(이 폭 ± truck_width_tol_m 인 쌍)의 기준. 1.4 는 임시 실험값, 현장 줄자로 확인",
@@ -17,8 +17,8 @@
           "value": null
         },
         "left_tag_offset_m": {
-          "description": "입구 중심에서 좌측 태그까지 거리[m]; 왼쪽 양수",
-          "value": 1.27
+          "description": "입구 중심에서 태그 중심까지 좌우 거리[m]; 왼쪽 +, 오른쪽 − (left 모드에서 씀)",
+          "value": 1.255
         },
         "tag_plane_offset_m": {
           "description": "입구면에서 태그면까지 앞뒤 거리[m]; 안쪽 양수",
@@ -42,11 +42,11 @@
         },
         "camera_height_m": {
           "description": "카메라(좌측 IR 렌즈) 중심 높이[m], 바닥부터. 컬러 렌즈와 같은 높이. 2026-10-20 포크 앞쪽 장착 0.46 (이전 캐리지 장착 0.59)",
-          "value": 0.46
+          "value": 0.42
         },
         "camera_lateral_m": {
           "description": "카메라(좌측 IR 렌즈) 좌우 위치[m]: 지게차 중심선(차폭의 정가운데를 앞뒤로 지나는 선)에서 렌즈까지 직각 거리. 왼쪽 +, 오른쪽 − (뒤에서 포크 쪽을 볼 때). 좌측 IR = 컬러 렌즈 바로 오른쪽 렌즈; 컬러 렌즈에서 쟀다면 그 값 − 0.015. 2026-10-20 컬러 렌즈를 중심선에 맞춘 장착 = −0.015",
-          "value": -0.015
+          "value": 0.001
         },
         "camera_to_fork_tip_m": {
           "description": "카메라(좌측 IR 렌즈)→포크 앞끝[m]: 렌즈에서 포크 앞끝 선까지 앞뒤 거리. 렌즈가 포크 끝보다 앞이면 음수. 이 값이 바뀌면 회전중심·태그컷·포크 끝 위치가 자동으로 다시 계산된다. 2026-10-20 포크 앞쪽 장착 0.23 (이전 캐리지 장착 1.47)",
@@ -66,7 +66,7 @@
         },
         "target_front_x_left_m": {
           "description": "left 모드 포크 앞끝 정지 목표[m]; 입구면 기준, 안쪽 양수. 1.0 = 입구를 지나 1 m. 비우면 1.0",
-          "value": 1.0
+          "value": 2.17
         },
         "rotation_center_behind_fork_tip_m": {
           "description": "제자리 회전중심이 포크 앞끝에서 뒤로 얼마나 있나[m]. 차의 성질이라 카메라를 옮겨도 바꾸지 않는다. v4 calibrate(캐리지 카메라보다 0.465 앞) → 포크 끝 뒤 1.005; 2026-10-20 실차 제자리 회전 20 번으로 확인(오차 약 4 cm). 비우면 1.005",
@@ -136,7 +136,8 @@
         "final_check_distance_m": {
           "description": "최종 확인 지점: 카메라가 입구면 앞 이 거리[m] 에서 멈춰 depth 로 마지막 확인. 비우면 depth 화각으로 계산(안쪽 반폭 ÷ tan(화각/2) + 0.1 ≈ 0.93 m)",
           "value": null
-        }
+        },
+        "baseline_s": { "description": "출발 뒤 태그 보며 정차 측정 시간[s]", "value": 30 }
       }
     }
   }

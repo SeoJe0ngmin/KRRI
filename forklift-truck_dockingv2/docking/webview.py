@@ -176,7 +176,7 @@ function drawDock(){
  const central=view.mode==='central',left=view.mode==='left';   // mode from runtime (targets are common.json values since 2026-10-20)
  const tagY=central?0:left&&finite(site.left_tag_offset_m)?site.left_tag_offset_m:null;
  const tag=finite(site.tag_plane_offset_m)&&finite(tagY)?[site.tag_plane_offset_m,tagY]:null;
- set('map-mode',(central?'중앙 태그':left?'좌측 태그':'입구 기준')+' · x 진입 / y 왼쪽');
+ set('map-mode',(central?'중앙 태그':left?(finite(tagY)&&tagY<0?'우측 태그':'좌측 태그'):'입구 기준')+' · x 진입 / y 왼쪽');
  const points=[[-1.5,0],[1.5,0],...trail.filter(Boolean),...latestRoute];
  if(pose)points.push(pose);if(tag)points.push(tag);if(finite(view.target))points.push([view.target,0]);
  if(finite(site.truck_inner_width_m)&&site.truck_inner_width_m>0)points.push([1.5,site.truck_inner_width_m/2],[1.5,-site.truck_inner_width_m/2]);
@@ -275,7 +275,7 @@ def _body_to_pixel(pt_body,T_body_cam,model):
 
 def encode_preview(image,obs,cfg,stream='infrared',cal=None):
     """One dashboard panel: 'infrared'/'ir' = IR + VIO points, 'color' = colour + tag outline + parking guide lines + depth
-    entrance, 'depth' = greyscale depth + entrance edges/centre (v2 2026-10-22). Display only; nothing here is a measurement."""
+    entrance, 'depth' = greyscale depth + entrance edges/centre (2026-10-22). Display only; nothing here is a measurement."""
     import cv2
     cal=cal or {};stream={'ir':'infrared'}.get(stream,stream)
     depth=obs.get('depth') or {}
@@ -296,7 +296,8 @@ def encode_preview(image,obs,cfg,stream='infrared',cal=None):
                 for u in (cnd.get('u_left'),cnd.get('u_right')):
                     if u is not None:cv2.line(out,(int(u),0),(int(u),h-1),(0,140,255),1)
                 if cnd.get('u_goal') is not None:ug=int(cnd['u_goal']);cv2.line(out,(ug,0),(ug,h-1),(0,140,255),2);cv2.circle(out,(ug,h//2),9,(0,140,255),2)
-                txt+=' | nearest opening (orange): width %.2f m at %.2f m, centre %+.3f m'%(cnd.get('width_m') or 0.,cnd.get('z_m') or 0.,cnd.get('goal_lateral_m') or 0.)
+                txt+=' | nearest opening (orange): width %.2f m at %.2f m, centre %+.3f m, edge dz %.2f m %s'%(cnd.get('width_m') or 0.,cnd.get('z_m') or 0.,cnd.get('goal_lateral_m') or 0.,cnd.get('dz_m') or 0.,'OK' if cnd.get('depth_match') else 'UNEQUAL')
+            elif cnd:txt+=' | nearest opening: '+str(cnd.get('reason'))
         if depth.get('expected_u') is not None:cv2.line(out,(int(depth['expected_u']),h//2-20),(int(depth['expected_u']),h//2+20),(180,180,180),1)
         cv2.rectangle(out,(0,h-44),(w-1,h-1),(0,0,0),-1)
         cv2.putText(out,txt,(10,h-26),cv2.FONT_HERSHEY_SIMPLEX,.45,(0,0,255) if depth.get('ok') else (0,165,255),1)

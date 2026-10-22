@@ -14,7 +14,7 @@ Passive stereo (IR projector off): good with texture, holes on plain surfaces, e
 import math
 import numpy as np
 
-DEFAULTS=dict(band_frac=.2,max_m=6.,min_jump_m=.15,rel_jump=.08,smooth=5,min_valid_frac=.3,max_gap_px=8,min_width_px=8)
+DEFAULTS=dict(band_frac=.2,max_m=6.,min_jump_m=.15,rel_jump=.08,smooth=5,min_valid_frac=.3,max_gap_px=8,min_width_px=8,same_range_m=.2)
 
 
 def column_profile(depth_m,band_frac=.2,max_m=6.,min_valid_frac=.3):
@@ -31,11 +31,14 @@ def column_profile(depth_m,band_frac=.2,max_m=6.,min_valid_frac=.3):
 
 
 def smooth_profile(prof,k=5):
+    """Running median over k columns, holes stay holes. Vectorised (the per-column Python loop cost ~25 ms per frame on the Jetson)."""
     if k<=1:return prof.copy()
-    out=prof.copy();h=k//2
-    for i in range(len(prof)):
-        win=prof[max(0,i-h):i+h+1];win=win[np.isfinite(win)]
-        if len(win):out[i]=np.median(win)
+    h=k//2;pad=np.full(h,np.nan);ext=np.concatenate([pad,prof,pad])
+    stack=np.stack([ext[i:i+len(prof)] for i in range(k)])
+    with np.errstate(all='ignore'):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore');out=np.nanmedian(stack,axis=0)
     out[~np.isfinite(prof)]=np.nan            # do not invent depth inside holes
     return out
 
@@ -60,42 +63,63 @@ def find_edges(prof,min_jump_m=.15,rel_jump=.08,max_gap_px=8,min_width_px=8):
     return edges
 
 
-def find_goal(depth_m,intr,params=None,width_m=None,width_tol_m=.2,expected_u=None):
-    """depth_m: HxW metres (0/NaN = no data); intr: dict(fx, cx) of the depth stream.
-    width_m (2026-10-22): the known inner width of the entrance. When given, only a left/right pair whose inner edges are
-    width_m +- width_tol_m apart (metres, from each edge's own depth) is accepted; among those the one closest to expected_u
-    (pixel column; default the image centre) wins. Without width_m the widest-fitting rule above is replaced by 'nearest the
-    centre', which also accepts gaps between chair legs: use it only for display. Returns a JSON-able dict."""
+def analyse(depth_m,intr,params=None):
+    """Band profile + edges of one depth frame (the expensive part), shared by several selections."""
     p=dict(DEFAULTS);p.update(params or {})
     h,w=depth_m.shape
     prof,(r0,r1)=column_profile(depth_m,p['band_frac'],p['max_m'],p['min_valid_frac'])
     sm=smooth_profile(prof,int(p['smooth']))
     edges=find_edges(sm,p['min_jump_m'],p['rel_jump'],p['max_gap_px'],p['min_width_px'])
-    out=dict(ok=False,band_rows=[int(r0),int(r1)],valid_columns=float(np.isfinite(prof).mean()),
-             edges=[dict(u=float(e['u']),kind=e['kind']) for e in edges],width_required_m=width_m)
+    return dict(params=p,width=w,band=(int(r0),int(r1)),valid_columns=float(np.isfinite(prof).mean()),profile=sm,edges=edges)
+
+
+def same_range_tolerance(z_near,width_m,heading=None,same_range_m=.2):
+    """Largest range difference the two entrance edges may show: measurement noise (same_range_m + 15 % of range) plus the
+    geometric difference width x |sin(heading)| when the body is not square to the entrance; unknown heading -> 0.5 m."""
+    noise=max(same_range_m,.15*z_near)
+    if heading is None:return max(.5,.15*z_near)
+    return noise+float(width_m or 1.4)*abs(math.sin(heading))
+
+
+def select_opening(a,intr,width_m=None,width_tol_m=.2,expected_u=None,heading=None,same_range_m=.2):
+    """Pick the opening from an analysis: with width_m only a left/right pair whose inner edges are width_m +- width_tol_m
+    apart (metres, from each edge's own depth) and at about the same range, nearest to expected_u (default: image centre);
+    without width_m the opening nearest the centre of ANY width (display only: it also accepts gaps between chair legs)."""
+    p=a['params'];edges=a['edges'];sm=a['profile'];w=a['width']
+    out=dict(ok=False,band_rows=list(a['band']),valid_columns=a['valid_columns'],edges=[dict(u=float(e['u']),kind=e['kind']) for e in edges],width_required_m=width_m)
     fx,cx=float(intr['fx']),float(intr['cx']);uc=float(cx if expected_u is None else expected_u)
-    cands=[]
-    for a in [e for e in edges if e['kind']=='rise']:
-        for b in [e for e in edges if e['kind']=='fall' and e['u']>a['u']]:
-            if b['u']-a['u']<p['min_width_px']:continue
-            xl=(a['near_u']-cx)/fx*a['near_z'];xr=(b['near_u']-cx)/fx*b['near_z'];wid=abs(xr-xl)
-            if width_m is not None:
-                if abs(wid-width_m)>width_tol_m:continue
-                if abs(a['near_z']-b['near_z'])>max(.5,.15*min(a['near_z'],b['near_z'])):continue   # both posts at about the same range
-            cands.append((abs((a['u']+b['u'])/2-uc),a,b,xl,xr))
-            if width_m is None:break          # without a width: nearest opening to the right of this rise only
+    cands=[];loose=[]
+    for ea in [e for e in edges if e['kind']=='rise']:
+        for eb in [e for e in edges if e['kind']=='fall' and e['u']>ea['u']]:
+            if eb['u']-ea['u']<p['min_width_px']:continue
+            xl=(ea['near_u']-cx)/fx*ea['near_z'];xr=(eb['near_u']-cx)/fx*eb['near_z'];wid=abs(xr-xl)
+            if width_m is not None and abs(wid-width_m)>width_tol_m:continue
+            # Both edges at the same range (2026-10-22 user: the left and right posts/walls are equally deep). Without a width
+            # (the orange display candidate) a near wall on one side must not be paired with a far object on the other.
+            dz=abs(ea['near_z']-eb['near_z']);same=dz<=same_range_tolerance(min(ea['near_z'],eb['near_z']),width_m,heading,same_range_m)
+            item=(abs((ea['u']+eb['u'])/2-uc),ea,eb,xl,xr,dz)
+            if same:cands.append(item)
+            elif width_m is None:loose.append(item)
+    depth_match=bool(cands)
+    if not cands and width_m is None and loose:cands=[min(loose,key=lambda c:c[5])]   # display only: no equally-deep pair -> the LEAST unequal one
     if not cands:
         out['reason']=('no_pair_of_width_%.2fm'%width_m if width_m is not None else 'no_opening') if edges else 'no_depth_edges'
         return out
-    _,a,b,xl,xr=min(cands,key=lambda c:c[0])
-    inside=sm[int(math.ceil(a['u'])):int(math.floor(b['u']))+1];inside=inside[np.isfinite(inside)]
-    ug=(a['u']+b['u'])/2
-    out.update(ok=True,reason='opening',u_left=float(a['u']),u_right=float(b['u']),u_goal=float(ug),
-               z_left_m=a['near_z'],z_right_m=b['near_z'],z_inside_m=float(np.median(inside)) if len(inside) else None,
+    _,ea,eb,xl,xr,dz=min(cands,key=lambda c:c[0])
+    inside=sm[int(math.ceil(ea['u'])):int(math.floor(eb['u']))+1];inside=inside[np.isfinite(inside)]
+    ug=(ea['u']+eb['u'])/2
+    out.update(ok=True,reason='opening',u_left=float(ea['u']),u_right=float(eb['u']),u_goal=float(ug),depth_match=depth_match,dz_m=float(dz),
+               z_left_m=ea['near_z'],z_right_m=eb['near_z'],z_inside_m=float(np.median(inside)) if len(inside) else None,
                left_edge_lateral_m=float(-xl),right_edge_lateral_m=float(-xr),           # left +
                goal_lateral_m=float(-(xl+xr)/2),width_m=float(abs(xr-xl)),
                goal_bearing_deg=float(math.degrees(math.atan2(-(ug-cx),fx))))           # left +
     return out
+
+
+def find_goal(depth_m,intr,params=None,width_m=None,width_tol_m=.2,expected_u=None,heading=None):
+    """depth_m: HxW metres (0/NaN = no data); intr: dict(fx, cx) of the depth stream. See select_opening for the rule."""
+    p=dict(DEFAULTS);p.update(params or {})
+    return select_opening(analyse(depth_m,intr,params),intr,width_m,width_tol_m,expected_u,heading,p.get('same_range_m',.2))
 
 
 def expected_column(pose,intr,T_body_ir):
@@ -110,13 +134,19 @@ def expected_column(pose,intr,T_body_ir):
     return float(intr['cx']+intr['fx']*cam[0]/cam[2])
 
 
-def measure(depth_m,intr,T_body_ir,width_m,width_tol_m,expected_u=None,params=None,stamp=None):
+def measure(depth_m,intr,T_body_ir,width_m,width_tol_m,expected_u=None,params=None,stamp=None,candidate=True,heading=None):
     """One depth frame -> the entrance in the BODY frame (x forward, y left of the body origin on the vehicle centreline).
     find_goal works in the depth camera frame (left IR lens); the lens sits T_body_ir[:3,3] from the body origin.
     Fields: ok, reason, lateral_body_m (centre y), x_body_m (centre x), width_m, z_left_m, z_right_m, u_goal, u_left,
-    u_right, pair_heading_deg (body heading relative to the entrance normal implied by the two edges, left +), stamp."""
-    g=find_goal(depth_m,intr,params,width_m=width_m,width_tol_m=width_tol_m,expected_u=expected_u)
+    u_right, pair_heading_deg (body heading relative to the entrance normal implied by the two edges, left +), stamp,
+    candidate (display only: the nearest opening of any width)."""
+    a=analyse(depth_m,intr,params);srm=float((params or {}).get('same_range_m',.2))
+    g=select_opening(a,intr,width_m=width_m,width_tol_m=width_tol_m,expected_u=expected_u,heading=heading,same_range_m=srm)
     out=dict(ok=bool(g.get('ok')),reason=g.get('reason'),stamp=stamp,width_required_m=width_m,valid_columns=g.get('valid_columns'))
+    if candidate:
+        c=select_opening(a,intr,expected_u=expected_u)
+        out['candidate']=dict(ok=bool(c.get('ok')),reason=c.get('reason'),u_left=c.get('u_left'),u_right=c.get('u_right'),u_goal=c.get('u_goal'),
+                              width_m=c.get('width_m'),z_m=None if not c.get('ok') else (c['z_left_m']+c['z_right_m'])/2,goal_lateral_m=c.get('goal_lateral_m'),depth_match=c.get('depth_match'),dz_m=c.get('dz_m'))
     if not g.get('ok'):return out
     T=np.asarray(T_body_ir,float);R=T[:3,:3];t=T[:3,3]
     def body_xy(u,z):

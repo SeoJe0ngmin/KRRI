@@ -1,4 +1,3 @@
-"""Gyro-based stationary judgment (2026-10-19). Synthetic samples; no claim about the real truck's vibration."""
 import unittest
 import math
 import numpy as np
@@ -21,7 +20,7 @@ class StationaryTest(unittest.TestCase):
         self.assertLess(r['gyro_p90_dps'],.01);self.assertEqual(r['translation_rule'],'vio_speed')
     def test_rotation_above_half_degree_per_second_is_not_rest(self):
         d=self.detector();self.assertFalse(self.feed(d,0,2,rate_dps=2.));self.assertEqual(d.report['reason'],'rotating')
-        d=self.detector();self.assertTrue(self.feed(d,0,2,rate_dps=.3))   # below the v4 IMU_MOVING_DPS threshold
+        d=self.detector();self.assertTrue(self.feed(d,0,2,rate_dps=.3))
     def test_bias_from_openvins_is_removed(self):
         d=self.detector();bias=(0.,0.,math.radians(1.))
         self.assertFalse(self.feed(d,0,2,bias=bias));self.assertEqual(d.report['bias_source'],'raw_no_bias')

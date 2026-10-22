@@ -1,4 +1,3 @@
-"""Native detector regression, using an independently generated upright tag."""
 import unittest
 import cv2
 import numpy as np

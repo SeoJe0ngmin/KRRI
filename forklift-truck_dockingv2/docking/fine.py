@@ -1,4 +1,4 @@
-"""Fine-stage geometry (v2, 2026-10-22): the lateral-correction bundle and depth-entrance bookkeeping.
+"""Fine-stage geometry (2026-10-22): the lateral-correction bundle and depth-entrance bookkeeping.
 
 A bundle is turn(alpha) -> drive d -> turn back to the straight heading. It moves the body origin sideways while the
 heading ends where it started, which is the only admissible correction once the vehicle must keep heading 0 (the depth

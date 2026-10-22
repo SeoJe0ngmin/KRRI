@@ -147,7 +147,7 @@ class Fusion:
         self.anchor_jitter=np.zeros(3);self.window=deque();self.Pvio=np.zeros((3,3));self.offset_updated_at=-math.inf
         self.travel=0.;self.last_window=None;self.report=dict(reason='no_tag_window')
         self.leg=[]   # tag frames of the current moving stretch (a VIO reset ends it without a fit)
-        self.still_offsets=deque()   # (stamp, pnp - vio) of still frames in the last few seconds, for rezero() (v2 2026-10-22)
+        self.still_offsets=deque()   # (stamp, pnp - vio) of still frames in the last few seconds, for rezero() (2026-10-22)
         self.rezero_count=0;self.rezero_info=None
         # The mount yaw is a physical constant of this camera mounting: samples survive VIO resets.
         if not hasattr(self,'mount_yaw_samples'):self.mount_yaw_samples=[];self.mount_yaw=0.;self.last_leg=None;self.legs_seen=0
@@ -247,7 +247,7 @@ class Fusion:
         return self.report
 
     def rezero(self,seconds,min_frames):
-        """v2 fine-stage entry (2026-10-22): set the heading offset to the median PnP-minus-VIO of the last `seconds` of still
+        """Fine-stage entry (2026-10-22): set the heading offset to the median PnP-minus-VIO of the last `seconds` of still
         frames, i.e. trust the tag heading HERE (4 m from the tag it is far better than the 9 m first window that set it).
         The anchor is moved so the current position does not jump; the next tag window re-anchors anyway.
         Returns the report, or None while there are not yet min_frames still frames (the caller retries)."""

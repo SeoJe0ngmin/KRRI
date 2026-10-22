@@ -1,4 +1,3 @@
-"""Synthetic geometry only; never field values or hardware connections."""
 from pathlib import Path
 import copy
 import numpy as np
@@ -8,12 +7,12 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def config(mode='central'):
     c=load(mode=mode)
-    # Pin every field number the geometry uses: the live common.json differs per machine (Jetson had tag 0.2 m).
     c['site'].update(vehicle_width_m=1.3,truck_inner_width_m=1.5,truck_depth_m=None,left_tag_offset_m=.9,tag_size_m=.3,tag_height_m=1.58,camera_height_m=.57,
                      camera_to_fork_tip_m=1.5,rear_extent_m=1.,rear_space_m=.5,tag_plane_offset_m=0.,camera_lateral_m=0.,
-                     rotation_center_behind_fork_tip_m=1.035,rotation_center_lateral_m=-.112)   # pivot stays [.465,-.112] for the pinned 1.5 m camera (2026-10-20)
+                     rotation_center_behind_fork_tip_m=1.035,rotation_center_lateral_m=-.112)
     c['sensor']['tag']['size_m']=.3;c['tuning']['backward_max_m']=.5;c['pivot']=[.465,-.112]
-    c['tuning']['baseline_s']=0.   # controller flow tests skip the 30 s post-search baseline; test_startup_flow covers it
+    c['tuning']['baseline_s']=0.
+    c['target_front_x']=c['sensor']['target_front_x']=-.5 if mode=='central' else 1.;c['site']['forward_path_bias_deg']=0.
     T=np.eye(4);T[:3,:3]=[[0,0,1],[-1,0,0],[0,-1,0]];T[:3,3]=[0,0,.57]
     D=np.eye(4);D[:3,:3]=[[0,0,-1],[-1,0,0],[0,1,0]];D[:3,3]=[0,.9 if mode=='left' else 0,1.58]
     c['sensor']['calibration'].update(T_body_camera=T.tolist(),T_dock_tag=D.tolist(),camera_model=dict(
@@ -22,21 +21,17 @@ def config(mode='central'):
     return c
 
 def synthetic_tag(sensor,dock_pose,stamp,epoch=1,heading_bias_rad=0.):
-    """Exact tag view from a body pose in the dock frame. heading_bias rotates the PnP solution about the tag
-    normal: bearing and range stay exact, the PnP heading (and therefore the PnP lateral) go wrong — the
-    2026-10-02 failure mode of a single tag."""
     from docking.geometry import matrix
     from docking.uncertainty import inverse
     cal=sensor['calibration'];Tbc=np.array(cal['T_body_camera']);Tdt=np.array(cal['T_dock_tag'])
     Tct=inverse(Tbc)@inverse(matrix(dock_pose))@Tdt
-    if heading_bias_rad:   # about the tag's vertical axis (tag y = dock z): yaw bias, exact translation
+    if heading_bias_rad:
         c,s=np.cos(heading_bias_rad),np.sin(heading_bias_rad)
         Tct=Tct@np.array([[c,0,s,0],[0,1,0,0],[-s,0,c,0],[0,0,0,1.]])
     return dict(ok=True,reason='accepted',detected=True,search_candidate=True,stamp=float(stamp),sensor_epoch=epoch,
                 capture_key=str(stamp),T_camera_tag=Tct,covariance=(np.eye(6)*1e-6).tolist())
 
 class VioSource:
-    """OpenVINS-like packets for a body pose expressed in an arbitrary odom gauge (T_body_imu = I)."""
     def __init__(self,gauge=(3.,-2.,.7),epoch=1):
         from docking.geometry import matrix
         self.G=matrix(gauge);self.epoch=epoch;self.previous=None
@@ -70,15 +65,13 @@ def observation(now,world=(-5.,0.,0.),local=(0.,0.,0.),**kwargs):
 
 
 def depth_obs(x_body,lateral_body,stamp,width=1.5,ok=True,pair_heading_deg=0.):
-    """Depth entrance reading in the BODY frame as the camera worker publishes it (x forward, y left of the body origin)."""
     if not ok:return dict(ok=False,reason='no_pair',stamp=stamp)
     return dict(ok=True,reason='opening',stamp=stamp,x_body_m=float(x_body),lateral_body_m=float(lateral_body),width_m=float(width),
                 z_left_m=float(x_body),z_right_m=float(x_body),u_goal=320.,u_left=200.,u_right=440.,pair_heading_deg=float(pair_heading_deg),
                 left_body=[float(x_body),float(lateral_body)+width/2],right_body=[float(x_body),float(lateral_body)-width/2])
 
 def depth_from_world(world,stamp,width=1.5,**kw):
-    """The depth reading a vehicle at dock pose `world` would see of an entrance centred at the dock origin (exact geometry)."""
     import math
     x,y,h=world;c,s=math.cos(h),math.sin(h)
-    dx,dy=-x,-y   # entrance centre relative to the body origin, dock frame
+    dx,dy=-x,-y
     return depth_obs(c*dx+s*dy,-s*dx+c*dy,stamp,width=width,pair_heading_deg=-math.degrees(h),**kw)

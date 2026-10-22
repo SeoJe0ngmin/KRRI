@@ -52,7 +52,7 @@ def estimate(rows,sensor,model,vio_rows=None,T_left_imu=None):
     """apriltag_v4 camyaw: median tag rotation while parked facing the tag normal (assumed, not measured) -> yaw.
     Pitch/roll come from gravity (IMU) when vio_rows are given, otherwise 0 (level camera)."""
     import uuid
-    report=dict(schema='camera_mount_reference_v1',id=uuid.uuid4().hex,usable=False,method='standing_v4_camyaw_assumes_body_parallel_to_tag_normal',
+    report=dict(schema='camera_mount_reference_v1',id=uuid.uuid4().hex,usable=False,method='standing_tag_yaw_imu_pitch_roll_assumes_square_to_tag',
         certified_error_bound=False,reference_alignment_confirmed=False,camera_model=model,reasons=[],
         warnings=['assumes_vehicle_parallel_to_tag_normal_by_eye'],assumptions=['upright_tag','vehicle_level','body_parallel_to_tag_normal'])
     warn=report['warnings'].append

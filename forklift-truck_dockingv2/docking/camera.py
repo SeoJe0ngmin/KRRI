@@ -85,10 +85,11 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
         dg=cfg.get('depth_goal') or {};depth_on=bool(c['depth_enabled'] and dg.get('enabled',True))
         depth_filters=[]
         if depth_on and dg.get('filters',True):
+            # 2026-10-22 Jetson: the spatial filter in the main loop cost enough CPU to halve the VIO output rate; temporal only by default.
             try:
-                sp=rs.spatial_filter();sp.set_option(rs.option.filter_magnitude,2);sp.set_option(rs.option.filter_smooth_alpha,.5);sp.set_option(rs.option.filter_smooth_delta,20)
-                tp=rs.temporal_filter();tp.set_option(rs.option.filter_smooth_alpha,.4);tp.set_option(rs.option.filter_smooth_delta,20)
-                depth_filters=[sp,tp]
+                if dg.get('spatial_filter',False):
+                    sp=rs.spatial_filter();sp.set_option(rs.option.filter_magnitude,2);sp.set_option(rs.option.filter_smooth_alpha,.5);sp.set_option(rs.option.filter_smooth_delta,20);depth_filters.append(sp)
+                tp=rs.temporal_filter();tp.set_option(rs.option.filter_smooth_alpha,.4);tp.set_option(rs.option.filter_smooth_delta,20);depth_filters.append(tp)
             except Exception as exc:errors.put('depth filters: '+str(exc))
         depth_intr=None
         if c['depth_enabled']:
@@ -141,14 +142,14 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     tag['capture_key']=str(cf.get_frame_number());tag_results.put(tag)
             except Exception as exc:errors.put('tag: '+str(exc))
         def depth_task():
-            """Entrance measurement from the depth stream (v2 2026-10-22) and the bird's-eye cells for the dashboard.
+            """Entrance measurement from the depth stream (2026-10-22) and the bird's-eye cells for the dashboard.
             Runs off the main loop; a failure here never stops the run (it is reported in the observation)."""
             try:
                 from .depth_goal import measure,expected_column
                 from .bev import depth_to_points,camera_to_body,occupancy,grid_xy
                 T_body_ir=np.array(cfg['calibration']['T_body_ir'],float);site=cfg.get('site') or {};last_bev=-1.;bev_acc=None
                 width=float(site.get('truck_inner_width_m') or 0.);tol=float(cfg['tuning'].get('truck_width_tol_m',.2))
-                params={k:dg[k] for k in ('band_frac','min_jump_m','rel_jump','min_valid_frac','max_gap_px','min_width_px','max_m') if k in dg}
+                params={k:dg[k] for k in ('band_frac','min_jump_m','rel_jump','min_valid_frac','max_gap_px','min_width_px','max_m','same_range_m') if k in dg}
                 while not stop.is_set():
                     item=depth_tasks.get()
                     if item is None:stop.wait(.005);continue
@@ -156,17 +157,11 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     depth=raw.astype(np.float32)*float(depth_scale)
                     try:
                         exp=expected_column(pose,depth_intr,T_body_ir) if pose is not None else None
-                        m=measure(depth,depth_intr,T_body_ir,width,tol,expected_u=exp,params=params,stamp=stamp) if width>0 else dict(ok=False,reason='no_truck_inner_width',stamp=stamp)
+                        m=measure(depth,depth_intr,T_body_ir,width,tol,expected_u=exp,params=params,stamp=stamp,heading=None if pose is None else float(pose[2])) if width>0 else dict(ok=False,reason='no_truck_inner_width',stamp=stamp)
                     except Exception as exc:m=dict(ok=False,reason='error: '+str(exc),stamp=stamp)
                     m['expected_u']=exp if width>0 else None;m['compute_ms']=round((time.monotonic()-t_start)*1000.,1);m['arrival']=arrival
-                    try:   # display only: the nearest opening of ANY width (orange on the panel), so a scene without the truck still shows a centre
-                        from .depth_goal import find_goal
-                        cnd=find_goal(depth,depth_intr,params,expected_u=exp)
-                        m['candidate']=dict(ok=bool(cnd.get('ok')),reason=cnd.get('reason'),u_left=cnd.get('u_left'),u_right=cnd.get('u_right'),u_goal=cnd.get('u_goal'),
-                                            width_m=cnd.get('width_m'),z_m=None if not cnd.get('ok') else (cnd['z_left_m']+cnd['z_right_m'])/2,goal_lateral_m=cnd.get('goal_lateral_m'))
-                    except Exception as exc:m['candidate']=dict(ok=False,reason='error: '+str(exc))
                     bev=None
-                    if time.monotonic()-last_bev>=1/max(.5,float(dg.get('bev_hz',4.))):
+                    if view and time.monotonic()-last_bev>=1/max(.5,float(dg.get('bev_hz',2.))):   # dashboard only
                         try:
                             pts,_,_=depth_to_points(depth,depth_intr,int(dg.get('bev_step',4)),float(dg.get('bev_forward_m',8.)))
                             body=camera_to_body(pts,T_body_ir[:3,:3],T_body_ir[:3,3])
@@ -202,6 +197,7 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
         last_color=-1.;last_tag=-1.;last_view=-1.;pending=deque(maxlen=32);latest_images=dict(ir=None,color=None,depth=None);output_watchdog=OutputWatchdog();have_vio_output=False;last_diagnostic=0.;ir_mean=None;last_frames=None;exposure=None
         last_depth_put=-1.;latest_depth=None;latest_bev=None;emitter_state=bool(c['emitter_enabled']);last_emitter_check=0.;rezero_seen=0
         view_panels=[k for k in (cfg['view'].get('panels') or ('ir','color','depth'))]   # --panels: unchosen panels are neither copied nor encoded
+        ir_recent=deque(maxlen=12);phase_code=0
         # Stall diagnostics (2026-10-19): the whole worker froze 0.3-1.1 s every few seconds with no backlog anywhere.
         # Record garbage-collector pauses (every thread stops for them) and the worst time of each main-loop stage
         # per second. Record only; nothing here changes behaviour.
@@ -248,18 +244,21 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 # mode, where there is no VIO and the colour image is what the tag detector sees (2026-10-19).
                 due=view and time.monotonic()-last_view>=1/cfg['view']['fps']
                 dfr=fs.get_depth_frame() if depth_on else None
-                if dfr and (due or time.monotonic()-last_depth_put>=1/max(1.,float(dg.get('rate_hz',10.)))):
+                # Depth measurement rate: full rate only in the fine/final/entry phases (hint[5] >= 2); measure mode and the rough
+                # approach use rate_hz_idle (the entrance is not needed there), which keeps the CPU for OpenVINS.
+                depth_rate=float(dg.get('rate_hz',10.)) if phase_code in (2,3,4) else float(dg.get('rate_hz_idle',3.))
+                if dfr and (due or time.monotonic()-last_depth_put>=1/max(1.,depth_rate)):
                     # Filters run on the SDK frame (C++), then the z16 buffer is copied (the SDK recycles it) for the depth thread.
                     for f in depth_filters:
                         try:dfr=f.process(dfr)
                         except Exception as exc:errors.put('depth filter: '+str(exc));depth_filters=[];break
                     raw=np.array(dfr.get_data(),copy=True);dstamp=timestamp(dfr)
-                    if time.monotonic()-last_depth_put>=1/max(1.,float(dg.get('rate_hz',10.))):
+                    if time.monotonic()-last_depth_put>=1/max(1.,depth_rate):
                         pose=last_obs['pose'] if (last_obs and last_obs.get('usable') and last_obs.get('pose') is not None) else None
                         depth_tasks.put((dstamp,raw,pose,time.monotonic()));last_depth_put=time.monotonic()
                     if due and 'depth' in view_panels:latest_images['depth']=(dstamp,raw)
+                if 'ir' in view_panels and view:ir_recent.append((stamp,left.copy()))   # the preview picks the frame the VIO state belongs to
                 if due:
-                    if 'ir' in view_panels:latest_images['ir']=(stamp,left.copy())
                     if 'color' in view_panels:latest_images['color']=(color_stamp,np.array(cf.get_data(),copy=True))
                 stage('remap')
                 if imu.begin(stamp,time.monotonic()):
@@ -276,7 +275,10 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     # Native output cannot exist before its first video input.
                     # The independent camera startup timeout covers this phase.
                     output_watchdog.input(time.monotonic())
-                if color_stamp>last_color and color_stamp-last_tag>=cfg['tag']['period_s']:
+                # Past the tag cut (FINAL/ENTRY) the tag is out of view: detect only every 2 s (the colour AprilTag search is the
+                # heaviest Python-side job); a tag that does reappear is still logged. ROUGH/FINE keep the normal period.
+                tag_period=cfg['tag']['period_s'] if phase_code<4 else max(cfg['tag']['period_s'],2.)
+                if color_stamp>last_color and color_stamp-last_tag>=tag_period:
                     tags.put((fs,color_stamp));last_tag=color_stamp
                 last_color=max(last_color,color_stamp)
                 if cfg.get('camera_only') or not have_vio_output:
@@ -303,7 +305,7 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                     if motion_hint is not None:
                         with motion_hint.get_lock():
                             neutral=bool(motion_hint[1]);packet['neutral_since']=motion_hint[2];packet['baseline_lock']=bool(motion_hint[3]) if len(motion_hint)>3 else False
-                            rezero_seen=int(motion_hint[4]) if len(motion_hint)>4 else 0
+                            rezero_seen=int(motion_hint[4]) if len(motion_hint)>4 else 0;phase_code=int(motion_hint[5]) if len(motion_hint)>5 else 0
                         observer.request_rezero(rezero_seen)
                         packet['captured_after_neutral']=clock.host_time(packet['stamp'])>=packet['neutral_since']
                         packet['since_neutral_s']=clock.host_time(packet['stamp'])-packet['neutral_since'] if neutral else None
@@ -365,10 +367,15 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 record=dict({k:v for k,v in last_obs.items() if k!='depth_bev'},odom=dict({k:v for k,v in last_obs['odom'].items() if k!='tracked_points'},tracked_points_n=len(last_obs['odom'].get('tracked_points') or [])),
                             depth_bev_cells=None if not last_obs.get('depth_bev') else len(last_obs['depth_bev'].get('cells') or []))
                 rec.put(record);publish_latest(results,last_obs);stage('record_publish')
-                if view and any(latest_images.get(k) for k in view_panels) and time.monotonic()-last_view>=1/cfg['view']['fps']:
-                    # Up to three panels (2026-10-22): IR + VIO points, colour + tag + guide lines, depth + entrance. Points only from a close stereo frame.
+                if view and (ir_recent or any(latest_images.get(k) for k in view_panels)) and time.monotonic()-last_view>=1/cfg['view']['fps']:
+                    # Up to three panels (2026-10-22): IR + VIO points, colour + tag + guide lines, depth + entrance.
                     picture=copy.deepcopy({k:v for k,v in last_obs.items() if k!='depth_bev'})
-                    if latest_images.get('ir') and abs(latest_images['ir'][0]-picture['capture_id'])>.05:picture['odom']['tracked_points']=[]
+                    if 'ir' in view_panels and ir_recent:
+                        # The VIO points belong to the frame the estimator processed (capture_id), which lags the newest frame by a
+                        # few frames when the CPU is busy: show THAT frame, else the newest one without points (2026-10-22 Jetson).
+                        match=[f for f in ir_recent if abs(f[0]-picture['capture_id'])<=.004]
+                        if match:latest_images['ir']=match[-1]
+                        else:latest_images['ir']=ir_recent[-1];picture['odom']['tracked_points']=[]
                     images={k:(latest_images[k][1] if latest_images.get(k) else None) for k in view_panels}
                     preview_tasks.put((images,picture));last_view=time.monotonic();stage('preview_put')
                 last_obs=None

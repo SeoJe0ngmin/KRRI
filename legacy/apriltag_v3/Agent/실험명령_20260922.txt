@@ -1,0 +1,398 @@
+# ====================================================================
+# first_run 현장 명령 목록 — 한 줄이 **한 시행**이다
+#
+#  · 한 줄 치면 실험 1회 하고 **종료하면서 CAN 을 놓는다**
+#    → 그때 수동 컨트롤러로 차를 옮길 수 있다
+#  · [사람] 표시가 나올 때만 차를 옮긴다. 그 아래 줄들은 같은 자리다
+#  · [차]  는 지게차가 **스스로** 하는 것 — 사람이 안 건드려도 된다
+#  · 거리(d)는 태그면까지 **수직거리**, 옆(lat)은 도킹축에서 옆으로
+#  · 각도는 눈대중이면 된다. 정확히 맞출 필요 없다
+#  · Ctrl+C = 즉시 정지 프레임 송신 후 종료 · 진행확인: --list
+# ====================================================================
+
+cd ~/krri/apriltag_v3
+
+# 장치 확인
+python tools/check/device_check.py --no-gui
+python -c "from canlib import canlib; print(canlib.getNumberOfChannels())"
+
+
+# --------------------------------------------------------------------
+# 1. timing   (필수)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 정면(축 위)
+#     메모:  태그가 화면 **중앙 높이**에 오게
+#  [차]   스스로 함: ±12° 제자리 회전 3번 → 스스로 0°로 복귀
+python tools/first_run.py 1 --part center --n 1                  # 1/1
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  아무 데나
+#     자세:  태그 정면(축 위)
+#     메모:  태그가 화면 **위쪽 행**에 오게 차를 조금 앞으로 (잘리지는 않을 만큼)
+#  [차]   스스로 함: ±12° 제자리 회전 3번 → 스스로 0°로 복귀
+python tools/first_run.py 1 --part upper --n 1                   # 1/1
+
+# --------------------------------------------------------------------
+# 2. safety   (필수)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **8.0 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 정면(축 위)
+#     메모:  앞 5 m 비움 · **사람 제동 위치** (포크는 건드리지 않는다)
+#  [차]   스스로 함: 저속 전진 6초 × 4종 → 매번 스스로 8 m 로 복귀
+python tools/first_run.py 2 --n 1                                # 1/3
+python tools/first_run.py 2 --n 1                                # 2/3
+python tools/first_run.py 2 --n 1                                # 3/3
+
+# --------------------------------------------------------------------
+# 3. mount   (필수)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **1.6 m**
+#     자세:  태그 쪽으로 약 25° 틀어서
+#     메모:  이 단계는 자리 **2곳**: ①비스듬(위 자세) ②정면(옆 0 m). 줄자 7개 입력
+#  [차]   스스로 함: 없음 — 차는 가만히 있는다
+python tools/first_run.py 3 --n 1                                # 1/1
+
+# --------------------------------------------------------------------
+# 4. rotate   (필수)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **1.6 m**
+#     자세:  태그 쪽으로 약 25° 틀어서 (tilt ≥ 20°)
+#     메모:  차 **주변이 원형으로** 비어야 한다 (앞뒤로는 안 간다)
+#  [차]   스스로 함: 제자리 회전 → 스스로 원래 각도로 복귀
+python tools/first_run.py 4 --part open --sec 1.0 --side L --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 1.0 --side L --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 1.0 --side L --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 1.0 --side L --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 1.0 --side R --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 1.0 --side R --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 1.0 --side R --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 1.0 --side R --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 1.5 --side L --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 1.5 --side L --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 1.5 --side L --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 1.5 --side L --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 1.5 --side R --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 1.5 --side R --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 1.5 --side R --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 1.5 --side R --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 2.0 --side L --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 2.0 --side L --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 2.0 --side L --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 2.0 --side L --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 2.0 --side R --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 2.0 --side R --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 2.0 --side R --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 2.0 --side R --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 3.0 --side L --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 3.0 --side L --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 3.0 --side L --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 3.0 --side L --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part open --sec 3.0 --side R --n 1 # 1/4
+python tools/first_run.py 4 --part open --sec 3.0 --side R --n 1 # 2/4
+python tools/first_run.py 4 --part open --sec 3.0 --side R --n 1 # 3/4
+python tools/first_run.py 4 --part open --sec 3.0 --side R --n 1 # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 4 --part gyro --n 1                    # 1/2
+python tools/first_run.py 4 --part gyro --n 1                    # 2/2
+
+#  [사람] 옮기지 않는다 — 바로 위와 **같은 자리**
+#     ★ σ_θ — 절대 못 버림
+python tools/first_run.py 4 --part closed --n 1                  # 1/6
+python tools/first_run.py 4 --part closed --n 1                  # 2/6
+python tools/first_run.py 4 --part closed --n 1                  # 3/6
+python tools/first_run.py 4 --part closed --n 1                  # 4/6
+python tools/first_run.py 4 --part closed --n 1                  # 5/6
+python tools/first_run.py 4 --part closed --n 1                  # 6/6
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **1.6 m**
+#     자세:  태그 쪽으로 약 25° 틀어서 (**tilt ≥ 20° 아니면 코드가 다시 세우라고 한다**)
+#     메모:  ★ 회전팔 A
+#  [차]   스스로 함: ±20° 제자리 회전 → 스스로 복귀
+python tools/first_run.py 4 --part arm --start-m 3.5 --n 1       # 1/5
+python tools/first_run.py 4 --part arm --start-m 3.5 --n 1       # 2/5
+python tools/first_run.py 4 --part arm --start-m 3.5 --n 1       # 3/5
+python tools/first_run.py 4 --part arm --start-m 3.5 --n 1       # 4/5
+python tools/first_run.py 4 --part arm --start-m 3.5 --n 1       # 5/5
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **6.0 m**, 옆으로 **2.8 m**
+#     자세:  태그 쪽으로 약 25° 틀어서 (tilt ≥ 20°)
+#     메모:  ★★ **6 m 로 옮긴다** — 이걸 빼면 회전팔 A 를 원리적으로 못 구한다
+#  [차]   스스로 함: ±20° 제자리 회전 → 스스로 복귀
+python tools/first_run.py 4 --part arm --start-m 6 --n 1         # 1/5
+python tools/first_run.py 4 --part arm --start-m 6 --n 1         # 2/5
+python tools/first_run.py 4 --part arm --start-m 6 --n 1         # 3/5
+python tools/first_run.py 4 --part arm --start-m 6 --n 1         # 4/5
+python tools/first_run.py 4 --part arm --start-m 6 --n 1         # 5/5
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **1.6 m**
+#     자세:  태그 쪽으로 약 25° 틀어서
+#     메모:  3.5 m 자리로 되돌아온다
+#  [차]   스스로 함: ±5° 제자리 회전 → 스스로 복귀
+python tools/first_run.py 4 --part small --n 1                   # 1/10
+python tools/first_run.py 4 --part small --n 1                   # 2/10
+python tools/first_run.py 4 --part small --n 1                   # 3/10
+python tools/first_run.py 4 --part small --n 1                   # 4/10
+python tools/first_run.py 4 --part small --n 1                   # 5/10
+python tools/first_run.py 4 --part small --n 1                   # 6/10
+python tools/first_run.py 4 --part small --n 1                   # 7/10
+python tools/first_run.py 4 --part small --n 1                   # 8/10
+python tools/first_run.py 4 --part small --n 1                   # 9/10
+python tools/first_run.py 4 --part small --n 1                   # 10/10
+
+#  [사람] 옮기지 않는다 — 태그가 안 보일 때까지 돌려 본다
+#  [차]   스스로 함: 좌우로 천천히 회전(태그 놓치면 스스로 멈춤)
+python tools/first_run.py 4 --part beta --n 1                    # 1/3
+python tools/first_run.py 4 --part beta --n 1                    # 2/3
+python tools/first_run.py 4 --part beta --n 1                    # 3/3
+
+# --------------------------------------------------------------------
+# 5. forward   (필수)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **5.5 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 정면(축 위) · tilt < 10°
+#     메모:  ★ τ_eff · 앞 2 m 여유
+#  [차]   스스로 함: 4초 전진(약 1.3 m) → **스스로 5.5 m 로 후진 복귀**
+python tools/first_run.py 5 --part front --n 1                   # 1/10
+python tools/first_run.py 5 --part front --n 1                   # 2/10
+python tools/first_run.py 5 --part front --n 1                   # 3/10
+python tools/first_run.py 5 --part front --n 1                   # 4/10
+python tools/first_run.py 5 --part front --n 1                   # 5/10
+python tools/first_run.py 5 --part front --n 1                   # 6/10
+python tools/first_run.py 5 --part front --n 1                   # 7/10
+python tools/first_run.py 5 --part front --n 1                   # 8/10
+python tools/first_run.py 5 --part front --n 1                   # 9/10
+python tools/first_run.py 5 --part front --n 1                   # 10/10
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **5.5 m**, 옆으로 **2.6 m**
+#     자세:  태그 쪽으로 약 25° 틀어서 (tilt 25~30°)
+#     메모:  옆으로 2.6 m 가 어려우면 2.0 m(tilt 20°)도 된다
+#  [차]   스스로 함: 4초 전진 → 스스로 복귀
+python tools/first_run.py 5 --part oblique --n 1                 # 1/10
+python tools/first_run.py 5 --part oblique --n 1                 # 2/10
+python tools/first_run.py 5 --part oblique --n 1                 # 3/10
+python tools/first_run.py 5 --part oblique --n 1                 # 4/10
+python tools/first_run.py 5 --part oblique --n 1                 # 5/10
+python tools/first_run.py 5 --part oblique --n 1                 # 6/10
+python tools/first_run.py 5 --part oblique --n 1                 # 7/10
+python tools/first_run.py 5 --part oblique --n 1                 # 8/10
+python tools/first_run.py 5 --part oblique --n 1                 # 9/10
+python tools/first_run.py 5 --part oblique --n 1                 # 10/10
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **5.5 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 정면(축 위)
+#     메모:  짧은 명령 — 거리 변동을 본다
+#  [차]   스스로 함: 짧게 전진 → 스스로 복귀
+python tools/first_run.py 5 --part short --sec 1.5 --n 1         # 1/4
+python tools/first_run.py 5 --part short --sec 1.5 --n 1         # 2/4
+python tools/first_run.py 5 --part short --sec 1.5 --n 1         # 3/4
+python tools/first_run.py 5 --part short --sec 1.5 --n 1         # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 5 --part short --sec 2.0 --n 1         # 1/4
+python tools/first_run.py 5 --part short --sec 2.0 --n 1         # 2/4
+python tools/first_run.py 5 --part short --sec 2.0 --n 1         # 3/4
+python tools/first_run.py 5 --part short --sec 2.0 --n 1         # 4/4
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 5 --part short --sec 3.0 --n 1         # 1/4
+python tools/first_run.py 5 --part short --sec 3.0 --n 1         # 2/4
+python tools/first_run.py 5 --part short --sec 3.0 --n 1         # 3/4
+python tools/first_run.py 5 --part short --sec 3.0 --n 1         # 4/4
+
+# --------------------------------------------------------------------
+# 6. creep   (선택)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **4.5 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 정면(축 위)
+#     메모:  ★ byte2=97 이 실제로 움직이나 (내일 처음 보내는 값)
+#  [차]   스스로 함: 저속 4초 전진(약 0.5 m) → 스스로 복귀
+python tools/first_run.py 6 --part stiction --n 1                # 1/10
+python tools/first_run.py 6 --part stiction --n 1                # 2/10
+python tools/first_run.py 6 --part stiction --n 1                # 3/10
+python tools/first_run.py 6 --part stiction --n 1                # 4/10
+python tools/first_run.py 6 --part stiction --n 1                # 5/10
+python tools/first_run.py 6 --part stiction --n 1                # 6/10
+python tools/first_run.py 6 --part stiction --n 1                # 7/10
+python tools/first_run.py 6 --part stiction --n 1                # 8/10
+python tools/first_run.py 6 --part stiction --n 1                # 9/10
+python tools/first_run.py 6 --part stiction --n 1                # 10/10
+
+#  [사람] 옮기지 않는다 — 바로 위와 **같은 자리**
+#  [차]   스스로 함: 저속 짧게 전진 → 스스로 복귀
+python tools/first_run.py 6 --part pulse --sec 1.0 --n 1         # 1/5
+python tools/first_run.py 6 --part pulse --sec 1.0 --n 1         # 2/5
+python tools/first_run.py 6 --part pulse --sec 1.0 --n 1         # 3/5
+python tools/first_run.py 6 --part pulse --sec 1.0 --n 1         # 4/5
+python tools/first_run.py 6 --part pulse --sec 1.0 --n 1         # 5/5
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 6 --part pulse --sec 1.5 --n 1         # 1/5
+python tools/first_run.py 6 --part pulse --sec 1.5 --n 1         # 2/5
+python tools/first_run.py 6 --part pulse --sec 1.5 --n 1         # 3/5
+python tools/first_run.py 6 --part pulse --sec 1.5 --n 1         # 4/5
+python tools/first_run.py 6 --part pulse --sec 1.5 --n 1         # 5/5
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 6 --part pulse --sec 2.0 --n 1         # 1/5
+python tools/first_run.py 6 --part pulse --sec 2.0 --n 1         # 2/5
+python tools/first_run.py 6 --part pulse --sec 2.0 --n 1         # 3/5
+python tools/first_run.py 6 --part pulse --sec 2.0 --n 1         # 4/5
+python tools/first_run.py 6 --part pulse --sec 2.0 --n 1         # 5/5
+
+#  [사람] 옮기지 않는다 — 바로 위와 같은 자리
+python tools/first_run.py 6 --part pulse --sec 2.5 --n 1         # 1/5
+python tools/first_run.py 6 --part pulse --sec 2.5 --n 1         # 2/5
+python tools/first_run.py 6 --part pulse --sec 2.5 --n 1         # 3/5
+python tools/first_run.py 6 --part pulse --sec 2.5 --n 1         # 4/5
+python tools/first_run.py 6 --part pulse --sec 2.5 --n 1         # 5/5
+
+# --------------------------------------------------------------------
+# 7. tagcut   (선택)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 정면(축 위)
+#     메모:  앞 1.5 m 여유 (태그가 잘릴 때까지 조금 전진)
+#  [차]   스스로 함: 태그 컷까지 전진 → 스스로 복귀. 안 멈추면 포크끝 0.40 m 앞에서 강제 정지
+python tools/first_run.py 7 --n 1                                # 1/1
+
+# --------------------------------------------------------------------
+# 8. grid   (선택)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 도킹축 **위**(옆 0 m)
+#     자세:  태그 쪽(태그가 화면 가운데 오게)
+#     메모:  각도는 **안 재도 된다**. 옆 거리도 걸음으로 충분
+#  [차]   스스로 함: 제자리 ±3° 흔들기 → 앞뒤로는 안 간다
+python tools/first_run.py 8 --pos 0 --n 1                        # 1/6
+python tools/first_run.py 8 --pos 0 --n 1                        # 2/6
+python tools/first_run.py 8 --pos 0 --n 1                        # 3/6
+python tools/first_run.py 8 --pos 0 --n 1                        # 4/6
+python tools/first_run.py 8 --pos 0 --n 1                        # 5/6
+python tools/first_run.py 8 --pos 0 --n 1                        # 6/6
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **0.5 m**
+#     자세:  태그 쪽(태그가 화면 가운데 오게)
+#     메모:  옆으로 **대략** 0.5 m
+#  [차]   스스로 함: 제자리 ±3° 흔들기
+python tools/first_run.py 8 --pos 0.5 --n 1                      # 1/6
+python tools/first_run.py 8 --pos 0.5 --n 1                      # 2/6
+python tools/first_run.py 8 --pos 0.5 --n 1                      # 3/6
+python tools/first_run.py 8 --pos 0.5 --n 1                      # 4/6
+python tools/first_run.py 8 --pos 0.5 --n 1                      # 5/6
+python tools/first_run.py 8 --pos 0.5 --n 1                      # 6/6
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **1.0 m**
+#     자세:  태그 쪽
+#     메모:  옆으로 대략 1 m
+#  [차]   스스로 함: 제자리 ±3° 흔들기
+python tools/first_run.py 8 --pos 1.0 --n 1                      # 1/6
+python tools/first_run.py 8 --pos 1.0 --n 1                      # 2/6
+python tools/first_run.py 8 --pos 1.0 --n 1                      # 3/6
+python tools/first_run.py 8 --pos 1.0 --n 1                      # 4/6
+python tools/first_run.py 8 --pos 1.0 --n 1                      # 5/6
+python tools/first_run.py 8 --pos 1.0 --n 1                      # 6/6
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **1.5 m**
+#     자세:  태그 쪽
+#     메모:  옆으로 대략 1.5 m
+#  [차]   스스로 함: 제자리 ±3° 흔들기
+python tools/first_run.py 8 --pos 1.5 --n 1                      # 1/6
+python tools/first_run.py 8 --pos 1.5 --n 1                      # 2/6
+python tools/first_run.py 8 --pos 1.5 --n 1                      # 3/6
+python tools/first_run.py 8 --pos 1.5 --n 1                      # 4/6
+python tools/first_run.py 8 --pos 1.5 --n 1                      # 5/6
+python tools/first_run.py 8 --pos 1.5 --n 1                      # 6/6
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **3.5 m**, 옆으로 **2.0 m**
+#     자세:  태그 쪽
+#     메모:  옆으로 대략 2 m
+#  [차]   스스로 함: 제자리 ±3° 흔들기
+python tools/first_run.py 8 --pos 2.0 --n 1                      # 1/6
+python tools/first_run.py 8 --pos 2.0 --n 1                      # 2/6
+python tools/first_run.py 8 --pos 2.0 --n 1                      # 3/6
+python tools/first_run.py 8 --pos 2.0 --n 1                      # 4/6
+python tools/first_run.py 8 --pos 2.0 --n 1                      # 5/6
+python tools/first_run.py 8 --pos 2.0 --n 1                      # 6/6
+
+# --------------------------------------------------------------------
+# 9. oblique   (선택)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  태그에서 **5.0 m**, 옆으로 **2.3 m**
+#     자세:  태그 쪽으로 약 25° 틀어서
+#     메모:  앞 2 m 여유
+#  [차]   스스로 함: 5 m → 3.5 m 전진 → 스스로 복귀
+python tools/first_run.py 9 --n 1                                # 1/2
+python tools/first_run.py 9 --n 1                                # 2/2
+
+# --------------------------------------------------------------------
+# 10. search   (선택)
+# --------------------------------------------------------------------
+
+#  [사람] 차를 세운다 ─────────────────────────────
+#     어디:  아무 데나
+#     자세:  **태그가 안 보이는** 방향
+#     메모:  어디서 해도 된다 · 차 주변 원형으로 비움
+#  [차]   스스로 함: 태그를 찾을 때까지 제자리 회전 — 찾으면 스스로 멈춤
+python tools/first_run.py 10 --n 1                               # 1/1
+
+
+# --------------------------------------------------------------------
+# 분석 → 캘리브 3종
+# --------------------------------------------------------------------
+python tools/first_run.py --list          # 세션 폴더 이름·진행 확인
+python tools/analyze_first_run.py work_dirs/first_run/<세션> --install
+cat work_dirs/first_run/<세션>/report.md
+
+# --------------------------------------------------------------------
+# 도킹 주행
+# --------------------------------------------------------------------
+python tools/dock.py --dry-run --show                 # CAN 안 보냄
+python tools/dock.py --show --record-events           # 실주행
+# 캘리브 없이 먼저 해보려면:
+python tools/dock.py --show --record-events --assume-calib --final-anyway
+
+# 총 165 줄 = 165 시행
+# 시간 모자라면 버리는 순서: 10 → 9 → 7 → 8 → 6 → 4의 6 m 자리
+# 절대 못 버림: 4 closed(σ_θ) · 4 arm 3.5+6 m(A) · 5 front(τ_eff) · 3 mount(줄자)

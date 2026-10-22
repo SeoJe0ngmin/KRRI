@@ -27,7 +27,7 @@ class ImuStartupTests(unittest.TestCase):
         self.assertTrue(all(p['stamp']>=278.468867 for p in samples))
         self.assertTrue(all(p['accel']==[0.,9.81,0.] for p in samples))
         imu.add('accel',stamp+26,[0,9.81,0],now+.002)
-        imu.drain();self.assertIsNone(imu.fault)   # after streaming began a gap is counted, not fatal (v4 rule, 2026-10-19)
+        imu.drain();self.assertIsNone(imu.fault)
         self.assertEqual(imu.status()['gaps'],1);self.assertIn('reason=sample_gap',imu.status()['last_gap'])
         self.assertEqual(imu.startup_resets,1)
 
