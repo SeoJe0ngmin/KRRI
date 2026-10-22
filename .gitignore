@@ -1,37 +1,19 @@
-# 데이터 — 용량이 크고 원본은 각 출처에서 받으면 된다
-#   data/apriltag/tagslam    : github.com/berndpfrommer/tagslam  (example/)
-#   data/apriltag/team293    : github.com/Team293/AprilTagDetection
-#   data/ashpile_*           : IEEE DataPort  PathFinder (10.21227/vz7z-jc84)
 data/
 work_dirs/
-/work/
-librealsense/
-
-# 안 쓰는 옛 코드 — 참고용으로 로컬에만 둔다
-apriltag/legacy/
-
-# v3 설계 토론 작업폴더 (proposer/critic 로그·plan 초안) — 로컬 전용, git 추적 안 함
-apriltag_v3/Agent/
-
-# 파이썬
+work/
 __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
 .ipynb_checkpoints/
-
-# WSL 부산물
+.pytest_cache/
+.DS_Store
 *:Zone.Identifier
-
-# 환경
 .venv/
 .env
-apriltag/offline_wheels/
-
 .claude/
 project_backup_lean_20260921_174252/
-# v5 학습 파일(장소마다 config/learned/<장소>.json) — 주행 기록에서 매번 다시 만들 수 있다. 판마다 바뀌어 VM 작업트리를 더럽히지 않게 git 에서 뺀다
-apriltag_v5/config/learned/
-
-# 참고용 외부 코드 사본 (reference/README.md)
-reference/
+legacy/apriltag_v3/Agent/
+legacy/apriltag_v5/config/learned/
+reference/open_vins/
+reference/librealsense/

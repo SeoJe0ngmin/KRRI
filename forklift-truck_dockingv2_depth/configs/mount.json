@@ -1,0 +1,121 @@
+{
+  "schema": "camera_mount_reference_v1",
+  "id": "3889af03eb3d4a319e2e2e2e5174d1dc",
+  "usable": true,
+  "method": "standing_tag_yaw_imu_pitch_roll_assumes_square_to_tag",
+  "certified_error_bound": false,
+  "reference_alignment_confirmed": false,
+  "camera_model": {
+    "serial": "405622074054",
+    "width": 640,
+    "height": 480,
+    "fx": 389.56341552734375,
+    "fy": 389.56341552734375,
+    "cx": 324.8617858886719,
+    "cy": 232.88568115234375,
+    "coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "distortion": "brown_conrady",
+    "source": "device_factory"
+  },
+  "reasons": [],
+  "warnings": [
+    "assumes_vehicle_parallel_to_tag_normal_by_eye"
+  ],
+  "assumptions": [
+    "upright_tag",
+    "vehicle_level",
+    "body_parallel_to_tag_normal"
+  ],
+  "accepted": 509,
+  "rest_s": 84.76506316199993,
+  "blocks": 170,
+  "block_spread_p95_deg": 0.48497924500009404,
+  "first_last_half_change_deg": 0.21138834750889549,
+  "tag_lean_deg": [
+    1.3783258099291613,
+    0.20592658058007038
+  ],
+  "R_body_camera": [
+    [
+      -0.01783817362021747,
+      0.022845235509195143,
+      0.9995798588179273
+    ],
+    [
+      -0.9998343632694761,
+      -0.004011299120327044,
+      -0.017751038712050856
+    ],
+    [
+      0.003604087007241785,
+      -0.99973098969069,
+      0.02291300583710257
+    ]
+  ],
+  "yaw_left_deg": -0.6484517791000564,
+  "pitch_roll_source": "imu_gravity_2414_samples",
+  "pitch_down_deg": -1.0385748586839234,
+  "roll_deg": -0.10674199608874632,
+  "tag_pitch_down_deg": 0.34199893339833426,
+  "tag_roll_deg": 0.08351758491253355,
+  "rotation_std_deg": 0.4849792450000941,
+  "covariance": [
+    [
+      2.5e-05,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      2.5e-05,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      2.5e-05,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      7.164750003606514e-05,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      7.164750003606514e-05,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      7.164750003606514e-05
+    ]
+  ],
+  "source_folder": "work/20261020/measure/152140_821fcd_measure",
+  "measured_stream": "color_converted_to_raw_left_ir",
+  "input_signature": "2f0a9953d69060578aac8c5df9b550274434a843fa6cfecba26b5842ecbf3744"
+}
