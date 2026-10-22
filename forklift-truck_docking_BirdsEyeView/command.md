@@ -1,7 +1,7 @@
 # forklift-truck_docking — 실행 명령 (command.md)
 
 AprilTag + OpenVINS(IR 스테레오·IMU) 로 지게차를 탑재부에 자동 도킹하는 코드. Jetson Orin Nano 에서 돈다.
-**이 폴더 (2026-10-22) = 띠 방식 코드 + 버드아이뷰 기반 입구 찾기.** depth 를 3D 점으로 바꿔 높이로 거르고 위에서 본 덩어리 쌍(안쪽 모서리 간격 = `truck_inner_width_m`)을 입구로 쓴다(`runtime.json` `depth_goal.method: bev`, `band` 로 두면 띠 방식). 트럭 옆판처럼 긴 덩어리면 선 맞춤으로 **탑재부 축 방향**을 재서 최종 확인의 방향 기준으로 쓴다(`heading_source: truck_walls`; 콘은 불가). 차폭 통로 안 점 개수(`obstacle_cells`)는 기록만. 못 찾으면 띠 방식으로 폴백. 그 밖은 depth_lowcam 폴더와 같다. Jetson 폴더는 `forklift-truck_docking_BirdsEyeBiew`.
+**이 폴더 (2026-10-22) = 띠 방식 코드 + 버드아이뷰 기반 입구 찾기.** depth 를 3D 점으로 바꿔 높이로 거르고 위에서 본 덩어리 쌍(안쪽 모서리 간격 = `truck_inner_width_m`)을 입구로 쓴다(`runtime.json` `depth_goal.method: bev`, `band` 로 두면 띠 방식). 트럭 옆판처럼 긴 덩어리면 선 맞춤으로 **탑재부 축 방향**을 재서 최종 확인의 방향 기준으로 쓴다(`heading_source: truck_walls`; 콘은 불가). 차폭 통로 안 점 개수(`obstacle_cells`)는 기록만. 못 찾으면 띠 방식으로 폴백. 그 밖은 depth_lowcam 폴더와 같다. Jetson 폴더는 `forklift-truck_docking_BirdsEyeView`.
 이 문서(command.md)는 실행 명령·현장 순서 모음이다. 프로젝트 설명은 README.md 에 따로 쓴다. 주행 흐름·화면 읽는 법은 아래 4단계 뒤에 있다.
 
 ## 연결
@@ -28,9 +28,9 @@ Host jetson-kw           # 광운대 핫스팟
 명령은 하나. 연결에 따라 `--host` 만 바꾼다.
 
 ```bash
-bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeBiew/update_jetson.sh --host jetson-wired            # USB 직결
-bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeBiew/update_jetson.sh --host jetson-kw               # 광운대 핫스팟
-bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeBiew/update_jetson.sh --host jetson-wired --dry-run  # 바뀔 파일·common.json 차이만 보기
+bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeView/update_jetson.sh --host jetson-wired            # USB 직결
+bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeView/update_jetson.sh --host jetson-kw               # 광운대 핫스팟
+bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeView/update_jetson.sh --host jetson-wired --dry-run  # 바뀔 파일·common.json 차이만 보기
 ```
 
 - 바뀐 파일만 보낸다. `configs/common.json` 은 **맥 것으로 덮는다**(주인은 맥). 덮기 전에 Jetson 것과 다른 줄을 보여 준다.
@@ -51,7 +51,7 @@ bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeBiew/update_jetson.s
 
 ```bash
 ssh jetson-wired
-cd /home/jetson/krri/forklift-truck_docking_BirdsEyeBiew
+cd /home/jetson/krri/forklift-truck_docking_BirdsEyeView
 bash scripts/install_jetson.sh            # ROS Jazzy·OpenCV 확인, 가상환경 ~/.venvs/krri, OpenVINS+브리지 빌드 (30~60분)
 bash scripts/install_jetson.sh --no-apt   # 인터넷 없이 빌드만 (apt·pip·rosdep 건너뜀)
 ```
@@ -61,7 +61,7 @@ bash scripts/install_jetson.sh --no-apt   # 인터넷 없이 빌드만 (apt·pip
 ## 브리지 재빌드 (C++ 가 바뀌었을 때만)
 
 ```bash
-cd /home/jetson/krri/forklift-truck_docking_BirdsEyeBiew
+cd /home/jetson/krri/forklift-truck_docking_BirdsEyeView
 bash scripts/rebuild_openvins.sh          # 우리 패키지 둘만 다시 컴파일, 몇 분. 파이썬만 바뀐 배포는 불필요
 ```
 
@@ -197,8 +197,8 @@ bash scripts/run_nano.sh note --folder $(ls -td work/*/*/* | head -1) --lateral-
 ## 로그
 
 ```bash
-ls -td /home/jetson/krri/forklift-truck_docking_BirdsEyeBiew/work/*/*/* | head -1                # 가장 최근 판
-scp -r jetson-wired:/home/jetson/krri/forklift-truck_docking_BirdsEyeBiew/work/<날짜> /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeBiew/work/   # 그날 전부 맥으로 (판 하나면 <날짜>/<명령>/<판>)
+ls -td /home/jetson/krri/forklift-truck_docking_BirdsEyeView/work/*/*/* | head -1                # 가장 최근 판
+scp -r jetson-wired:/home/jetson/krri/forklift-truck_docking_BirdsEyeView/work/<날짜> /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeView/work/   # 그날 전부 맥으로 (판 하나면 <날짜>/<명령>/<판>)
 ```
 
 판 폴더는 `work/<날짜>/<명령>/<시각>_<id>_<명령>/`(2026-10-20 부터 하루 한 폴더). 안에 `observations.jsonl`(관측 전부), `control.jsonl`(명령·CAN), `pipeline_status.json`(1초마다 센서·GC·프레임 공백), `openvins.log`(브리지; 2초마다 `[pipeline]` 줄).
@@ -208,7 +208,7 @@ scp -r jetson-wired:/home/jetson/krri/forklift-truck_docking_BirdsEyeBiew/work/<
 판이 끝나면 브리지 줄 하나로 VIO 가 멀쩡했는지 본다(2026-10-20 기준 정상: `dropped=0`, `imu_lost` 수십 이하, 도착 간격 0.1 s 아래):
 
 ```bash
-F=$(ls -td /home/jetson/krri/forklift-truck_docking_BirdsEyeBiew/work/*/measure/* | head -1)   # drive 면 drive/*
+F=$(ls -td /home/jetson/krri/forklift-truck_docking_BirdsEyeView/work/*/measure/* | head -1)   # drive 면 drive/*
 grep "\[pipeline\]" $F/openvins.log | tail -1      # dropped(버린 영상) · imu_lost/imu_sequence_jumps(빠진 IMU) · imu/image_arrival_gap_max_s(도착 간격 최대)
 ```
 
