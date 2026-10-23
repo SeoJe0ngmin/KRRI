@@ -43,8 +43,9 @@ bash /Users/seojeongmin/krri/forklift-truck_docking/update_jetson.sh --host jets
   접속할 때마다 자동으로 맞추려면(키 로그인 전제, 없으면 `ssh-copy-id jetson-wired` 한 번): Jetson 에서 `echo 'jetson ALL=(root) NOPASSWD: /usr/bin/date' | sudo tee /etc/sudoers.d/clock >/dev/null && sudo chmod 440 /etc/sudoers.d/clock`, 맥 `~/.ssh/config` 의 jetson 항목에 아래 두 줄(jetson-kw 도 같은 방식):
   ```
   PermitLocalCommand yes
-  LocalCommand ssh -o PermitLocalCommand=no -o BatchMode=yes -o ConnectTimeout=5 jetson-wired "sudo -n date -u -s '$(date -u '+%Y-%m-%d %H:%M:%S')'" >/dev/null 2>&1 &
+  LocalCommand ssh -n -o PermitLocalCommand=no -o BatchMode=yes -o ConnectTimeout=5 jetson-wired "sudo -n date -u -s '$(date -u '+%%Y-%%m-%%d %%H:%%M:%%S')'" >/dev/null 2>&1 &
   ```
+  (`-n` 은 안쪽 ssh 가 바깥 접속의 stdin(파이프 데이터)을 가로채지 않게 하는 것. `%` 는 ssh 가 자기 토큰으로 읽어서 `%%` 로 써야 한다. `%Y` 로 쓰면 `percent_expand: failed` 로 접속이 끊긴다.)
 
 ## Jetson 설치 (한 번)
 
@@ -244,3 +245,34 @@ cd /Users/seojeongmin/krri/forklift-truck_docking && PYTHONPATH=.:tests python3 
 4. **원시 depth 프레임 저장**: measure 중 2 s 에 한 장(~600 KB)을 남겨 맥에서 띠 방식·버드아이뷰 방식을 같은 프레임으로 비교(보류).
 5. **들어간 뒤 옆벽 거리로 마지막 1.6 m 추적**(옆판 있는 트럭만), **차폭 통로 안 장애물 정지**.
 6. **띠 그리기**: 주행 화면 depth 패널에 측정 띠(회색 가로선 두 줄) 표시(요청 시).
+
+## Jetson 온도·부하 보기
+
+```bash
+ssh jetson-wired 'for z in /sys/class/thermal/thermal_zone*; do t=$(cat $z/temp 2>/dev/null) && echo "$(cat $z/type): $((t/1000))°C"; done'   # CPU·GPU 온도 한 번
+ssh -t jetson-wired 'tegrastats --interval 2000'                                   # 2초마다 CPU 사용률·온도·전력 (Ctrl+C 로 종료)
+```
+주행 중엔 Jetson 터미널에서 `tegrastats --interval 2000` 을 따로 띄워 두면 된다. CPU 70 °C 넘으면 처리 fps 가 떨어질 수 있다.
+
+## 새 현장에서 common.json 에 바꿔야 하는 값
+
+전부 다시 재는 게 아니다. **차에 붙은 값은 그대로**, **현장(탑재부·태그)에 붙은 값만** 줄자로 다시 넣는다. 값은 `configs/common.json` 의 `site` 에 있고, 바꾼 뒤 배포하면 Jetson 에 덮인다.
+
+| 구분 | 항목 | 다시 재나 | 메모 |
+|---|---|---|---|
+| **현장마다** | `truck_inner_width_m` | 예 | 두 옆판(벽) 안쪽 사이 폭. depth 입구 찾기의 폭 조건(±`truck_width_tol_m`)이라 틀리면 입구를 못 찾는다 |
+| | `truck_depth_m` | 예 | 입구면(옆판 앞끝)→안쪽 막힌 곳. 비우면 검사 없음. 넣으면 포크 목표가 깊이 − 5 cm 를 넘을 때 출발 거부 |
+| | `target_front_x_left_m` | 예 | 포크 앞끝이 멈출 자리(입구면 기준, 안쪽 +). 탑재부 깊이에 맞춰 정한다 |
+| | `tag_height_m` | 예 | 태그 **중심** 높이. 태그컷(눈 감는 거리)이 여기서 나온다. 바꾸면 mount.json 서명이 깨져 장착각 재측정 |
+| | `left_tag_offset_m` | 예 | 입구 중심→태그 중심 좌우. 왼쪽 +, 오른쪽 − |
+| | `tag_plane_offset_m` | 예 | 입구면↔태그면 앞뒤 차이(안쪽 +). 태그를 입구면에 붙이면 0 |
+| | `rear_space_m` | 예 | 차 뒤 빈 공간(후진 상한) |
+| | `forward_path_bias_deg` | 주행 뒤 | 비우고 시작. 눈 감고 들어간 뒤 한쪽으로 쏠리면 흐른 각을 넣는다(왼쪽 +) |
+| | `tag_id`, `tag_size_m` | 태그 바꿀 때만 | 같은 태그판이면 그대로 |
+| **차에 붙은 값** | `vehicle_width_m`, `vehicle_length_m` | 아니오 | 같은 지게차면 그대로 |
+| | `rotation_center_behind_fork_tip_m`, `rotation_center_lateral_m` | 아니오 | 차의 성질. 카메라를 옮겨도 그대로 |
+| | `camera_height_m`, `camera_lateral_m`, `camera_to_fork_tip_m` | 카메라를 옮겼을 때만 | 좌측 IR 렌즈 기준(컬러 렌즈로 쟀으면 1.48 cm 환산). 바꾸면 `measure` 30초 → `preflight.sh mount --write` 로 장착각 재측정 |
+| | `rear_extent_m` | 아니오 | 비워 두면 전장 − 포크끝거리로 계산 |
+| | `target_front_x_central_m` | 아니오 | central 모드용. left 모드에선 안 씀 |
+
+`operation` 쪽(시간 한도·허용 오차·depth 범위)은 현장과 무관해서 그대로 둔다. `configs/mount.json`(장착각)은 카메라와 태그 높이·크기·ID 가 안 바뀌면 그대로 쓰고, 그중 하나라도 바뀌면 `preflight.sh check` 가 "새 장착 기준 측정 필요" 로 알려 준다.

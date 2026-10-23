@@ -17,3 +17,5 @@ legacy/apriltag_v3/Agent/
 legacy/apriltag_v5/config/learned/
 reference/open_vins/
 reference/librealsense/
+*.tar
+*.gz
