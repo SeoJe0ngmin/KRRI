@@ -129,15 +129,23 @@ def load(path=COMMON, mode='central', require_mount=False):
         if site['truck_inner_width_m']<=site['vehicle_width_m']:raise ValueError('탑재부 안쪽 폭은 차폭보다 커야 합니다')
     depth=site.get('truck_depth_m')
     if depth is not None and (not number(depth) or depth<=0):raise ValueError('invalid truck_depth_m')
-    # Rails (2026-10-27 v2): optional. rail_inner_width_m = inner width between the two floor rails (the wheels run between them;
-    # must exceed the vehicle width), rail_front_offset_m = entrance plane -> rail front ends, into the truck + (empty = 0).
+    # Rails (2026-10-27 v2): optional. rail_inner_width_m = distance between the two floor rails (inner faces); it may be wider
+    # than the body (the body runs between them) or narrower (only the wheels do). rail_clearance_m = the one-side gap between a
+    # rail and what it guides; empty = (rail distance - vehicle width)/2 when the rails are wider than the body, otherwise it
+    # must be entered. rail_front_offset_m = entrance plane -> rail front ends, into the truck + (empty = 0).
     rw=site.get('rail_inner_width_m')
     if rw is not None:
         if not number(rw) or rw<=0:raise ValueError('invalid rail_inner_width_m')
-        if number(site.get('vehicle_width_m')) and rw<=site['vehicle_width_m']:raise ValueError('레일 안쪽 폭은 차폭보다 커야 합니다 (rail_inner_width_m > vehicle_width_m)')
-        if number(site.get('truck_inner_width_m')) and rw>site['truck_inner_width_m']:raise ValueError('레일 안쪽 폭은 탑재부 안쪽 폭보다 클 수 없습니다')
+        if number(site.get('truck_inner_width_m')) and rw>site['truck_inner_width_m']:raise ValueError('레일 사이 거리는 탑재부 안쪽 폭보다 클 수 없습니다')
+    rc=site.get('rail_clearance_m')
+    if rc is not None and (not number(rc) or rc<0):raise ValueError('invalid rail_clearance_m')
+    if rw is not None and rc is None:
+        if number(site.get('vehicle_width_m')) and rw>site['vehicle_width_m']:site['rail_clearance_m']=(float(rw)-float(site['vehicle_width_m']))/2
+        elif require_mount:raise ValueError('common: rail_clearance_m 미입력 (레일 사이 거리가 차폭보다 좁으면 레일과 바퀴 사이 한쪽 틈을 직접 넣음)')
     ro=site.get('rail_front_offset_m')
     if ro is not None and (not number(ro) or ro<0):raise ValueError('invalid rail_front_offset_m')
+    rf=site.get('rail_flare_m')   # flared (trapezoid) lead-in length at the rail front; the line fit uses only the parallel part beyond it
+    if rf is not None and (not number(rf) or rf<0):raise ValueError('invalid rail_flare_m')
     sensor=json.loads((ROOT/'configs/runtime.json').read_text())
     gap=sensor['openvins']['max_correction_gap_s']
     if not number(gap) or not 0<gap<=1.:raise ValueError('max_correction_gap_s must be within (0, 1] seconds')

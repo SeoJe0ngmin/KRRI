@@ -153,6 +153,7 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                 tn=cfg['tuning'];rail_width=float(site.get('rail_inner_width_m') or 0.)
                 rail_params=dict(band_in_m=float(tn.get('rail_band_in_m',.1)),band_out_m=float(tn.get('rail_band_out_m',.2)),x_max=float(tn.get('rail_fit_max_m',3.)),
                                  min_len_m=float(tn.get('rail_min_len_m',.4)),min_bins=int(tn.get('rail_min_bins',8)),inner_k=int(tn.get('rail_inner_k',3)))
+                rail_narrow=float(site.get('rail_front_offset_m') or 0.)+float(site.get('rail_flare_m') or 0.)   # dock x where the rails run parallel (flare excluded from the fit)
                 params={k:dg[k] for k in ('band_frac','min_jump_m','rel_jump','min_valid_frac','max_gap_px','min_width_px','max_m',
                                           'step','z_min','z_max','x_min','cell_m','forward_m','half_width_m','min_cells','wall_min_len_m','same_range_m') if k in dg}
                 params.setdefault('cell_m',float(dg.get('bev_cell_m',.05)));params.setdefault('forward_m',float(dg.get('bev_forward_m',8.)));params.setdefault('half_width_m',float(dg.get('bev_half_width_m',3.)))
@@ -169,8 +170,10 @@ def worker(cfg,stop,results,previews,output_dir,view=False,motion_hint=None,fast
                         if width<=0:m=dict(ok=False,reason='no_truck_inner_width',stamp=stamp,method=method)
                         elif method=='band':m=measure(depth,depth_intr,T_body_ir,width,tol,expected_u=exp,params=params,stamp=stamp,heading=None if pose is None else float(pose[2]));m['method']='band'
                         else:
+                            rp=rail_params
+                            if rail_width>0 and pose is not None and rail_narrow>0:rp=dict(rail_params,x_min=max(float(params.get('x_min',.2)),rail_narrow-float(pose[0])))
                             m=measure_bev(depth,depth_intr,T_body_ir,width,tol,expected_xy=exp_xy,params=params,stamp=stamp,vehicle_half_width_m=half_vehicle,expected_u=exp,heading=None if pose is None else float(pose[2]),
-                                          rail_width_m=rail_width or None,rail_params=rail_params)
+                                          rail_width_m=rail_width or None,rail_params=rp)
                             grid=m.pop('grid',None)
                             if 'candidate' not in m:   # display only: the nearest opening of any width from the band profile (orange on the panel)
                                 try:

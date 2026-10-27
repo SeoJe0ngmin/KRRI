@@ -51,7 +51,7 @@ class Controller:
         self.rezero_request=0;self.rezero_since=None;self.rezero_report=None
         self.corrections=0;self.fallback_corrections=0;self.fine_bundles=0
         # ---- rails (2026-10-27 v2): None = no rail tracking (the earlier one-leg entry)
-        self.rail_width=cfg['site'].get('rail_inner_width_m');self.rail_front_offset=float(cfg['site'].get('rail_front_offset_m') or 0.)
+        self.rail_width=cfg['site'].get('rail_inner_width_m');self.rail_front_offset=float(cfg['site'].get('rail_front_offset_m') or 0.);self.rail_flare=float(cfg['site'].get('rail_flare_m') or 0.)
         self.rail_samples=[];self.rail_measure=None;self.rail_centre_y=None;self.rail_axis=None   # rail centreline y / direction in the dock frame, carried by the VIO
         self.entry=None;self.entry_legs=0;self.entry_corrections=0
 
@@ -153,9 +153,10 @@ class Controller:
         total_x = dock-frame x from here to the fork-tip target (depth-measured entrance + target_front_x - camera_to_fork_tip)."""
         p=o['pose'];total=max(0.,float(total_x))
         ex=float(self.depth_centre_dock[0]) if self.depth_centre_dock is not None else 0.   # dock x of the entrance plane as measured
-        self.entry=dict(start_pose=[float(v) for v in p],total_x=total,source=source,distance_m=float(dist),rail_front_x=ex+self.rail_front_offset,t=now)
+        self.entry=dict(start_pose=[float(v) for v in p],total_x=total,source=source,distance_m=float(dist),rail_front_x=ex+self.rail_front_offset,
+                        rail_narrow_x=ex+self.rail_front_offset+self.rail_flare,t=now)   # front = where the rails begin (flare tip), narrow = where they run parallel
         self.phase='ENTRY';self.blind=True;self.entry_legs=0
-        self.events.append(dict(t=now,event='entry',distance_m=total,source=source,segmented=True,leg_m=self.t['entry_leg_m'],rail_front_x=self.entry['rail_front_x'],
+        self.events.append(dict(t=now,event='entry',distance_m=total,source=source,segmented=True,leg_m=self.t['entry_leg_m'],rail_front_x=self.entry['rail_front_x'],rail_narrow_x=self.entry['rail_narrow_x'],
                                 pose=[float(v) for v in p],heading_deg=float(math.degrees(p[2])),
                                 lateral_error_m=None if self.depth_measure is None else self.depth_measure.get('lateral_error_m'),
                                 rail_lateral_m=None if not (self.rail_measure or {}).get('ok') else self.rail_measure['lateral_error_m']))
@@ -699,26 +700,29 @@ class Controller:
                                        measured lateral exceeds the clearance + rail_contact_margin_m -> stop (fault, operator)."""
         r=self.rail_measurement(now,o)
         if r is None:self.reason='measuring_rails';return self.status()
-        E=self.entry;tip_x=float(front(p,self.cfg)[0]);inside=tip_x>=E['rail_front_x'];dmin=self.t['minimum_translation_m']
+        E=self.entry;tip_x=float(front(p,self.cfg)[0]);dmin=self.t['minimum_translation_m']
+        inside=tip_x>=E['rail_narrow_x'];in_flare=(not inside) and tip_x>=E['rail_front_x']   # in the flared lead-in: no turn, lateral judged at the parallel start
         if not r.get('ok'):
             self.events.append(dict(t=now,event='entry_rails_unseen',n=self.entry_legs,frames=r.get('frames'),inside=inside,pose=[float(v) for v in p]))
             return self.entry_next_leg(now,o)
         e=float(r['lateral_error_m']);herr=wrap(math.radians(r['heading_err_deg'])+path_bias(self.cfg))
         if r.get('both_sides'):self.adopt_rails(p,r)
-        clearance=(float(self.rail_width)-float(self.cfg['site']['vehicle_width_m']))/2
+        rc=self.cfg['site'].get('rail_clearance_m')   # one-side gap rail <-> what it guides; derived from the body width when the rails are wider than it
+        clearance=float(rc) if rc is not None else max(0.,(float(self.rail_width)-float(self.cfg['site']['vehicle_width_m']))/2)
         ltol=self.t['rail_lateral_tol_m'];htol=math.radians(self.t['rail_heading_tol_deg'])
-        d_front=E['rail_front_x']-float(p[0]);pred=e+math.sin(herr)*d_front   # the fork tip's lateral when it reaches the rail front, driving straight
+        d_front=E['rail_narrow_x']-float(p[0]);pred=e+math.sin(herr)*d_front   # the fork tip's lateral when it reaches the parallel rails, driving straight
         # A heading within tolerance still drifts up to sin(tol) x run-up before the rail front; that part is below the turn
         # resolution (0.84 deg floor, +-0.4 residual), no retry can remove it, so it is not a reason to back out.
         excused=0. if abs(herr)>htol else math.sin(htol)*max(0.,d_front)
         self.events.append(dict(t=now,event='entry_rails',n=self.entry_legs,lateral_error_m=e,heading_err_deg=float(math.degrees(herr)),both_sides=bool(r.get('both_sides')),
-                                frames=r.get('frames'),inside=inside,tip_x=tip_x,predicted_front_lateral_m=float(pred),excused_drift_m=float(excused),clearance_m=float(clearance),pose=[float(v) for v in p]))
+                                frames=r.get('frames'),inside=inside,in_flare=in_flare,tip_x=tip_x,predicted_front_lateral_m=float(pred),excused_drift_m=float(excused),clearance_m=float(clearance),pose=[float(v) for v in p]))
         if inside:
             if r.get('both_sides') and abs(e)>clearance+self.t['rail_contact_margin_m']:
                 self.events.append(dict(t=now,event='rail_contact_predicted',lateral_error_m=e,clearance_m=float(clearance),margin_m=self.t['rail_contact_margin_m']))
                 return self.fault('rail_contact_predicted')
             return self.entry_next_leg(now,o)
-        if abs(herr)>htol and self.entry_corrections<self.t['entry_retries_max']:
+        if abs(herr)>htol and in_flare:self.events.append(dict(t=now,event='entry_heading_turn_blocked_in_flare',heading_err_deg=float(math.degrees(herr))))
+        elif abs(herr)>htol and self.entry_corrections<self.t['entry_retries_max']:
             target=wrap(p[2]-herr)
             if path_clear(p,wrap(target-p[2]),0.,self.cfg):
                 self.entry_corrections+=1

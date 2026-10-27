@@ -38,7 +38,7 @@ class Sim:
 
 def fresh_controller(mode='left',rails=None,**tuning):
     c=config(mode);c['tuning'].update(preparation_s=1.,**tuning);cut=cut_position(c)
-    if rails:c['site'].update(rail_inner_width_m=rails[0],rail_front_offset_m=rails[1])   # (inner width, front offset) -> rail tracking on
+    if rails:c['site'].update(rail_inner_width_m=rails[0],rail_front_offset_m=rails[1],rail_clearance_m=rails[2] if len(rails)>2 else None)   # (rail distance, front offset[, clearance]) -> rail tracking on
     x=Controller(c,cut,0.);x.state='PLAN';x.mission_start=0.;x.baseline_done=True
     return c,x
 
@@ -116,6 +116,20 @@ class RailEntryTests(unittest.TestCase):
         sim.rail_centre=-.05;sim.run(60)   # the rails now read the body 5 cm left of their centre, between the rails: no correction possible
         self.assertEqual(x.state,'FAULT');self.assertEqual(x.reason,'rail_contact_predicted');self.assertEqual(x.command,'stop')
         self.assertTrue(events(x,'rail_contact_predicted'))
+    def test_rails_narrower_than_the_body_use_the_entered_clearance(self):
+        # rails 1.1 apart guide only the wheels (body 1.3): the lateral reference is still the rail centreline, the contact stop uses rail_clearance_m
+        c,x=fresh_controller('left',rails=(1.1,.3,.01));sim=final_sim(c,x)
+        while x.state not in ('COMPLETE','FAULT') and not any(ch['inside'] for ch in events(x,'entry_rails')):sim.run(.1)
+        self.assertNotIn(x.state,('COMPLETE','FAULT'),x.reason);self.assertAlmostEqual(events(x,'entry_rails')[-1]['clearance_m'],.01)
+        sim.rail_centre=-.05;sim.run(60);self.assertEqual(x.reason,'rail_contact_predicted')
+        c,x=fresh_controller('left',rails=(1.1,.3,.01));sim=final_sim(c,x);sim.run(300)
+        self.assertEqual(x.state,'COMPLETE',(x.reason,x.events[-3:]));self.assertLess(abs(x.final_report['lateral_vs_rail_centre_m']),.02)
+    def test_flared_lead_in_allows_no_turn_and_judges_at_the_parallel_part(self):
+        c,x=fresh_controller('left',rails=(1.32,.3));c['site']['rail_flare_m']=.4;x.rail_flare=.4;sim=final_sim(c,x);sim.run(300)
+        self.assertEqual(x.state,'COMPLETE',(x.reason,x.events[-3:]));self.assertAlmostEqual(events(x,'entry')[0]['rail_narrow_x'],.7)
+        checks=events(x,'entry_rails');flare=[ch for ch in checks if ch['in_flare']];self.assertTrue(flare,checks)
+        for ch in flare:self.assertFalse(ch['inside']);self.assertGreaterEqual(ch['tip_x'],.3-1e-6);self.assertLess(ch['tip_x'],.7)
+        self.assertTrue(all(ch['inside'] for ch in checks if ch['tip_x']>=.7))
     def test_rails_never_seen_enters_on_the_vio(self):
         c,x=fresh_controller('left',rails=(1.32,.3));sim=final_sim(c,x);sim.rails_on=False;sim.run(300)
         self.assertEqual(x.state,'COMPLETE',(x.reason,x.events[-3:]));self.assertEqual(x.final_report['ended_by'],'vio_progress')
