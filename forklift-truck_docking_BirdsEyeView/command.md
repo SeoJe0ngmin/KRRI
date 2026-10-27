@@ -116,6 +116,15 @@ sudo nmcli dev wifi connect "SSID" password "비밀번호"   # 한 줄 버전
 hostname -I                                             # 받은 IP → 맥 ~/.ssh/config 의 HostName 에
 ```
 
+**맥 VM(ubuntu-vm)에서 돌리기** — Jetson 을 못 쓸 때의 대체. 2026-10-27 에 같은 스택(ROS Jazzy·OpenVINS·브리지·librealsense·Kvaser)을 깔아 둠. 경로·명령은 Jetson 과 똑같이 `/home/jetson/krri/<폴더>` 이고 호스트만 `ubuntu-vm`.
+```bash
+bash /Users/seojeongmin/krri/forklift-truck_docking_BirdsEyeView/update_jetson.sh --host ubuntu-vm       # 배포 (mount.json 은 scp 로 따로)
+ssh ubuntu-vm                                     # 또는 VS Code Remote-SSH → ubuntu-vm, 대시보드는 같은 8765 포트 전달
+```
+- VM 을 UTM 에서 켠 뒤 **UTM 창 위 USB 아이콘**으로 RealSense·Kvaser 를 VM 에 넘긴다(실험마다). 맥엔 허브 없이 직결, 맥 절전 끄기(`caffeinate -s`).
+- VM 은 USB 전달이 0.3초 넘게 멈추는 일이 있어(2026-10-01) 실주행은 사람이 제동 자리에 있을 때만.
+- `tegrastats`·`jetson_clocks` 는 Jetson 전용이라 VM 에선 없음. 온도 대신 `top` 로 CPU 만 본다.
+
 **CPU·온도**
 ```bash
 ssh jetson-wired 'for z in /sys/class/thermal/thermal_zone*; do t=$(cat $z/temp 2>/dev/null) && echo "$(cat $z/type): $((t/1000))°C"; done'   # 온도 한 번
