@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=카메라·CAN 연결 확인
+Exec=/bin/bash /home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337/CHECK_DEVICES_JETSON.sh
+Path=/home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337
+Terminal=true
+Icon=camera-video
+StartupNotify=false

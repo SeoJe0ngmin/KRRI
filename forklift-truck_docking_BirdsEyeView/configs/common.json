@@ -10,7 +10,7 @@
         },
         "truck_inner_width_m": {
           "description": "탑재부 안쪽 폭[m]: 두 옆판(벽) 안쪽 사이. 차폭 1.28 + 양쪽 여유. 벽 충돌 검사와 depth 입구 찾기(이 폭 ± truck_width_tol_m 인 쌍)의 기준. 1.4 는 임시 실험값, 현장 줄자로 확인",
-          "value": 1.4
+          "value": 1.65
         },
         "truck_depth_m": {
           "description": "탑재부 깊이[m]: 입구면(두 옆판 앞끝)에서 안쪽 끝(트럭 차체)까지. 비우면 검사 없음. 넣으면 포크 끝 목표(target_front_x_*_m)가 깊이 − 5 cm 를 넘을 때 출발 거부",
@@ -18,7 +18,7 @@
         },
         "left_tag_offset_m": {
           "description": "입구 중심에서 태그 중심까지 좌우 거리[m]; 왼쪽 +, 오른쪽 − (left 모드에서 씀)",
-          "value": 1.255
+          "value": -0.785
         },
         "tag_plane_offset_m": {
           "description": "입구면에서 태그면까지 앞뒤 거리[m]; 안쪽 양수",
@@ -34,7 +34,7 @@
         },
         "tag_height_m": {
           "description": "태그 중심 높이[m] 밑변은 1.35m",
-          "value": 1.58
+          "value": 1.542
         },
         "vehicle_length_m": {
           "description": "지게차 전장[m]: 포크 앞끝 ~ 차 뒤끝. rear_extent_m 을 비우면 이것으로 계산. 2026-10-20 실측 2.17",
@@ -46,11 +46,11 @@
         },
         "camera_lateral_m": {
           "description": "카메라(좌측 IR 렌즈) 좌우 위치[m]: 지게차 중심선(차폭의 정가운데를 앞뒤로 지나는 선)에서 렌즈까지 직각 거리. 왼쪽 +, 오른쪽 − (뒤에서 포크 쪽을 볼 때). 좌측 IR = 컬러 렌즈 바로 오른쪽 렌즈; 컬러 렌즈에서 쟀다면 그 값 − 0.015. 2026-10-20 컬러 렌즈를 중심선에 맞춘 장착 = −0.015",
-          "value": 0.001
+          "value": -0.003
         },
         "camera_to_fork_tip_m": {
           "description": "카메라(좌측 IR 렌즈)→포크 앞끝[m]: 렌즈에서 포크 앞끝 선까지 앞뒤 거리. 렌즈가 포크 끝보다 앞이면 음수. 이 값이 바뀌면 회전중심·태그컷·포크 끝 위치가 자동으로 다시 계산된다. 2026-10-20 포크 앞쪽 장착 0.23 (이전 캐리지 장착 1.47)",
-          "value": 0.23
+          "value": 0.07
         },
         "rear_extent_m": {
           "description": "카메라 렌즈→차 뒤끝[m]. 비우면(null) vehicle_length_m − camera_to_fork_tip_m 로 계산(권장). 2026-10-20 포크 앞쪽 장착 1.94",
@@ -137,7 +137,10 @@
           "description": "최종 확인 지점: 카메라가 입구면 앞 이 거리[m] 에서 멈춰 depth 로 마지막 확인. 비우면 depth 화각으로 계산(안쪽 반폭 ÷ tan(화각/2) + 0.1 ≈ 0.93 m)",
           "value": null
         },
-        "baseline_s": { "description": "출발 뒤 태그 보며 정차 측정 시간[s]", "value": 30 }
+        "baseline_s": {
+          "description": "출발 뒤 태그 보며 정차 측정 시간[s]",
+          "value": 30
+        }
       }
     }
   }

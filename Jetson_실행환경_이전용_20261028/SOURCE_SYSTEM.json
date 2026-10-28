@@ -1,0 +1,20 @@
+{
+  "source_root": "/home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337",
+  "created": "2026-10-28T12:09:23.170302+09:00",
+  "hostname": "aiaas-desktop",
+  "architecture": "aarch64",
+  "kernel": "5.15.148-tegra",
+  "python": "3.10.12",
+  "l4t": "# R36 (release), REVISION: 4.7, GCID: 42132812, BOARD: generic, EABI: aarch64, DATE: Thu Sep 18 22:54:44 UTC 2025\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia\n",
+  "os_release": "PRETTY_NAME=\"Ubuntu 22.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"22.04\"\nVERSION=\"22.04.5 LTS (Jammy Jellyfish)\"\nVERSION_CODENAME=jammy\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=jammy\n",
+  "physical_runtime_started": false,
+  "all_runtime_sources_included": true,
+  "recordings_logs_backups_excluded": true,
+  "excluded": {
+    "files": 23109,
+    "bytes": 3093538794
+  },
+  "credentials_home_not_copied": true,
+  "file_entries": 18350,
+  "uncompressed_bytes": 971389947
+}

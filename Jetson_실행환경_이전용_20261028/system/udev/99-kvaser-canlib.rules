@@ -1,0 +1,1 @@
+SUBSYSTEM=="kvaser_can", GROUP="plugdev", MODE="0660"

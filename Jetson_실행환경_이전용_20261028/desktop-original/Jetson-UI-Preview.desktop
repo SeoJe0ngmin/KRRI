@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=UI 미리보기 (장치 없이)
+Exec=/bin/bash /home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337/PREVIEW_JETSON.sh
+Path=/home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337
+Terminal=false
+Icon=applications-graphics
+StartupNotify=false

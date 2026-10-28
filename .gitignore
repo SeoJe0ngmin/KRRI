@@ -19,3 +19,5 @@ reference/open_vins/
 reference/librealsense/
 *.tar
 *.gz
+Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch_cpu.so
+Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch_cuda.so
