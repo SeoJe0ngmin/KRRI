@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "model_type": "selected_delayed_linear_trajectory",
+  "operator_selected": true,
+  "model_sha256": "sha256:4ee578e02810caae56b786c23a084121f4dfb33941e11d4d3fb216b9bfbbe60e",
+  "rotation_strength": 30,
+  "forward_command_byte": 67,
+  "rotation_training_session": "20260915_142911_607501_8f10e8",
+  "forward": {
+    "slope": 0.3219239409997287,
+    "intercept": -0.482160757307095,
+    "effective_delay_s": 1.4977474362725367,
+    "trial_count": 10,
+    "fit_max_s": 11.0,
+    "errors": {
+      "mean": 0.0017869749863466107,
+      "SD": 0.020074733892589562,
+      "MAE": 0.01465346931185132,
+      "RMSE": 0.020149575017621525
+    }
+  },
+  "rotation": {
+    "slope": 13.667609814222988,
+    "intercept": -17.039803865660534,
+    "effective_delay_s": 1.246728879246196,
+    "trial_count": 6,
+    "fit_max_s": 6.0,
+    "errors": {
+      "mean": 0.07728025579056233,
+      "SD": 0.9819442240077635,
+      "MAE": 0.7352395128591058,
+      "RMSE": 0.9843061403382822
+    }
+  },
+  "method": "Equal-trial bounded least squares of max(k*t+b,0); b=-k*delay. 50 ms interpolation grid; command samples only.",
+  "source_sha256": {
+    "C:\\Users\\DELL\\Documents\\25y_automatic_lifter-master\\CAN\\lifter_control\\25y_automatic_lifter-master\\laser\\logs\\experiment_20260915_141922_767633_79d402\\events.jsonl": "c20a9744bf69c17924cef3db5e9c412c6be543dbe3d1abc4e674dd1a99c0b58f",
+    "C:\\Users\\DELL\\Documents\\25y_automatic_lifter-master\\CAN\\lifter_control\\25y_automatic_lifter-master\\laser\\logs\\experiment_20260915_144440_166288_ef5b00\\events.jsonl": "0b8b7240ca37dc1410e272c58adc09fdaa167de6da55c9722035104fa8383c29",
+    "C:\\Users\\DELL\\Downloads\\\ub85c\uadf8\uc218\uc9d1\\docs\\project-memory\\verification\\camera_tag_rotation_20260915\\runtime_fit_overlay\\results.json": "442068dedc6d956c387d8ff95721c02205f11862097d7deac2080b4a32f2de58",
+    "C:\\Users\\DELL\\Downloads\\\ub85c\uadf8\uc218\uc9d1\\docs\\project-memory\\verification\\camera_tag_rotation_20260915\\142911_poses.jsonl": "f2dd8d6727375b5ae6146e8086078a2def0b8ec7b919afe7671e6dd071aae3ac",
+    "C:\\Users\\DELL\\Downloads\\\ub85c\uadf8\uc218\uc9d1\\docs\\project-memory\\verification\\camera_tag_rotation_20260915\\143623_poses.jsonl": "d6e32198adde0392ae834f47d3e52b88518cb599ff401cfb75da2020480abe56"
+  },
+  "notes": "ON-command regression with effective-delay heuristics: forward -0.1s, rotation -0.35s cumulative (-0.1s, -0.3s, +0.05s). Slopes unchanged. Original fit errors are historical, not revalidated. Session adaptive rotation slope remains enabled. On 2026-09-28, forward distance-dependent command time scaled by 0.9 through slope / 0.9; effective delay retained at 1.4977474362725367 s per user clarification and intercept recomputed. Supersedes the earlier unchanged-forward-slope note. Rotation unchanged.",
+  "heuristic_adjustment": {
+    "date": "2026-09-16",
+    "effective_delay_delta_s": -0.1,
+    "slope_changed": false,
+    "purpose": "User-requested early STOP heuristic for inertia; not a refit",
+    "regression_before_adjustment": {
+      "forward": {
+        "slope": 0.28973154689975583,
+        "intercept": -0.4629178362663611,
+        "effective_delay_s": 1.5977474362725368,
+        "trial_count": 10,
+        "fit_max_s": 11.0,
+        "errors": {
+          "mean": 0.0017869749863466107,
+          "SD": 0.020074733892589562,
+          "MAE": 0.01465346931185132,
+          "RMSE": 0.020149575017621525
+        }
+      },
+      "rotation": {
+        "slope": 13.667609814222988,
+        "intercept": -21.82346730063858,
+        "effective_delay_s": 1.596728879246196,
+        "trial_count": 6,
+        "fit_max_s": 6.0,
+        "errors": {
+          "mean": 0.07728025579056233,
+          "SD": 0.9819442240077635,
+          "MAE": 0.7352395128591058,
+          "RMSE": 0.9843061403382822
+        }
+      }
+    },
+    "error_statistics_scope": "Original unadjusted regression; not revalidated after heuristic shift",
+    "effective_delay_delta_s_by_model": {
+      "forward": -0.1,
+      "rotation": -0.3500000000000001
+    },
+    "additional_adjustments": [
+      {
+        "date": "2026-09-16",
+        "model": "rotation",
+        "effective_delay_delta_s": -0.3,
+        "previous_delay_s": 1.496728879246196,
+        "new_delay_s": 1.1967288792461959,
+        "purpose": "User-requested shorter rotation command after insertion oscillation; slope unchanged, not refitted"
+      },
+      {
+        "date": "2026-09-17",
+        "model": "rotation",
+        "effective_delay_delta_s": 0.05,
+        "previous_delay_s": 1.1967288792461959,
+        "new_delay_s": 1.246728879246196,
+        "purpose": "User-requested 0.05s longer rotation delay; slope unchanged, not refitted"
+      }
+    ]
+  },
+  "pose_model_independent": true,
+  "calibration_measurements": "external_laser_and_fixed_camera_tag",
+  "forward_command_time_adjustment": {
+    "date": "2026-09-28",
+    "previous_coefficients": {
+      "slope": 0.28973154689975583,
+      "intercept": -0.43394468157638555,
+      "effective_delay_s": 1.4977474362725367
+    },
+    "purpose": "User-requested 10 percent reduction of distance-dependent forward command time, keeping previous delay fixed. Slope divided by 0.9 and intercept recomputed as -slope*delay. Applied before existing command limits; not a physical refit.",
+    "error_statistics_scope": "Historical original regression, not revalidated after command-time adjustment",
+    "distance_dependent_time_scale": 0.9,
+    "delay_changed": false
+  }
+}

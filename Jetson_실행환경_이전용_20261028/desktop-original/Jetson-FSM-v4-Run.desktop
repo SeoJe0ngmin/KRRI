@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=차량제어 실행 (FSM v4)
+Exec=/bin/bash /home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337/RUN_JETSON.sh
+Path=/home/aiaas/Downloads/main_rec_v4_portable_20261012_044639_212337
+Terminal=true
+Icon=applications-engineering
+StartupNotify=false
