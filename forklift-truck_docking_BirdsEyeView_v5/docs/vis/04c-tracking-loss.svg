@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1740" viewBox="0 0 2100 1740" role="img" aria-labelledby="title desc">
+<title id="title">이동 중 추적 손실</title>
+<desc id="desc">중앙의 주 흐름에서 조건에 따라 좌우로 분기한다. 복귀선은 직각 경로로 표시한다.</desc>
+<rect width="2100" height="1740" fill="#FBFCFE"/>
+<defs>
+<marker id="arrow637F98" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#637F98"/></marker>
+<marker id="arrow438E83" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#438E83"/></marker>
+<marker id="arrow8975B2" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#8975B2"/></marker>
+<marker id="arrowC38C38" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#C38C38"/></marker>
+</defs>
+<text x="1050" y="42" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="600" fill="#637F98">FORKLIFT DOCKING</text>
+<text x="1050" y="88" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="38" font-weight="700" fill="#14354B">이동 중 추적 손실</text>
+<text x="1050" y="134" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400" fill="#637F98">중앙에서 판단 · 좌우로 분기 · 바깥선으로 복귀</text>
+<g class="edge" data-from="V0" data-to="V1"><polyline points="1050,256 1050,404" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="V1" data-to="VF"><polyline points="700,460 350,460 350,688" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="V1" data-to="VR"><polyline points="1050,516 1050,688" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="V1" data-to="VT"><polyline points="1400,460 1750,460 1750,688" fill="none" stroke="#C38C38" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrowC38C38)"/></g>
+<g class="edge" data-from="VR" data-to="VQ"><polyline points="1050,792 1050,954" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="VQ" data-to="VP"><polyline points="700,1010 595,1010" fill="none" stroke="#438E83" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow438E83)"/></g>
+<g class="edge" data-from="VQ" data-to="VL"><polyline points="1050,1066 1050,1234" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="VL" data-to="VR"><polyline points="1400,1290 1450,1290 1450,740 1370,740" fill="none" stroke="#8975B2" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow8975B2)"/></g>
+<g class="edge" data-from="VL" data-to="END"><polyline points="1050,1346 1050,1544" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<rect x="438" y="420" width="94" height="32" rx="6" fill="#FBFCFE"/>
+<text x="485" y="436" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#637F98">탐색 회전</text>
+<rect x="1064" y="586" width="94" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1111.0" y="602.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#637F98">일반 이동</text>
+<rect x="1563" y="420" width="94" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1610" y="436" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#C38C38">최종 진입</text>
+<rect x="630.5" y="970" width="34" height="32" rx="6" fill="#FBFCFE"/>
+<text x="647.5" y="986.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#438E83">예</text>
+<rect x="1064" y="1134" width="70" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1099.0" y="1150.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#637F98">아니요</text>
+<rect x="1460" y="1250" width="70" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1495" y="1266" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#8975B2">아니요</text>
+<rect x="1064" y="1429" width="34" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1081.0" y="1445.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#637F98">예</text>
+<g id="node-V0" class="node" data-main="true">
+<rect x="730.0" y="184.0" width="640" height="72" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="220.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">이동 중 추적 손실</text>
+</g>
+<g id="node-V1" class="node" data-main="true">
+<polygon points="1050,404.0 1400.0,460 1050,516.0 700.0,460" fill="#FFF4DA" stroke="#DCBC6A" stroke-width="1.8"/>
+<text x="1050" y="460.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">어떤 동작 중인가?</text>
+</g>
+<g id="node-VF" class="node" data-main="false">
+<rect x="105.0" y="688.0" width="490" height="104" rx="19" fill="#FDEEEF" stroke="#D9A5AB" stroke-width="1.8"/>
+<text x="350" y="724.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">회전량을 확인할 수 없어</text>
+<text x="350" y="756.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">정지·실패 종료</text>
+</g>
+<g id="node-VR" class="node" data-main="true">
+<rect x="730.0" y="688.0" width="640" height="104" rx="19" fill="#F1EDF8" stroke="#BDB0D3" stroke-width="1.8"/>
+<text x="1050" y="724.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">정지·회복 대기</text>
+<text x="1050" y="756.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">남은 동작 묶음 해제</text>
+</g>
+<g id="node-VT" class="node" data-main="false">
+<rect x="1505.0" y="688.0" width="490" height="104" rx="19" fill="#FFF1DD" stroke="#DBBB80" stroke-width="1.8"/>
+<text x="1750" y="724.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">시간 기준으로 전환</text>
+<text x="1750" y="756.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">진입 시작부터 계산한 예정 시간에 정지</text>
+</g>
+<g id="node-VQ" class="node" data-main="true">
+<polygon points="1050,954.0 1400.0,1010 1050,1066.0 700.0,1010" fill="#FFF4DA" stroke="#DCBC6A" stroke-width="1.8"/>
+<text x="1050" y="1010.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">정지와 유효한 위치가 회복됐는가?</text>
+</g>
+<g id="node-VP" class="node" data-main="false">
+<rect x="105.0" y="974.0" width="490" height="72" rx="19" fill="#E7F5F0" stroke="#A4CFC2" stroke-width="1.8"/>
+<text x="350" y="1010.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">관측한 위치에서 다음 동작 결정</text>
+</g>
+<g id="node-VL" class="node" data-main="true">
+<polygon points="1050,1234.0 1400.0,1290 1050,1346.0 700.0,1290" fill="#FFF4DA" stroke="#DCBC6A" stroke-width="1.8"/>
+<text x="1050" y="1290.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">회복 시간 초과?</text>
+</g>
+<g id="node-END" class="node" data-main="true">
+<rect x="730.0" y="1544.0" width="640" height="72" rx="19" fill="#FDEEEF" stroke="#D9A5AB" stroke-width="1.8"/>
+<text x="1050" y="1580.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">정지·실패 종료</text>
+</g>
+</svg>

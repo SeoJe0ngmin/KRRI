@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="990" viewBox="0 0 2100 990" role="img" aria-labelledby="title desc">
+<title id="title">IMU·CAN 감시 이상</title>
+<desc id="desc">중앙의 주 흐름에서 조건에 따라 좌우로 분기한다. 복귀선은 직각 경로로 표시한다.</desc>
+<rect width="2100" height="990" fill="#FBFCFE"/>
+<defs>
+<marker id="arrow637F98" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#637F98"/></marker>
+<marker id="arrow438E83" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#438E83"/></marker>
+<marker id="arrow8975B2" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#8975B2"/></marker>
+<marker id="arrowC38C38" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#C38C38"/></marker>
+</defs>
+<text x="1050" y="42" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="600" fill="#637F98">FORKLIFT DOCKING</text>
+<text x="1050" y="88" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="38" font-weight="700" fill="#14354B">IMU·CAN 감시 이상</text>
+<text x="1050" y="134" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400" fill="#637F98">중앙에서 판단 · 좌우로 분기 · 바깥선으로 복귀</text>
+<g class="edge" data-from="S0" data-to="I"><polyline points="700,260 550,260 550,514" fill="none" stroke="#8975B2" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow8975B2)"/></g>
+<g class="edge" data-from="S0" data-to="C"><polyline points="1400,260 1550,260 1550,498" fill="none" stroke="#C38C38" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrowC38C38)"/></g>
+<g class="edge" data-from="I" data-to="R"><polyline points="550,586 550,768" fill="none" stroke="#8975B2" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow8975B2)"/></g>
+<g class="edge" data-from="C" data-to="X"><polyline points="1550,602 1550,784" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<rect x="574" y="220" width="52" height="32" rx="6" fill="#FBFCFE"/>
+<text x="600" y="236" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#8975B2">IMU</text>
+<rect x="1472.5" y="220" width="55" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1500" y="236" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#C38C38">CAN</text>
+<g id="node-S0" class="node" data-main="true">
+<polygon points="1050,204.0 1400.0,260 1050,316.0 700.0,260" fill="#FFF4DA" stroke="#DCBC6A" stroke-width="1.8"/>
+<text x="1050" y="260.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">감시에서 어떤 이상을 확인했는가?</text>
+</g>
+<g id="node-I" class="node" data-main="false">
+<rect x="230.0" y="514.0" width="640" height="72" rx="19" fill="#F1EDF8" stroke="#BDB0D3" stroke-width="1.8"/>
+<text x="550" y="550.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">자이로 지연·초기화 해제 등</text>
+</g>
+<g id="node-C" class="node" data-main="false">
+<rect x="1230.0" y="498.0" width="640" height="104" rx="19" fill="#FFF1DD" stroke="#DBBB80" stroke-width="1.8"/>
+<text x="1550" y="534.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">송신 실패·작업자 종료</text>
+<text x="1550" y="566.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">명령 갱신 기한 초과 등</text>
+</g>
+<g id="node-R" class="node" data-main="false">
+<rect x="230.0" y="768.0" width="640" height="104" rx="19" fill="#F1EDF8" stroke="#BDB0D3" stroke-width="1.8"/>
+<text x="550" y="804.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">정지·추적 회복 처리</text>
+<text x="550" y="836.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">최종 진입 중에도 적용</text>
+</g>
+<g id="node-X" class="node" data-main="false">
+<rect x="1230.0" y="784.0" width="640" height="72" rx="19" fill="#FDEEEF" stroke="#D9A5AB" stroke-width="1.8"/>
+<text x="1550" y="820.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">정지 처리·종료</text>
+</g>
+</svg>

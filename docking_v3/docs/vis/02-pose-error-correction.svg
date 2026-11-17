@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="3100" viewBox="0 0 2100 3100" role="img" aria-labelledby="title desc">
+<title id="title">위치 추정·오차·관성 보정</title>
+<desc id="desc">중앙의 주 흐름에서 조건에 따라 좌우로 분기한다. 복귀선은 직각 경로로 표시한다.</desc>
+<rect width="2100" height="3100" fill="#FBFCFE"/>
+<defs>
+<marker id="arrow637F98" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#637F98"/></marker>
+<marker id="arrow438E83" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#438E83"/></marker>
+<marker id="arrow8975B2" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#8975B2"/></marker>
+<marker id="arrowC38C38" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3.5 L0,7 Z" fill="#C38C38"/></marker>
+</defs>
+<text x="1050" y="42" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="600" fill="#637F98">FORKLIFT DOCKING</text>
+<text x="1050" y="88" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="38" font-weight="700" fill="#14354B">위치 추정·오차·관성 보정</text>
+<text x="1050" y="134" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400" fill="#637F98">중앙에서 판단 · 좌우로 분기 · 바깥선으로 복귀</text>
+<g class="edge" data-from="C" data-to="T"><polyline points="500,256 500,358" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="IR" data-to="V"><polyline points="1600,256 1600,358" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="T" data-to="H"><polyline points="500,462 500,640 730,640" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="V" data-to="H"><polyline points="1600,462 1600,624 1370,624" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="H" data-to="W"><polyline points="1050,676 1050,818" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="H" data-to="Y"><polyline points="1370,656 1750,656 1750,802" fill="none" stroke="#8975B2" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow8975B2)"/></g>
+<g class="edge" data-from="W" data-to="J"><polyline points="1050,922 1050,1048" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="J" data-to="A"><polyline points="700,1120 350,1120 350,1344" fill="none" stroke="#438E83" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow438E83)"/></g>
+<g class="edge" data-from="J" data-to="Q"><polyline points="1050,1192 1050,1324" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="Q" data-to="A"><polyline points="700,1380 595,1380" fill="none" stroke="#438E83" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow438E83)"/></g>
+<g class="edge" data-from="Q" data-to="SK"><polyline points="1050,1436 1050,1568" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="V" data-to="P"><polyline points="1900,410 2050,410 2050,1894 1370,1894" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="Y" data-to="P"><polyline points="1995,870 2010,870 2010,1866 1370,1866" fill="none" stroke="#8975B2" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow8975B2)"/></g>
+<g class="edge" data-from="A" data-to="P"><polyline points="350,1416 350,1880 730,1880" fill="none" stroke="#438E83" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow438E83)"/></g>
+<g class="edge" data-from="SK" data-to="P"><polyline points="1050,1672 1050,1844" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="P" data-to="F"><polyline points="1050,1916 1050,2048" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="F" data-to="B"><polyline points="1050,2152 1050,2258" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="B" data-to="S"><polyline points="1050,2362 1050,2484" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="S" data-to="O"><polyline points="1050,2556 1050,2678" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="O" data-to="U"><polyline points="1050,2782 1050,2914" fill="none" stroke="#637F98" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#arrow637F98)"/></g>
+<g class="edge" data-from="U" data-to="B"><polyline points="730,2950 90,2950 90,2310 730,2310" fill="none" stroke="#8975B2" stroke-width="2.2" stroke-linejoin="round" stroke-dasharray="8 7" marker-end="url(#arrow8975B2)"/></g>
+<rect x="483" y="1080" width="34" height="32" rx="6" fill="#FBFCFE"/>
+<text x="500" y="1096" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#438E83">예</text>
+<rect x="1064" y="1242" width="70" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1099.0" y="1258.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#637F98">아니요</text>
+<rect x="630.5" y="1340" width="34" height="32" rx="6" fill="#FBFCFE"/>
+<text x="647.5" y="1356.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#438E83">예</text>
+<rect x="1064" y="1486" width="70" height="32" rx="6" fill="#FBFCFE"/>
+<text x="1099.0" y="1502.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#637F98">아니요</text>
+<rect x="333" y="2270" width="154" height="32" rx="6" fill="#FBFCFE"/>
+<text x="410" y="2286" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="500" fill="#8975B2">다음 동작에 반영</text>
+<g id="node-C" class="node" data-main="false">
+<rect x="200.0" y="184.0" width="600" height="72" rx="19" fill="#E7F5F0" stroke="#A4CFC2" stroke-width="1.8"/>
+<text x="500" y="220.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">컬러 영상</text>
+</g>
+<g id="node-T" class="node" data-main="false">
+<rect x="200.0" y="358.0" width="600" height="104" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="500" y="394.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">AprilTag 검출·PnP</text>
+<text x="500" y="426.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">ID·크기·잘림·재투영·모호성 검사</text>
+</g>
+<g id="node-IR" class="node" data-main="false">
+<rect x="1300.0" y="184.0" width="600" height="72" rx="19" fill="#E7F5F0" stroke="#A4CFC2" stroke-width="1.8"/>
+<text x="1600" y="220.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">좌우 IR 영상 + IMU</text>
+</g>
+<g id="node-V" class="node" data-main="false">
+<rect x="1300.0" y="358.0" width="600" height="104" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1600" y="394.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">OpenVINS</text>
+<text x="1600" y="426.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">자체 좌표계의 위치·방향·상대 이동</text>
+</g>
+<g id="node-H" class="node" data-main="true">
+<rect x="730.0" y="604.0" width="640" height="72" rx="19" fill="#E7F5F0" stroke="#A4CFC2" stroke-width="1.8"/>
+<text x="1050" y="640.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">촬영 시각의 VIO 상태와 대응</text>
+</g>
+<g id="node-W" class="node" data-main="true">
+<rect x="730.0" y="818.0" width="640" height="104" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="854.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">태그 관측 창 구성</text>
+<text x="1050" y="886.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">거리·방위로 앵커 후보 계산</text>
+</g>
+<g id="node-Y" class="node" data-main="false">
+<rect x="1505.0" y="802.0" width="490" height="136" rx="19" fill="#F1EDF8" stroke="#BDB0D3" stroke-width="1.8"/>
+<text x="1750" y="838.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">방향 오프셋</text>
+<text x="1750" y="870.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">첫 창에서 설정 · 정지 중 완만한 갱신</text>
+<text x="1750" y="902.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">근거리 전환 시 별도 재보정</text>
+</g>
+<g id="node-J" class="node" data-main="true">
+<polygon points="1050,1048.0 1400.0,1120 1050,1192.0 700.0,1120" fill="#FFF4DA" stroke="#DCBC6A" stroke-width="1.8"/>
+<text x="1050" y="1104.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">앵커 후보가 점프 허용 범위</text>
+<text x="1050" y="1136.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">안인가?</text>
+</g>
+<g id="node-A" class="node" data-main="false">
+<rect x="105.0" y="1344.0" width="490" height="72" rx="19" fill="#E7F5F0" stroke="#A4CFC2" stroke-width="1.8"/>
+<text x="350" y="1380.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">태그 앵커 갱신</text>
+</g>
+<g id="node-Q" class="node" data-main="true">
+<polygon points="1050,1324.0 1400.0,1380 1050,1436.0 700.0,1380" fill="#FFF4DA" stroke="#DCBC6A" stroke-width="1.8"/>
+<text x="1050" y="1380.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">마지막 앵커 채택 후 1초 이상인가?</text>
+</g>
+<g id="node-SK" class="node" data-main="true">
+<rect x="730.0" y="1568.0" width="640" height="104" rx="19" fill="#FFF1DD" stroke="#DBBB80" stroke-width="1.8"/>
+<text x="1050" y="1604.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">이번 위치 갱신 건너뜀</text>
+<text x="1050" y="1636.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">기존 앵커 + VIO로 이어감</text>
+</g>
+<g id="node-P" class="node" data-main="true">
+<rect x="730.0" y="1844.0" width="640" height="72" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="1880.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">입구 기준 차량 위치·방향 추정</text>
+</g>
+<g id="node-F" class="node" data-main="true">
+<rect x="730.0" y="2048.0" width="640" height="104" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="2084.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">회전중심·포크 길이 반영</text>
+<text x="1050" y="2116.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">이동 진행량·예상 도착 위치 계산</text>
+</g>
+<g id="node-B" class="node" data-main="true">
+<rect x="730.0" y="2258.0" width="640" height="104" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="2294.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">정지 여유 계산</text>
+<text x="1050" y="2326.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">관측 속도 × 잔여 이동 시간과 관측 지연</text>
+</g>
+<g id="node-S" class="node" data-main="true">
+<rect x="730.0" y="2484.0" width="640" height="72" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="2520.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">목표 도달 전에 정지 명령</text>
+</g>
+<g id="node-O" class="node" data-main="true">
+<rect x="730.0" y="2678.0" width="640" height="104" rx="19" fill="#EDF4FD" stroke="#BDD0E5" stroke-width="1.8"/>
+<text x="1050" y="2714.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">중립 상태에서 자이로·VIO로</text>
+<text x="1050" y="2746.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="400" fill="#17324A">잔여 회전·이동·되튐 관측</text>
+</g>
+<g id="node-U" class="node" data-main="true">
+<rect x="730.0" y="2914.0" width="640" height="72" rx="19" fill="#F1EDF8" stroke="#BDB0D3" stroke-width="1.8"/>
+<text x="1050" y="2950.0" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="24" font-weight="600" fill="#17324A">유효한 동작의 속도·시작 지연·제동 추정 갱신</text>
+</g>
+</svg>
