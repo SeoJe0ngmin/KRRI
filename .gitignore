@@ -12,13 +12,27 @@ __pycache__/
 .venv/
 .env
 .claude/
-project_backup_lean_20260921_174252/
-legacy/apriltag_v3/Agent/
-legacy/apriltag_v5/config/learned/
-reference/open_vins/
-reference/librealsense/
+legacy/0921_apriltag_v3/Agent/
+legacy/1001_apriltag_v5/config/learned/
+code_reference/open_vins/
+code_reference/librealsense/
 *.tar
 *.gz
-Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch_cpu.so
-Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch_cuda.so
+project_backup_lean_20260921_174252/
+kw/Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch_cpu.so
+kw/Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch_cuda.so
 tests/
+# 부서 서식(work/.claude/templates/project/gitignore, 2026-11-20)
+docs/ppt/**/*.pptx
+docs/fig/**/*.jpg
+docs/fig/**/*.png
+.claude/skills/helper/researcher/pdf/
+outputs/
+checkpoints/
+# 정민님 결정(2026-11-20): git 에 올리지 않음
+docs/
+*.md
+*.docx
+*.doc
+*.pptx
+*.ppt
