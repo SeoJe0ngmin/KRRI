@@ -117,7 +117,7 @@
 <rect x="700" y="1337" width="700" height="134" rx="14" fill="none" stroke="#90BCF0" stroke-width="1.2"/>
 <text x="734" y="1378" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">최종 진입</text>
 <rect x="1308.4" y="1363" width="73.6" height="28" rx="14" fill="#FFFFFF"/><text x="1345.2" y="1378" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#2B7DE0">ENTRY</text>
-<text x="734" y="1415" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">포크를 접은 상태로 목표 깊이까지 단일 직진</text>
+<text x="734" y="1415" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">목표 깊이까지 단일 직진</text>
 <text x="734" y="1446" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">VIO · 내부 태그 · depth 거리로 정지 시점 판정</text>
 <rect x="700" y="1521" width="700" height="103" rx="14" fill="#12A38B" filter="url(#soft)"/>
 <path d="M709,1521 H1386 A14,14 0 0 1 1400,1535 V1610 A14,14 0 0 1 1386,1624 H709 Z" fill="#DDF5F0"/>
