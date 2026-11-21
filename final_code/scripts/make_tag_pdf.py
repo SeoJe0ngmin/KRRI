@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Printable AprilTag 36h11 PDFs (v4, 2026-11-01). Port of the legacy apriltag_v2 make_tag_pdf.py (cv2.aruco pattern + matplotlib page).
 
-  python scripts/make_tag_pdf.py                    # ids 2 and 3 at 200 mm on B4 -> tags/tag36h11_id{2,3}_200mm_B4.pdf (the inner tags)
+  python scripts/make_tag_pdf.py                    # ids 2 and 3 at 200 mm on B4 -> ../tag/tag36h11_id{2,3}_200mm_B4.pdf (the inner tags)
   python scripts/make_tag_pdf.py --id 1 --size 300 --paper B3
   python scripts/make_tag_pdf.py --check            # also decode the rendered pattern with pupil_apriltags (id + hamming 0)
 
@@ -165,8 +165,10 @@ def main():
     ap.add_argument("--id", type=int, action="append", help="tag id (repeatable); default 2 and 3 = the inner tags")
     ap.add_argument("--size", type=float, default=200.0, help="edge of the black border [mm]; default 200 (inner tags)")
     ap.add_argument("--paper", default="B4", choices=sorted(PAPERS))
+    # 태그 PDF 는 final_code 밖의 tag 폴더 한 곳에만 둔다
     ap.add_argument(
-        "--out-dir", default=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tags")
+        "--out-dir",
+        default=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tag"),
     )
     ap.add_argument("--check", action="store_true", help="decode the pattern with pupil_apriltags")
     a = ap.parse_args()
