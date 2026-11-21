@@ -21,7 +21,7 @@ def set_stamp(stamp, t):
 
 def check_build_ready():
     ws = Path(
-        os.environ.get('DOCK_WS', str(Path.home() / '.local/share/krri/ros_ws'))
+        os.environ.get('DOCK_WS', str(Path(__file__).resolve().parents[2] / 'ros_ws'))
     )  # environment.sh exports the resolved one
     if (ws / '.docking_rebuild_pending').exists():
         raise RuntimeError(

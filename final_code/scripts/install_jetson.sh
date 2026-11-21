@@ -19,9 +19,12 @@ source /etc/os-release
 [[ "$ID" == ubuntu && "$VERSION_ID" == 24.04 ]] || { echo '이 설치 구성은 Ubuntu 24.04 / ROS Jazzy용입니다.' >&2; exit 2; }
 DOCK_ARCH="$(dpkg --print-architecture)"
 [[ "$DOCK_ARCH" == arm64 || "$DOCK_ARCH" == amd64 ]] || exit 2
-DOCK_WS="${DOCK_WS:-$HOME/.local/share/krri/ros_ws}"   # one workspace for the project (2026-10-19)
-DOCK_VENV="${DOCK_VENV:-$HOME/.venvs/krri}"   # one venv for the project (2026-10-19 user decision)
+# 빌드 폴더 · 가상환경은 코드 폴더 옆(프로젝트 폴더 안)에 둔다 (2026-11-21 정민님 결정)
+DOCK_BASE="$(dirname "$DOCK_APP")"
+DOCK_WS="${DOCK_WS:-$DOCK_BASE/ros_ws}"
+DOCK_VENV="${DOCK_VENV:-$DOCK_BASE/.venv}"
 /usr/bin/python3 "$DOCK_APP/scripts/build_support.py" "$DOCK_APP/ros2"
+/usr/bin/python3 "$DOCK_APP/scripts/build_support.py" "$DOCK_APP/third_party"
 if ((DOCK_NO_APT)); then
   [[ -f /opt/ros/jazzy/setup.bash && -x /usr/bin/colcon ]] || { echo 'ROS Jazzy/colcon 이 없습니다: --no-apt 없이 실행하세요.' >&2; exit 2; }
   [[ -x "$DOCK_VENV/bin/python" ]] || { echo "가상환경 없음: $DOCK_VENV" >&2; exit 2; }
@@ -83,19 +86,12 @@ PY
     fi
   fi
 fi
-mkdir -p "$DOCK_WS/src" "$DOCK_WS/upstream"
-touch "$DOCK_WS/upstream/COLCON_IGNORE"
-DOCK_OV_COMMIT=69488123ed9362dd44b6f28e7f4680abbff1442b
-DOCK_OV_SRC="$DOCK_WS/upstream/open_vins"
-if [[ ! -d "$DOCK_OV_SRC/.git" ]]; then
-  git clone https://github.com/rpng/open_vins.git "$DOCK_OV_SRC"
-fi
-if [[ -n "$(git -C "$DOCK_OV_SRC" status --porcelain)" ]]; then echo 'OpenVINS source has local changes; leaving them untouched.' >&2; exit 2; fi
-if [[ "$(git -C "$DOCK_OV_SRC" rev-parse HEAD)" != "$DOCK_OV_COMMIT" ]]; then
-  git -C "$DOCK_OV_SRC" fetch origin "$DOCK_OV_COMMIT"
-  git -C "$DOCK_OV_SRC" checkout --detach "$DOCK_OV_COMMIT"
-fi
-/usr/bin/python3 "$DOCK_APP/scripts/prepare_openvins.py" "$DOCK_OV_SRC" "$DOCK_WS/src/open_vins"
+mkdir -p "$DOCK_WS/src"
+# OpenVINS 는 내려받지 않고 코드 폴더 안의 소스(third_party/open_vins)를 그대로 빌드한다
+DOCK_OV_SRC="$DOCK_APP/third_party/open_vins"
+[[ -f "$DOCK_OV_SRC/ov_msckf/package.xml" ]] || { echo "OpenVINS 소스가 없습니다: $DOCK_OV_SRC" >&2; exit 2; }
+if [[ -e "$DOCK_WS/src/open_vins" && ! -L "$DOCK_WS/src/open_vins" ]]; then echo "Existing directory: $DOCK_WS/src/open_vins" >&2; exit 2; fi
+ln -sfn "$DOCK_OV_SRC" "$DOCK_WS/src/open_vins"
 # Symlinks track subsequent code updates; re-run installer after bridge changes.
 for DOCK_PACKAGE in docking_msgs docking_openvins; do
   DOCK_DEST="$DOCK_WS/src/$DOCK_PACKAGE"

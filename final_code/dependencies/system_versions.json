@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "note": "Versions of what stays outside the project folder on the Jetson (apt system libraries) and of the packages inside the project venv. Recorded by hand from the Jetson on 2026-11-21 (dpkg-query / pip list --local); nothing here is read at runtime. Record again after any apt or pip change.",
+  "recorded": "2026-11-21",
+  "machine": "Jetson Orin Nano",
+  "system": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "6.8.12-1021-tegra",
+    "nvidia-l4t-core": "39.2.1-20260806224157",
+    "gcc": "13.3.0",
+    "cmake": "3.28.3",
+    "python": "3.12.3"
+  },
+  "apt": {
+    "ros-jazzy-ros-base": "0.11.0-1noble.20261006.040749",
+    "ros-jazzy-rclcpp": "28.1.22-1noble.20260911.060156",
+    "ros-jazzy-cv-bridge": "4.1.0-1noble.20260911.140139",
+    "ros-jazzy-image-transport": "5.1.8-1noble.20260911.145925",
+    "ros-jazzy-tf2-geometry-msgs": "0.36.23-1noble.20260916.083525",
+    "python3-colcon-common-extensions": "0.3.0-100",
+    "libopencv-dev": "4.6.0+dfsg-13.1ubuntu1",
+    "libopencv-contrib-dev": "4.6.0+dfsg-13.1ubuntu1",
+    "python3-opencv": "4.6.0+dfsg-13.1ubuntu1",
+    "libeigen3-dev": "3.4.0-4build0.1",
+    "libceres-dev": "2.2.0+dfsg-4.1ubuntu2",
+    "libboost-all-dev": "1.83.0.1ubuntu2",
+    "libusb-1.0-0": "2:1.0.27-1",
+    "python3-numpy": "1:1.26.4+ds-6ubuntu1",
+    "python3-scipy": "1.11.4-6build1",
+    "python3-yaml": "6.0.1-2build2"
+  },
+  "venv": {
+    "location": "<project>/.venv (python3 -m venv --system-site-packages)",
+    "pip": {
+      "annotated-types": "0.8.0",
+      "canlib": "1.33.358",
+      "cmake": "3.31.10",
+      "Cython": "3.3.0",
+      "distro": "1.9.0",
+      "ninja": "1.13.2",
+      "numpy": "1.26.4",
+      "opencv-python-headless": "4.10.0.84",
+      "packaging": "26.3",
+      "pip": "26.2.1",
+      "pupil_apriltags": "1.0.4.post11",
+      "pydantic": "2.14.1",
+      "pydantic_core": "2.50.1",
+      "scikit-build": "0.19.1",
+      "setuptools": "84.0.0",
+      "setuptools-scm": "10.3.4",
+      "typing_extensions": "4.16.0",
+      "typing-inspection": "0.4.4",
+      "vcs-versioning": "2.6.0",
+      "wheel": "0.48.0"
+    },
+    "pyrealsense2": "2.58.4 (RSUSB source build; librealsense is linked into the module, so there is no separate SDK folder)"
+  }
+}

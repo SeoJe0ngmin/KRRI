@@ -2,7 +2,10 @@
 
 Only the three CMakeLists.txt files are generated. Upstream ROS visualizers and
 example executables are not needed by our adapter (and use older ROS headers).
-The immutable git checkout is kept outside the colcon source discovery tree.
+
+2026-11-21: the staged tree is kept in the code folder (third_party/open_vins) and built from there; the Jetson
+installer no longer clones. Run this on a development machine only, to regenerate that tree from an upstream
+checkout at the pinned commit:  python scripts/prepare_openvins.py <open_vins checkout> third_party/open_vins
 """
 
 import argparse
