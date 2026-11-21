@@ -115,7 +115,8 @@ def tag_margin(p, cfg):
     if xyz[:, 2].min() <= 0.1:
         return -math.inf
     K = np.array([[model['fx'], 0, model['cx']], [0, model['fy'], model['cy']], [0, 0, 1.0]])
-    uv = cv2.projectPoints(xyz, np.zeros(3), np.zeros(3), K, np.array(model['coeffs']))[0].reshape(-1, 2)
+    # 왜곡 계수는 실수형으로 넘긴다 (정수 배열이면 OpenCV 4.10 이 멈춘다)
+    uv = cv2.projectPoints(xyz, np.zeros(3), np.zeros(3), K, np.array(model['coeffs'], dtype=float))[0].reshape(-1, 2)
     return float(
         min(uv[:, 0].min(), uv[:, 1].min(), model['width'] - 1 - uv[:, 0].max(), model['height'] - 1 - uv[:, 1].max())
     )
@@ -140,7 +141,7 @@ def inner_margin(p, cfg):
         xyz = corners @ Tct[:3, :3].T + Tct[:3, 3]
         if xyz[:, 2].min() <= 0.1:
             return -math.inf, None
-        uv = cv2.projectPoints(xyz, np.zeros(3), np.zeros(3), K, np.array(model['coeffs']))[0].reshape(-1, 2)
+        uv = cv2.projectPoints(xyz, np.zeros(3), np.zeros(3), K, np.array(model['coeffs'], dtype=float))[0].reshape(-1, 2)
         m = dict(
             left=uv[:, 0].min(),
             top=uv[:, 1].min(),

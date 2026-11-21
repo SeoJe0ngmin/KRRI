@@ -51,9 +51,9 @@ rsync "${DOCK_RSYNC[@]}" --delete \
   --exclude='.git/' --exclude='__pycache__/' --exclude='*.pyc' \
   --exclude='.venv/' --exclude='work/' --exclude='configs/mount.json' --exclude='*.docx' --exclude='*.docx:*' \
   "$DOCK_ROOT/" "$DOCK_HOST:$DOCK_TARGET/"
-# First deploy of a new version folder: reuse the mount (camera pitch/yaw) measured with the previous folder when the camera has not moved.
+# 새 폴더를 처음 배포할 때: 옛 판(legacy) 중 가장 최근에 쓰인 장착각 파일을 가져온다 (카메라를 옮기지 않았을 때만 맞는 값)
 if ((!DOCK_DRY)); then
-  "${DOCK_SSH[@]}" "$DOCK_HOST" "if [ ! -f '$DOCK_TARGET/configs/mount.json' ]; then for src in /home/jetson/krri/0.forklift_docking /home/jetson/krri/forklift_docking /home/jetson/krri/docking_v3 /home/jetson/krri/docking_v2 /home/jetson/krri/docking /home/jetson/krri/forklift-truck_dockingv2 /home/jetson/krri/forklift-truck_docking; do if [ -f \"\$src/configs/mount.json\" ]; then cp \"\$src/configs/mount.json\" '$DOCK_TARGET/configs/mount.json' && echo \"mount.json 을 \$src 에서 복사했습니다 (카메라를 옮겼으면 preflight.sh mount 로 다시)\"; break; fi; done; fi"
+  "${DOCK_SSH[@]}" "$DOCK_HOST" "if [ ! -f '$DOCK_TARGET/configs/mount.json' ]; then src=\$(ls -t /home/jetson/krri/legacy/*/configs/mount.json 2>/dev/null | head -1); if [ -n \"\$src\" ]; then cp \"\$src\" '$DOCK_TARGET/configs/mount.json' && echo \"mount.json 을 \$src 에서 복사했습니다 (카메라를 옮겼으면 preflight.sh mount 로 다시)\"; else echo \"mount.json 없음: legacy 에 옛 장착각이 없습니다 (preflight.sh mount 로 측정)\"; fi; fi"
 fi
 if ((DOCK_DRY)); then
   echo '미리보기만 완료: 파일은 전송/삭제하지 않았습니다.'
