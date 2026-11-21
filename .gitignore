@@ -24,14 +24,18 @@ kw/Jetson_실행환경_이전용_20261028/runtime/python-user/torch/lib/libtorch
 tests/
 # 부서 서식(work/.claude/templates/project/gitignore, 2026-11-20)
 docs/ppt/**/*.pptx
-docs/fig/**/*.jpg
-docs/fig/**/*.png
 .claude/skills/helper/researcher/pdf/
 outputs/
 checkpoints/
-# 정민님 결정(2026-11-20): git 에 올리지 않음
-docs/
+# 정민님 결정(2026-11-20~21): git 에 올리지 않음 — 문서는 맨 위 README.md 와 docs/fig(그 그림)만 올린다
+/docs/*
+!/docs/fig/
+# 그림 만드는 코드는 올리지 않음(정민님 2026-11-21) — 맥에만 둔다
+/docs/fig/figures/
+/docs/fig/make_figures.py
+/*/**/docs/
 *.md
+!/README.md
 *.docx
 *.doc
 *.pptx

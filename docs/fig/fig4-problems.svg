@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1260" viewBox="0 0 2100 1260" role="img" aria-label="예외 상황 처리">
+<rect width="2100" height="1260" fill="#FFFFFF"/>
+<defs>
+<filter id="soft" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#1B3A5C" flood-opacity="0.10"/></filter>
+<marker id="amain" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#3F4D5E"/></marker>
+<marker id="aside" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#8C99A8"/></marker>
+<marker id="aobserve" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#12A38B"/></marker>
+<marker id="acorrect" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#7B57E0"/></marker>
+<marker id="aalt" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#E08900"/></marker>
+<marker id="astop" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#E04458"/></marker>
+<marker id="adrive" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#2B7DE0"/></marker>
+</defs>
+<rect x="0" y="170" width="2100" height="1016" fill="#F5F7FA"/>
+<text x="1050" y="44" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="600" fill="#7A8797">FORKLIFT DOCKING · final_code · Fig 4</text>
+<text x="1050" y="92" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="40" font-weight="800" fill="#111C2B">예외 상황 처리</text>
+<rect x="647.76" y="126" width="8" height="24" rx="3" fill="#2B7DE0"/><text x="665.76" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">주행 기동</text>
+<rect x="804.4" y="126" width="8" height="24" rx="3" fill="#12A38B"/><text x="822.4" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">관측 · 측정</text>
+<rect x="982.32" y="126" width="8" height="24" rx="3" fill="#7B57E0"/><text x="1000.32" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">오차 보정</text>
+<rect x="1138.96" y="126" width="8" height="24" rx="3" fill="#E08900"/><text x="1156.96" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">대체 경로</text>
+<rect x="1295.6" y="126" width="8" height="24" rx="3" fill="#E04458"/><text x="1313.6" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">주행 중단</text>
+<path d="M500,292 L540,292" fill="none" stroke="#12A38B" stroke-width="2.2" marker-end="url(#aobserve)"/>
+<path d="M500,386 L540,386" fill="none" stroke="#2B7DE0" stroke-width="2.2" marker-end="url(#adrive)"/>
+<path d="M500,480 L540,480" fill="none" stroke="#E04458" stroke-width="2.2" marker-end="url(#astop)"/>
+<path d="M500,650 L540,650" fill="none" stroke="#2B7DE0" stroke-width="2.2" marker-end="url(#adrive)"/>
+<path d="M500,820 L540,820" fill="none" stroke="#E08900" stroke-width="2.2" marker-end="url(#aalt)"/>
+<path d="M500,990 L540,990" fill="none" stroke="#7B57E0" stroke-width="2.2" marker-end="url(#acorrect)"/>
+<path d="M500,1084 L540,1084" fill="none" stroke="#E04458" stroke-width="2.2" marker-end="url(#astop)"/>
+<path d="M1520,292 L1560,292" fill="none" stroke="#E04458" stroke-width="2.2" marker-end="url(#astop)"/>
+<path d="M1520,386 L1560,386" fill="none" stroke="#7B57E0" stroke-width="2.2" marker-end="url(#acorrect)"/>
+<path d="M1520,480 L1560,480" fill="none" stroke="#E08900" stroke-width="2.2" marker-end="url(#aalt)"/>
+<path d="M1520,650 L1560,650" fill="none" stroke="#2B7DE0" stroke-width="2.2" marker-end="url(#adrive)"/>
+<path d="M1520,744 L1560,744" fill="none" stroke="#7B57E0" stroke-width="2.2" marker-end="url(#acorrect)"/>
+<path d="M1520,838 L1560,838" fill="none" stroke="#E08900" stroke-width="2.2" marker-end="url(#aalt)"/>
+<path d="M1520,1008 L1560,1008" fill="none" stroke="#E04458" stroke-width="2.2" marker-end="url(#astop)"/>
+<path d="M1520,1102 L1560,1102" fill="none" stroke="#E04458" stroke-width="2.2" marker-end="url(#astop)"/>
+<rect x="60" y="252" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,252 H486 A14,14 0 0 1 500,266 V318 A14,14 0 0 1 486,332 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="252" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="293" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">직전까지 태그가 검출된 경우</text>
+<rect x="540" y="252" width="480" height="80" rx="14" fill="#12A38B" filter="url(#soft)"/>
+<path d="M549,252 H1006 A14,14 0 0 1 1020,266 V318 A14,14 0 0 1 1006,332 H549 Z" fill="#DDF5F0"/>
+<rect x="540" y="252" width="480" height="80" rx="14" fill="none" stroke="#82D0C3" stroke-width="1.2"/>
+<text x="574" y="293" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">정지 상태에서 재관측</text>
+<rect x="60" y="346" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,346 H486 A14,14 0 0 1 500,360 V412 A14,14 0 0 1 486,426 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="346" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="387" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">미검출인 경우</text>
+<rect x="540" y="346" width="480" height="80" rx="14" fill="#2B7DE0" filter="url(#soft)"/>
+<path d="M549,346 H1006 A14,14 0 0 1 1020,360 V412 A14,14 0 0 1 1006,426 H549 Z" fill="#E3EFFD"/>
+<rect x="540" y="346" width="480" height="80" rx="14" fill="none" stroke="#90BCF0" stroke-width="1.2"/>
+<text x="574" y="387" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">제자리 회전 탐색 후 기준 측정 재수행</text>
+<rect x="60" y="440" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,440 H486 A14,14 0 0 1 500,454 V506 A14,14 0 0 1 486,520 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="440" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="481" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">1회전 또는 제한 시간 초과</text>
+<rect x="540" y="440" width="480" height="80" rx="14" fill="#E04458" filter="url(#soft)"/>
+<path d="M549,440 H1006 A14,14 0 0 1 1020,454 V506 A14,14 0 0 1 1006,520 H549 Z" fill="#FDE4E7"/>
+<rect x="540" y="440" width="480" height="80" rx="14" fill="none" stroke="#F09CA7" stroke-width="1.2"/>
+<text x="574" y="481" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">주행 중단</text>
+<rect x="60" y="610" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,610 H486 A14,14 0 0 1 500,624 V676 A14,14 0 0 1 486,690 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="610" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="651" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">anchor 가 확보된 경우</text>
+<rect x="540" y="610" width="480" height="80" rx="14" fill="#2B7DE0" filter="url(#soft)"/>
+<path d="M549,610 H1006 A14,14 0 0 1 1020,624 V676 A14,14 0 0 1 1006,690 H549 Z" fill="#E3EFFD"/>
+<rect x="540" y="610" width="480" height="80" rx="14" fill="none" stroke="#90BCF0" stroke-width="1.2"/>
+<text x="574" y="651" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">직전 anchor + VIO 로 주행 지속</text>
+<rect x="60" y="780" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,780 H486 A14,14 0 0 1 500,794 V846 A14,14 0 0 1 486,860 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="780" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="821" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">태그 · depth · VIO 전파값 부재</text>
+<rect x="540" y="780" width="480" height="80" rx="14" fill="#E08900" filter="url(#soft)"/>
+<path d="M549,780 H1006 A14,14 0 0 1 1020,794 V846 A14,14 0 0 1 1006,860 H549 Z" fill="#FDEFD3"/>
+<rect x="540" y="780" width="480" height="80" rx="14" fill="none" stroke="#F0C174" stroke-width="1.2"/>
+<text x="574" y="821" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">조준 후 진입 (최종 검증 생략)</text>
+<rect x="60" y="950" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,950 H486 A14,14 0 0 1 500,964 V1016 A14,14 0 0 1 486,1030 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="950" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="991" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">IMU 데이터 지연</text>
+<rect x="540" y="950" width="480" height="80" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M549,950 H1006 A14,14 0 0 1 1020,964 V1016 A14,14 0 0 1 1006,1030 H549 Z" fill="#ECE6FC"/>
+<rect x="540" y="950" width="480" height="80" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="574" y="991" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">정지 후 위치 재획득</text>
+<rect x="60" y="1044" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M69,1044 H486 A14,14 0 0 1 500,1058 V1110 A14,14 0 0 1 486,1124 H69 Z" fill="#FFFFFF"/>
+<rect x="60" y="1044" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="94" y="1085" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">CAN 송신 이상 · 운영자 정지</text>
+<rect x="540" y="1044" width="480" height="80" rx="14" fill="#E04458" filter="url(#soft)"/>
+<path d="M549,1044 H1006 A14,14 0 0 1 1020,1058 V1110 A14,14 0 0 1 1006,1124 H549 Z" fill="#FDE4E7"/>
+<rect x="540" y="1044" width="480" height="80" rx="14" fill="none" stroke="#F09CA7" stroke-width="1.2"/>
+<text x="574" y="1085" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">중립 명령 송신 후 종료</text>
+<rect x="1080" y="252" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,252 H1506 A14,14 0 0 1 1520,266 V318 A14,14 0 0 1 1506,332 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="252" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="293" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">탐색 회전 중</text>
+<rect x="1560" y="252" width="480" height="80" rx="14" fill="#E04458" filter="url(#soft)"/>
+<path d="M1569,252 H2026 A14,14 0 0 1 2040,266 V318 A14,14 0 0 1 2026,332 H1569 Z" fill="#FDE4E7"/>
+<rect x="1560" y="252" width="480" height="80" rx="14" fill="none" stroke="#F09CA7" stroke-width="1.2"/>
+<text x="1594" y="293" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">주행 중단 (회전각 미상)</text>
+<rect x="1080" y="346" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,346 H1506 A14,14 0 0 1 1520,360 V412 A14,14 0 0 1 1506,426 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="346" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="387" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">일반 이동 중</text>
+<rect x="1560" y="346" width="480" height="80" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M1569,346 H2026 A14,14 0 0 1 2040,360 V412 A14,14 0 0 1 2026,426 H1569 Z" fill="#ECE6FC"/>
+<rect x="1560" y="346" width="480" height="80" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="1594" y="387" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">정지 후 태그 · 문 · 격자로 재획득</text>
+<rect x="1080" y="440" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,440 H1506 A14,14 0 0 1 1520,454 V506 A14,14 0 0 1 1506,520 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="440" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="481" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">최종 진입 중</text>
+<rect x="1560" y="440" width="480" height="80" rx="14" fill="#E08900" filter="url(#soft)"/>
+<path d="M1569,440 H2026 A14,14 0 0 1 2040,454 V506 A14,14 0 0 1 2026,520 H1569 Z" fill="#FDEFD3"/>
+<rect x="1560" y="440" width="480" height="80" rx="14" fill="none" stroke="#F0C174" stroke-width="1.2"/>
+<text x="1594" y="481" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">시간 기반 제어로 전환, 예정 시간에 정지</text>
+<rect x="1080" y="610" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,610 H1506 A14,14 0 0 1 1520,624 V676 A14,14 0 0 1 1506,690 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="610" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="651" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">저속 명령에 무응답</text>
+<rect x="1560" y="610" width="480" height="80" rx="14" fill="#2B7DE0" filter="url(#soft)"/>
+<path d="M1569,610 H2026 A14,14 0 0 1 2040,624 V676 A14,14 0 0 1 2026,690 H1569 Z" fill="#E3EFFD"/>
+<rect x="1560" y="610" width="480" height="80" rx="14" fill="none" stroke="#90BCF0" stroke-width="1.2"/>
+<text x="1594" y="651" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">정상 명령으로 전환</text>
+<rect x="1080" y="704" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,704 H1506 A14,14 0 0 1 1520,718 V770 A14,14 0 0 1 1506,784 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="704" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="745" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">일반 이동 중 정체</text>
+<rect x="1560" y="704" width="480" height="80" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M1569,704 H2026 A14,14 0 0 1 2040,718 V770 A14,14 0 0 1 2026,784 H1569 Z" fill="#ECE6FC"/>
+<rect x="1560" y="704" width="480" height="80" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="1594" y="745" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">정지 후 재계획 (반복 시 중단)</text>
+<rect x="1080" y="798" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,798 H1506 A14,14 0 0 1 1520,812 V864 A14,14 0 0 1 1506,878 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="798" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="839" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">최종 진입 중 정체</text>
+<rect x="1560" y="798" width="480" height="80" rx="14" fill="#E08900" filter="url(#soft)"/>
+<path d="M1569,798 H2026 A14,14 0 0 1 2040,812 V864 A14,14 0 0 1 2026,878 H1569 Z" fill="#FDEFD3"/>
+<rect x="1560" y="798" width="480" height="80" rx="14" fill="none" stroke="#F0C174" stroke-width="1.2"/>
+<text x="1594" y="839" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">시간 기반 제어로 전환</text>
+<rect x="1080" y="968" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,968 H1506 A14,14 0 0 1 1520,982 V1034 A14,14 0 0 1 1506,1048 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="968" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="1009" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">차체–측벽 충돌 예측</text>
+<rect x="1560" y="968" width="480" height="80" rx="14" fill="#E04458" filter="url(#soft)"/>
+<path d="M1569,968 H2026 A14,14 0 0 1 2040,982 V1034 A14,14 0 0 1 2026,1048 H1569 Z" fill="#FDE4E7"/>
+<rect x="1560" y="968" width="480" height="80" rx="14" fill="none" stroke="#F09CA7" stroke-width="1.2"/>
+<text x="1594" y="1009" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">주행 중단 (진입 중 유일한 중단 조건)</text>
+<rect x="1080" y="1062" width="440" height="80" rx="14" fill="#8C99A8" filter="url(#soft)"/>
+<path d="M1089,1062 H1506 A14,14 0 0 1 1520,1076 V1128 A14,14 0 0 1 1506,1142 H1089 Z" fill="#FFFFFF"/>
+<rect x="1080" y="1062" width="440" height="80" rx="14" fill="none" stroke="#CBD1D8" stroke-width="1.2"/>
+<text x="1114" y="1103" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">재획득 · 준비 · 전체 제한 시간 초과</text>
+<rect x="1560" y="1062" width="480" height="80" rx="14" fill="#E04458" filter="url(#soft)"/>
+<path d="M1569,1062 H2026 A14,14 0 0 1 2040,1076 V1128 A14,14 0 0 1 2026,1142 H1569 Z" fill="#FDE4E7"/>
+<rect x="1560" y="1062" width="480" height="80" rx="14" fill="none" stroke="#F09CA7" stroke-width="1.2"/>
+<text x="1594" y="1103" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#111C2B">주행 중단</text>
+<text x="60" y="214" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">입구 태그 기준 부재</text>
+<rect x="324" y="200" width="83.52" height="28" rx="14" fill="#E3EFFD"/><text x="365.76" y="215" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#2B7DE0">SEARCH</text>
+<text x="60" y="572" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">주행 중 태그 소실</text>
+<text x="60" y="742" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">정지 측정에서 기준 부재</text>
+<rect x="374" y="728" width="103.36" height="28" rx="14" fill="#FDEFD3"/><text x="425.68" y="743" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#E08900">FALLBACK</text>
+<text x="60" y="912" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">센서 · 통신 이상</text>
+<text x="1080" y="214" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">이동 중 위치 추정 상실</text>
+<rect x="1383" y="200" width="93.44" height="28" rx="14" fill="#ECE6FC"/><text x="1429.72" y="215" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#7B57E0">RECOVER</text>
+<text x="1080" y="572" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">명령 대비 진행 정체</text>
+<text x="1080" y="930" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="800" fill="#111C2B">주행 중단 조건</text>
+<rect x="1280" y="916" width="73.6" height="28" rx="14" fill="#FDE4E7"/><text x="1316.8" y="931" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#E04458">FAULT</text>
+<text x="1050" y="1224" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="20" font-weight="400" fill="#7A8797">좌: 상황 및 조건, 우: 대응  ·  시간 · 횟수 제한은 설정 파라미터  ·  종료 시 중립 명령을 우선 송신</text>
+</svg>

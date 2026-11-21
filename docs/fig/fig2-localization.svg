@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1570" viewBox="0 0 2100 1570" role="img" aria-label="센서 융합 기반 위치 추정">
+<rect width="2100" height="1570" fill="#FFFFFF"/>
+<defs>
+<filter id="soft" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#1B3A5C" flood-opacity="0.10"/></filter>
+<marker id="amain" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#3F4D5E"/></marker>
+<marker id="aside" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#8C99A8"/></marker>
+<marker id="aobserve" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#12A38B"/></marker>
+<marker id="acorrect" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#7B57E0"/></marker>
+<marker id="aalt" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#E08900"/></marker>
+<marker id="astop" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#E04458"/></marker>
+<marker id="adrive" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0.4 L8,3.5 L0,6.6 Z" fill="#2B7DE0"/></marker>
+</defs>
+<rect x="0" y="170" width="2100" height="212" fill="#F5F7FA"/>
+<rect x="0" y="382" width="2100" height="220" fill="#FFFFFF"/>
+<rect x="0" y="602" width="2100" height="894" fill="#F5F7FA"/>
+<text x="1050" y="44" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="600" fill="#7A8797">FORKLIFT DOCKING · final_code · Fig 2</text>
+<text x="1050" y="92" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="40" font-weight="800" fill="#111C2B">센서 융합 기반 위치 추정</text>
+<path d="M370,343 L370,409.5" fill="none" stroke="#7B57E0" stroke-width="2.2" marker-end="url(#acorrect)"/>
+<rect x="245.66" y="361.25" width="248.68" height="30" rx="15" fill="#FFFFFF" stroke="#7B57E0" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="370" y="377.25" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#7B57E0">거리 · 방위각 → anchor</text>
+<path d="M1050,343 L1050,409.5" fill="none" stroke="#2B7DE0" stroke-width="2.2" marker-end="url(#adrive)"/>
+<rect x="964.04" y="361.25" width="171.92" height="30" rx="15" fill="#FFFFFF" stroke="#2B7DE0" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="1050" y="377.25" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2B7DE0">이동량 · 회전량</text>
+<path d="M1730,343 L1730,409.5" fill="none" stroke="#12A38B" stroke-width="2.2" marker-end="url(#aobserve)"/>
+<rect x="1620.86" y="361.25" width="218.28" height="30" rx="15" fill="#FFFFFF" stroke="#12A38B" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="1730" y="377.25" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#12A38B">정지 측정으로 재보정</text>
+<path d="M530,574.5 L530,648.5" fill="none" stroke="#3F4D5E" stroke-width="3.4" marker-end="url(#amain)"/>
+<rect x="371.08" y="596.5" width="317.84" height="30" rx="15" fill="#FFFFFF" stroke="#3F4D5E" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="530" y="612.5" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2D3B4D">기준 선택 우선순위 (상위 우선)</text>
+<path d="M530,751.5 L530,789.5" fill="none" stroke="#3F4D5E" stroke-width="3.4" marker-end="url(#amain)"/>
+<rect x="449.36" y="755.5" width="161.28" height="30" rx="15" fill="#FFFFFF" stroke="#3F4D5E" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="530" y="771.5" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2D3B4D">동시 검출 실패</text>
+<path d="M530,892.5 L530,930.5" fill="none" stroke="#3F4D5E" stroke-width="3.4" marker-end="url(#amain)"/>
+<rect x="488.5" y="896.5" width="83" height="30" rx="15" fill="#FFFFFF" stroke="#3F4D5E" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="530" y="912.5" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2D3B4D">미검출</text>
+<path d="M530,1033.5 L530,1071.5" fill="none" stroke="#3F4D5E" stroke-width="3.4" marker-end="url(#amain)"/>
+<rect x="488.5" y="1037.5" width="83" height="30" rx="15" fill="#FFFFFF" stroke="#3F4D5E" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="530" y="1053.5" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2D3B4D">미검출</text>
+<path d="M530,1174.5 L530,1212.5" fill="none" stroke="#3F4D5E" stroke-width="3.4" marker-end="url(#amain)"/>
+<rect x="473.68" y="1178.5" width="112.64" height="30" rx="15" fill="#FFFFFF" stroke="#3F4D5E" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="530" y="1194.5" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2D3B4D">검출 실패</text>
+<path d="M530,1315.5 L530,1353.5" fill="none" stroke="#3F4D5E" stroke-width="3.4" marker-end="url(#amain)"/>
+<rect x="498" y="1319.5" width="64" height="30" rx="15" fill="#FFFFFF" stroke="#3F4D5E" stroke-opacity="0.5" stroke-width="1.2"/>
+<text x="530" y="1335.5" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#2D3B4D">부재</text>
+<rect x="60" y="209" width="620" height="134" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M69,209 H666 A14,14 0 0 1 680,223 V329 A14,14 0 0 1 666,343 H69 Z" fill="#ECE6FC"/>
+<rect x="60" y="209" width="620" height="134" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="94" y="250" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">컬러 영상 → AprilTag</text>
+<rect x="588.4" y="235" width="73.6" height="28" rx="14" fill="#FFFFFF"/><text x="625.2" y="250" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#7B57E0">COLOR</text>
+<text x="94" y="287" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">입구 태그 · 내부 태그의 거리와 방위각을 측정</text>
+<text x="94" y="318" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">단일 태그의 PnP 방위는 보조 정보로만 사용</text>
+<rect x="740" y="209" width="620" height="134" rx="14" fill="#2B7DE0" filter="url(#soft)"/>
+<path d="M749,209 H1346 A14,14 0 0 1 1360,223 V329 A14,14 0 0 1 1346,343 H749 Z" fill="#E3EFFD"/>
+<rect x="740" y="209" width="620" height="134" rx="14" fill="none" stroke="#90BCF0" stroke-width="1.2"/>
+<text x="774" y="250" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">스테레오 IR + IMU → OpenVINS</text>
+<rect x="1288.24" y="235" width="53.76" height="28" rx="14" fill="#FFFFFF"/><text x="1315.12" y="250" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#2B7DE0">VIO</text>
+<text x="774" y="287" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">이동량 · 회전량을 연속 추정</text>
+<text x="774" y="318" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">태그 미검출 구간의 위치를 전파</text>
+<rect x="1420" y="209" width="620" height="134" rx="14" fill="#12A38B" filter="url(#soft)"/>
+<path d="M1429,209 H2026 A14,14 0 0 1 2040,223 V329 A14,14 0 0 1 2026,343 H1429 Z" fill="#DDF5F0"/>
+<rect x="1420" y="209" width="620" height="134" rx="14" fill="none" stroke="#82D0C3" stroke-width="1.2"/>
+<text x="1454" y="250" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">Depth → 문 · 격자 구조물</text>
+<rect x="1948.4" y="235" width="73.6" height="28" rx="14" fill="#FFFFFF"/><text x="1985.2" y="250" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#12A38B">DEPTH</text>
+<text x="1454" y="287" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">정지 상태에서 문 수직선 쌍 · 격자를 검출</text>
+<text x="1454" y="318" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">태그 부재 시의 기준, 진입 중 거리 측정</text>
+<rect x="270" y="409.5" width="1560" height="165" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M279,409.5 H1816 A14,14 0 0 1 1830,423.5 V560.5 A14,14 0 0 1 1816,574.5 H279 Z" fill="#ECE6FC"/>
+<rect x="270" y="409.5" width="1560" height="165" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="304" y="450.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">융합 위치 = 태그 기준 위치(anchor) + VIO 이동량</text>
+<text x="304" y="487.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">위치: anchor 에 VIO 이동량을 누적 — 0.5 s 창에 태그가 3프레임 이상 검출되면 anchor 를 갱신</text>
+<text x="304" y="518.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">방위: VIO 방위 + 오프셋 — 정지 상태에서만 태그로 보정 (내부 태그 쌍 기준일 때는 직접 대입)</text>
+<text x="304" y="549.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">갱신 후보가 운동학적 한계를 벗어나면 기각 — 불일치가 1 s 이상 지속되면 태그를 채택</text>
+<rect x="60" y="648.5" width="940" height="103" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M69,648.5 H986 A14,14 0 0 1 1000,662.5 V737.5 A14,14 0 0 1 986,751.5 H69 Z" fill="#ECE6FC"/>
+<rect x="60" y="648.5" width="940" height="103" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="94" y="689.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">① 내부 태그 쌍 (태그 2·3 동시 검출)</text>
+<text x="94" y="726.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">3.5 m 이내에서 위치와 방위를 동시에 제공 — 최우선 기준</text>
+<rect x="60" y="789.5" width="940" height="103" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M69,789.5 H986 A14,14 0 0 1 1000,803.5 V878.5 A14,14 0 0 1 986,892.5 H69 Z" fill="#ECE6FC"/>
+<rect x="60" y="789.5" width="940" height="103" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="94" y="830.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">② 입구 태그 (태그 1)</text>
+<text x="94" y="867.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">거리 · 방위각으로 anchor 결정 — 원거리 구간의 주 기준</text>
+<rect x="60" y="930.5" width="940" height="103" rx="14" fill="#7B57E0" filter="url(#soft)"/>
+<path d="M69,930.5 H986 A14,14 0 0 1 1000,944.5 V1019.5 A14,14 0 0 1 986,1033.5 H69 Z" fill="#ECE6FC"/>
+<rect x="60" y="930.5" width="940" height="103" rx="14" fill="none" stroke="#B9A6EF" stroke-width="1.2"/>
+<text x="94" y="971.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">③ 단일 내부 태그</text>
+<text x="94" y="1008.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">해당 태그의 거리 · 방위각으로 anchor 결정</text>
+<rect x="60" y="1071.5" width="940" height="103" rx="14" fill="#12A38B" filter="url(#soft)"/>
+<path d="M69,1071.5 H986 A14,14 0 0 1 1000,1085.5 V1160.5 A14,14 0 0 1 986,1174.5 H69 Z" fill="#DDF5F0"/>
+<rect x="60" y="1071.5" width="940" height="103" rx="14" fill="none" stroke="#82D0C3" stroke-width="1.2"/>
+<text x="94" y="1112.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">④ Depth 구조물: 격자 → 문</text>
+<text x="94" y="1149.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">격자 수직재 쌍(신뢰 조건 충족 시) → 문 수직선 쌍으로 위치를 재보정</text>
+<rect x="60" y="1212.5" width="940" height="103" rx="14" fill="#2B7DE0" filter="url(#soft)"/>
+<path d="M69,1212.5 H986 A14,14 0 0 1 1000,1226.5 V1301.5 A14,14 0 0 1 986,1315.5 H69 Z" fill="#E3EFFD"/>
+<rect x="60" y="1212.5" width="940" height="103" rx="14" fill="none" stroke="#90BCF0" stroke-width="1.2"/>
+<text x="94" y="1253.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">⑤ VIO 전파값</text>
+<text x="94" y="1290.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">직전에 측정한 중심 위치를 VIO 로 전파한 값</text>
+<rect x="60" y="1353.5" width="940" height="103" rx="14" fill="#E08900" filter="url(#soft)"/>
+<path d="M69,1353.5 H986 A14,14 0 0 1 1000,1367.5 V1442.5 A14,14 0 0 1 986,1456.5 H69 Z" fill="#FDEFD3"/>
+<rect x="60" y="1353.5" width="940" height="103" rx="14" fill="none" stroke="#F0C174" stroke-width="1.2"/>
+<text x="94" y="1394.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700" fill="#111C2B">기준 부재 → fallback 진입</text>
+<rect x="878.64" y="1379.5" width="103.36" height="28" rx="14" fill="#FFFFFF"/><text x="930.32" y="1394.5" text-anchor="middle" dominant-baseline="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="16" font-weight="600" fill="#E08900">FALLBACK</text>
+<text x="94" y="1431.5" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400" fill="#3F4D5E">융합 위치만으로 조준 후 진입</text>
+<text x="980" y="1434.5" text-anchor="end" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="600" fill="#7A8797">상세 → Fig 4</text>
+<rect x="720" y="126" width="8" height="24" rx="3" fill="#7B57E0"/><text x="738" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">태그 (컬러 영상)</text>
+<rect x="956.56" y="126" width="8" height="24" rx="3" fill="#2B7DE0"/><text x="974.56" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">VIO (IR + IMU)</text>
+<rect x="1185.52" y="126" width="8" height="24" rx="3" fill="#12A38B"/><text x="1203.52" y="139" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="19" font-weight="600" fill="#3F4D5E">depth (문 · 격자)</text>
+<text x="1090" y="636" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700" fill="#3F4D5E">구간별 사용 기준 — 평면도 (축척 무시)</text>
+<rect x="1090" y="664" width="960" height="352" rx="18" fill="#FFFFFF" stroke="#D5DDE8" stroke-width="1.2"/>
+<rect x="1722" y="774" width="290" height="160" fill="#EEF3F9"/>
+<path d="M1722,774 H2012 V934 H1722" fill="none" stroke="#2D3B4D" stroke-width="6" stroke-linejoin="round"/>
+<text x="1897" y="754" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="18" font-weight="700" fill="#3F4D5E">트럭 탑재부</text>
+<line x1="1722" y1="744" x2="1722" y2="964" stroke="#2D3B4D" stroke-width="2" stroke-dasharray="7 6"/>
+<rect x="1718" y="771" width="11" height="24" fill="#12A38B"/><rect x="1718" y="913" width="11" height="24" fill="#12A38B"/>
+<line x1="1966" y1="786" x2="1966" y2="922" stroke="#12A38B" stroke-width="5" stroke-dasharray="11 7"/>
+<text x="1966" y="958" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#12A38B">격자</text>
+<text x="1730" y="958" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#12A38B">문</text>
+<rect x="1709" y="738" width="24" height="24" fill="#111C2B"/><rect x="1715" y="744" width="12" height="12" fill="#FFFFFF"/>
+<text x="1700" y="750" text-anchor="end" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#111C2B">태그 1</text>
+<rect x="1768" y="791" width="8" height="22" fill="#7B57E0"/>
+<rect x="1768" y="895" width="8" height="22" fill="#7B57E0"/>
+<text x="1786" y="802" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#7B57E0">태그 2 · 3</text>
+<line x1="1430" y1="702" x2="1430" y2="1002" stroke="#7A8797" stroke-width="2" stroke-dasharray="3 7"/><text x="1430" y="688" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="16" font-weight="600" fill="#7A8797">입구 태그 가시 한계</text>
+<line x1="1570" y1="730" x2="1570" y2="1002" stroke="#7B57E0" stroke-width="2" stroke-dasharray="3 7"/><text x="1570" y="716" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="16" font-weight="600" fill="#7B57E0">내부 태그 쌍 유효 거리</text>
+<path d="M1170,854 H1662" fill="none" stroke="#2B7DE0" stroke-width="4" stroke-dasharray="12 8" stroke-linecap="round"/>
+<path d="M1662,854 H1818" fill="none" stroke="#2B7DE0" stroke-width="5" marker-end="url(#adrive)"/>
+<g transform="translate(1200,854) rotate(0) scale(0.62)"><rect x="-62" y="-36" width="104" height="72" rx="12" fill="#F2B544" stroke="#9C6F14" stroke-width="2"/><rect x="-52" y="-26" width="44" height="52" rx="7" fill="#FFE2A3" stroke="#9C6F14" stroke-width="1.5"/><rect x="42" y="-24" width="62" height="8" rx="3" fill="#5B6B7C"/><rect x="42" y="16" width="62" height="8" rx="3" fill="#5B6B7C"/><circle cx="38" cy="0" r="6" fill="#10283E"/></g><g transform="translate(1612,854) rotate(0) scale(0.62)"><rect x="-62" y="-36" width="104" height="72" rx="12" fill="#F2B544" stroke="#9C6F14" stroke-width="2"/><rect x="-52" y="-26" width="44" height="52" rx="7" fill="#FFE2A3" stroke="#9C6F14" stroke-width="1.5"/><rect x="42" y="-24" width="62" height="8" rx="3" fill="#5B6B7C"/><rect x="42" y="16" width="62" height="8" rx="3" fill="#5B6B7C"/><circle cx="38" cy="0" r="6" fill="#10283E"/></g><g transform="translate(1872,854) rotate(0) scale(0.62)" opacity="0.45"><rect x="-62" y="-36" width="104" height="72" rx="12" fill="#F2B544" stroke="#9C6F14" stroke-width="2"/><rect x="-52" y="-26" width="44" height="52" rx="7" fill="#FFE2A3" stroke="#9C6F14" stroke-width="1.5"/><rect x="42" y="-24" width="62" height="8" rx="3" fill="#5B6B7C"/><rect x="42" y="16" width="62" height="8" rx="3" fill="#5B6B7C"/><circle cx="38" cy="0" r="6" fill="#10283E"/></g>
+<rect x="1170" y="1038" width="260" height="30" rx="15" fill="#111C2B" opacity="1"/><text x="1186" y="1054" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">입구 태그 1</text>
+<rect x="1570" y="1078" width="302" height="30" rx="15" fill="#7B57E0" opacity="1"/><text x="1586" y="1094" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">내부 태그 쌍 2·3</text>
+<rect x="1320" y="1118" width="552" height="30" rx="15" fill="#12A38B" opacity="0.55"/><text x="1336" y="1134" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">depth 문 · 격자 — 정지 상태, 태그 부재 시</text>
+<rect x="1170" y="1158" width="702" height="30" rx="15" fill="#2B7DE0" opacity="1"/><text x="1186" y="1174" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">VIO — 상시, 기준 사이 구간을 전파</text>
+<rect x="1090" y="1220" width="960" height="142" rx="14" fill="#FDEFD3" stroke="#E08900" stroke-opacity="0.35" stroke-width="1.2"/>
+<text x="1112" y="1250" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="21" font-weight="700" fill="#E08900">컬러 카메라 노출 제어</text>
+<text x="1112" y="1282" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="20" font-weight="400" fill="#2D3B4D">입구 태그 사용 구간 → 기본 자동 노출 유지</text>
+<text x="1112" y="1312" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="20" font-weight="400" fill="#2D3B4D">입구 태그 가시 한계 이후 또는 내부 태그 쌍 유효 거리 이내 → 내부 태그 영역(음영부) 기준</text>
+<text x="1112" y="1342" text-anchor="start" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="20" font-weight="400" fill="#2D3B4D">내부 태그가 2 s 이상 미검출 → 기본 자동 노출로 복귀</text>
+<text x="1050" y="1534" text-anchor="middle" dominant-baseline="middle" font-family="Apple SD Gothic Neo, Noto Sans CJK KR, sans-serif" font-size="20" font-weight="400" fill="#7A8797">태그 기준의 유효 조건: 최근 1 s 이내, 0.5 s 창에 3프레임 이상  ·  구간 경계는 설정값과 현장 조건에 따라 달라짐</text>
+</svg>
