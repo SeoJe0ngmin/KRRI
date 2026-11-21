@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "note": "OpenVINS only (2026-10-19): RTAB-Map / ORB-SLAM3 / reference snapshots were never used and were removed. The Jetson installer clones this commit; nothing here is read at runtime.",
+  "note": "OpenVINS only (2026-10-19): RTAB-Map / ORB-SLAM3 / reference snapshots were never used and were removed. 2026-11-21: the sources of this commit are kept unchanged in third_party/open_vins (per-file sha256 in .docking-v6-generated.json; only the three CMakeLists.txt are generated) and the Jetson installer builds them from there instead of cloning; nothing here is read at runtime.",
   "open_vins": {
     "repository": "https://github.com/rpng/open_vins.git",
     "commit": "69488123ed9362dd44b6f28e7f4680abbff1442b",

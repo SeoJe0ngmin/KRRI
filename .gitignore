@@ -10,6 +10,8 @@ __pycache__/
 .DS_Store
 *:Zone.Identifier
 .venv/
+/ros_ws/
+/realsense/
 .env
 .claude/
 legacy/0921_apriltag_v3/Agent/

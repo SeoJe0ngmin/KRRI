@@ -60,4 +60,4 @@ if ((DOCK_DRY)); then
 else
   echo '업데이트 완료. common.json 은 맥 것으로 덮었고, configs/mount.json(장착각)과 work/ 는 그대로입니다.'
 fi
-echo '첫 배포 뒤 또는 C++ 브리지가 바뀐 뒤에는 Jetson 에서 bash scripts/rebuild_openvins.sh 를 실행합니다.'
+echo '첫 배포 뒤 또는 C++ 브리지 · OpenVINS 소스(third_party)가 바뀐 뒤에는 Jetson 에서 bash scripts/rebuild_openvins.sh 를 실행합니다.'

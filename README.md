@@ -252,4 +252,4 @@ bash scripts/run_nano.sh drive --execute --view   # 6. 실주행: READY 표시 �
 | CAN 송신 | `canbus.py` |
 | 감독 프로세스(실행 진입점) | `runtime.py` |
 
-OpenVINS 연동부는 `final_code/ros2/` 에 있다.
+OpenVINS 연동부는 `final_code/ros2/` 에, OpenVINS 소스(고정 commit 의 원본)는 `final_code/third_party/open_vins/` 에 있다.
