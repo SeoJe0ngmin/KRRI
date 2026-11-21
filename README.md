@@ -83,7 +83,7 @@ $$
 - **갱신 후보의 검증**: anchor 갱신 후보는 VIO 예측 위치와의 차 d 가 아래 한계를 만족할 때 채택한다. r 은 태그까지의 거리, Δt 는 직전 채택 이후의 경과 시간이고, 0.29 m/s 는 공칭 주행 속도이다. 한계를 벗어난 후보는 기각하되, 불일치가 1 s 이상 지속되면 태그 관측을 채택한다.
 
 $$
-d \le \max(3\ \mathrm{cm},\ 0.01\,r) + 0.29\ \mathrm{m/s} \cdot \Delta t
+d \le \max(3\ \mathrm{cm},\ 0.01 r) + 0.29\ \mathrm{m/s} \cdot \Delta t
 $$
 
 - **태그 종류의 우선순위**: 한 창에 여러 종류의 태그 관측이 있으면 내부 태그 쌍, 입구 태그, 단일 내부 태그의 순으로 하나만 사용한다.
@@ -194,11 +194,11 @@ Depth 영상을 차체 좌표계의 3차원 점군으로 변환하고 높이 구
 
 ### 6.1 설정
 
-| 파일 | 내용 | 수정 시점 |
-|---|---|---|
-| `final_code/configs/common.json` | 차량 · 카메라 · 태그 · 탑재부의 실측값(`site`)과 허용 오차 · 제한 시간 · 기능 선택(`operation`). 항목별 설명이 파일에 포함되어 있다 | 현장 변경 시 |
-| `final_code/configs/runtime.json` | 카메라 스트림, 태그 검출, depth 처리, VIO 설정 | 통상 수정하지 않음 |
-| `final_code/configs/mount.json` | 카메라 장착각. 사전 점검 절차에서 측정하여 생성한다 | 카메라 또는 입구 태그 재설치 시 |
+| 파일 | 내용 |
+|---|---|
+| `final_code/configs/common.json` | 차량 · 카메라 · 태그 · 탑재부의 실측값(`site`)과 허용 오차 · 제한 시간 · 기능 선택(`operation`). 항목별 설명이 파일에 포함되어 있다 |
+| `final_code/configs/runtime.json` | 카메라 스트림, 태그 검출, depth 처리, VIO 설정 |
+| `final_code/configs/mount.json` | 카메라 장착각. 사전 점검 절차에서 측정하여 생성한다 |
 
 새로운 현장에서는 다음 값을 실측하여 `site` 에 입력한다.
 
@@ -213,21 +213,7 @@ Depth 영상을 차체 좌표계의 3차원 점군으로 변환하고 높이 구
 
 내부 태그의 실측값이 입력되지 않으면 실행을 거부한다. 입구 태그 또는 카메라의 설치를 변경하면 카메라 장착각을 재측정해야 하며, 사전 점검에서 이를 검사한다.
 
-### 6.2 설치 및 배포
-
-```bash
-# Jetson 최초 1회 (30~60분, 인터넷 필요)
-bash scripts/install_jetson.sh      # ROS 2 Jazzy, 가상환경, OpenVINS 및 브리지 빌드
-bash scripts/rebuild_openvins.sh    # C++ 브리지 수정 또는 폴더 이름 변경 시 재빌드
-
-# 개발 PC → Jetson (final_code 폴더에서 실행)
-bash update_jetson.sh --host <ssh 호스트>             # 변경된 파일만 전송
-bash update_jetson.sh --host <ssh 호스트> --dry-run   # 전송 대상과 설정 차이만 확인
-```
-
-OpenVINS 는 commit `69488123ed93` 으로 고정하였다. 배포 시 `common.json` 은 개발 PC 의 것으로 대체되며, 장착각(`mount.json`)과 주행 기록(`work/`)은 변경하지 않는다.
-
-### 6.3 현장 절차
+### 6.2 현장 절차
 
 Jetson 의 `final_code` 폴더에서 실행한다. `--view` 옵션을 주면 `http://127.0.0.1:8765` 에서 상태 화면을 확인할 수 있다.
 
@@ -242,7 +228,7 @@ bash scripts/run_nano.sh drive --execute --view   # 6. 실주행: READY 표시 �
 
 2 · 3번 단계는 카메라 또는 입구 태그를 재설치한 경우에만 수행한다.
 
-### 6.4 주행 기록
+### 6.3 주행 기록
 
 주행마다 `final_code/work/<날짜>/<명령>/<시각>_<id>_<명령>/` 에 기록을 남긴다(저장소에는 포함하지 않는다).
 
@@ -252,8 +238,6 @@ bash scripts/run_nano.sh drive --execute --view   # 6. 실주행: READY 표시 �
 | `control.jsonl` | 제어 주기별 상태, 송신 명령, 판단 이벤트와 선택한 측정 기준 |
 | `observations.jsonl` | 프레임별 융합 자세, 태그 검출, depth 검출 결과 |
 | `config_used.json` | 해당 주행에 적용한 설정 전체 |
-
-분석 도구로 주행 결과 요약(`scripts/run_summary.py`), 기록 기반 오프라인 재생(`scripts/replay.py`, 코드 변경이 판단 결과에 미치는 영향 확인), 폐루프 시뮬레이션(`scripts/sim_eval.py`, 출발 조건과 잡음을 바꾼 반복 실험)을 제공한다.
 
 ## 7. 구현
 
@@ -269,23 +253,3 @@ bash scripts/run_nano.sh drive --execute --view   # 6. 실주행: READY 표시 �
 | 감독 프로세스(실행 진입점) | `runtime.py` |
 
 OpenVINS 연동부는 `final_code/ros2/` 에 있다.
-
-## 8. 제한 사항
-
-- `COMPLETE` 는 목표 거리에 도달하여 정지하였음을 뜻하며 성공 판정이 아니다. 실제 오차는 주행 기록과 실측으로 확인해야 한다.
-- 허용 오차와 제한 시간은 운영 기준이며, 포크 끝의 위치 정확도나 충돌 회피를 보증하지 않는다. 관측 불확실성(σ)은 기록만 하고 진입 판정에는 사용하지 않는다.
-- 소프트웨어 정지는 하드웨어 비상정지를 대체하지 않는다. 주행 중에는 운영자가 제동 가능한 위치에 있어야 한다.
-- 장애물 검출에 의한 자동 정지 기능은 없다. 충돌 검사는 설정된 탑재부 폭에 대한 차체 경로 검사에 한정된다.
-- CAN 은 송신 전용으로 사용하므로, 차량의 실제 거동은 VIO 와 태그 관측으로만 확인한다.
-- 카메라 장착각 측정은 차량이 탑재부 축과 평행하게 정지해 있다고 가정하며, 이 가정을 검증하지 않는다.
-
-## 9. 저장소 구조
-
-| 폴더 | 내용 |
-|---|---|
-| `final_code/` | 현행 도킹 코드. 새 버전 개발을 시작하면 이전 버전은 `legacy/` 로 옮긴다 |
-| `legacy/` | 이전 버전. 폴더 이름은 `MMDD_원래이름` 이며 `MMDD` 는 해당 버전을 현장에서 처음 실행한 날짜이다(현장 실행 이력이 없으면 최종 수정일) |
-| `kw/` | 광운대에서 제공받은 Jetson 실행 환경 |
-| `code_reference/` | 참고용 외부 코드(OpenVINS 중 실제 빌드에 사용하는 부분) |
-| `tag/` | 인쇄용 AprilTag PDF |
-| `docs/fig/` | 본 문서의 그림 |
